@@ -1,0 +1,352 @@
+version: 2
+
+models:
+  - name: stg_active_players
+    description: "Staging table for NBA active players. Contains current roster information including player names, positions, and team assignments."
+    columns:
+      - name: player_id
+        description: "Unique identifier for each NBA player"
+      - name: team_id
+        description: "Unique identifier for the player's current team"
+      - name: team_name
+        description: "Full name of the player's current team"
+      - name: team_abbreviation
+        description: "Three-letter abbreviation of the player's team"
+      - name: player_name
+        description: "Full name of the player (First Last format)"
+      - name: last_name_first_team
+        description: "Player name in Last, First (TEAM) format for display purposes"
+      - name: position
+        description: "Player's position (e.g., G, F, C, G-F, F-C)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
+  - name: stg_game_player_stats
+    description: "Staging table for individual player statistics from each NBA game. Contains detailed performance metrics for every player in every game they participated in."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: team_id
+        description: "Unique identifier for the player's team in this game"
+      - name: game_id
+        description: "Unique identifier for the game"
+      - name: game_date
+        description: "Date when the game was played (string format from source)"
+      - name: home_team_score
+        description: "Final score of the home team"
+      - name: home_team_id
+        description: "Unique identifier for the home team"
+      - name: visitor_team_score
+        description: "Final score of the visiting team"
+      - name: visitor_team_id
+        description: "Unique identifier for the visiting team"
+      - name: points
+        description: "Points scored by the player (converted to INTEGER)"
+      - name: minutes
+        description: "Minutes played by the player (converted to INTEGER)"
+      - name: threes
+        description: "Three-point field goals made by the player (converted to INTEGER)"
+      - name: rebounds
+        description: "Total rebounds (offensive + defensive) by the player (converted to INTEGER)"
+      - name: points_rebounds
+        description: "Combined points and rebounds (calculated: points + rebounds)"
+      - name: assists
+        description: "Assists by the player (converted to INTEGER)"
+      - name: points_assists
+        description: "Combined points and assists (calculated: points + assists)"
+      - name: rebounds_assists
+        description: "Combined rebounds and assists (calculated: rebounds + assists)"
+      - name: points_rebounds_assists
+        description: "Combined points, rebounds, and assists (calculated: points + rebounds + assists)"
+      - name: steals
+        description: "Steals by the player (converted to INTEGER)"
+      - name: blocks
+        description: "Blocks by the player (converted to INTEGER)"
+      - name: blocks_steals
+        description: "Combined blocks and steals (calculated: blocks + steals)"
+      - name: turnovers
+        description: "Turnovers by the player (converted to INTEGER)"
+      - name: triple_double
+        description: "Binary indicator (1/0) if player achieved a triple-double (10+ in 3 of: points, rebounds, assists, steals, blocks)"
+      - name: double_double
+        description: "Binary indicator (1/0) if player achieved a double-double (10+ in 2 of: points, rebounds, assists, steals, blocks)"
+      - name: winner_team_id
+        description: "Team ID of the winning team (calculated from scores)"
+      - name: game_number
+        description: "Sequential game number for the player (1 = most recent game, calculated using ROW_NUMBER)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
+  - name: stg_games
+    description: "Staging table for NBA games. Contains comprehensive game-level information including teams, scores, game status, quarter-by-quarter scores, and game metadata. Data is extracted from NDJSON format with nested games array structure."
+    columns:
+      - name: game_id
+        description: "Unique identifier for the game"
+      - name: season
+        description: "Season year (e.g., 2025, converted to INT64)"
+      - name: game_date
+        description: "Date when the game was/will be played (parsed from string to DATE)"
+      - name: game_status
+        description: "Current status of the game (e.g., Final, InProgress, Scheduled, or null)"
+      - name: period
+        description: "Current period/quarter (0-4 for regulation, 5+ for overtime, converted to INT64)"
+      - name: time
+        description: "Time remaining in current period (e.g., 'Final', '12:00', or null for future games)"
+      - name: is_postseason
+        description: "Boolean flag indicating if this is a postseason game (converted to BOOL)"
+      - name: game_datetime_utc
+        description: "Game datetime in UTC timezone (ISO 8601 format string)"
+      - name: game_datetime_brasilia
+        description: "Game datetime converted to Brasília timezone (UTC-3), converted from UTC datetime"
+      - name: ist_stage
+        description: "In-Season Tournament stage (e.g., 'Championship', 'East Semifinal', 'West Quarterfinal', or null if not IST game)"
+      - name: home_team_id
+        description: "Unique identifier for the home team (converted to INT64)"
+      - name: home_team_conference
+        description: "Conference of the home team (East or West)"
+      - name: home_team_division
+        description: "Division of the home team (e.g., Atlantic, Pacific, Central)"
+      - name: home_team_city
+        description: "City of the home team"
+      - name: home_team_name
+        description: "Name of the home team (without city)"
+      - name: home_team_full_name
+        description: "Full name of the home team (city + name)"
+      - name: home_team_abbreviation
+        description: "Three-letter abbreviation for the home team"
+      - name: home_team_score
+        description: "Final score of the home team (null for future games, converted to INT64)"
+      - name: home_q1
+        description: "Home team score in Q1 (null for future games, converted to INT64)"
+      - name: home_q2
+        description: "Home team score in Q2 (null for future games, converted to INT64)"
+      - name: home_q3
+        description: "Home team score in Q3 (null for future games, converted to INT64)"
+      - name: home_q4
+        description: "Home team score in Q4 (null for future games, converted to INT64)"
+      - name: home_ot1
+        description: "Home team score in first overtime (null if no OT or future game, converted to INT64)"
+      - name: home_ot2
+        description: "Home team score in second overtime (null if no OT or future game, converted to INT64)"
+      - name: home_ot3
+        description: "Home team score in third overtime (null if no OT or future game, converted to INT64)"
+      - name: home_timeouts_remaining
+        description: "Number of timeouts remaining for home team (null for future games, converted to INT64)"
+      - name: home_in_bonus
+        description: "Boolean flag indicating if home team is in bonus (null for future games, converted to BOOL)"
+      - name: visitor_team_id
+        description: "Unique identifier for the visiting team (converted to INT64)"
+      - name: visitor_team_conference
+        description: "Conference of the visitor team (East or West)"
+      - name: visitor_team_division
+        description: "Division of the visitor team (e.g., Atlantic, Pacific, Central)"
+      - name: visitor_team_city
+        description: "City of the visitor team"
+      - name: visitor_team_name
+        description: "Name of the visitor team (without city)"
+      - name: visitor_team_full_name
+        description: "Full name of the visitor team (city + name)"
+      - name: visitor_team_abbreviation
+        description: "Three-letter abbreviation for the visiting team"
+      - name: visitor_team_score
+        description: "Final score of the visiting team (null for future games, converted to INT64)"
+      - name: visitor_q1
+        description: "Visitor team score in Q1 (null for future games, converted to INT64)"
+      - name: visitor_q2
+        description: "Visitor team score in Q2 (null for future games, converted to INT64)"
+      - name: visitor_q3
+        description: "Visitor team score in Q3 (null for future games, converted to INT64)"
+      - name: visitor_q4
+        description: "Visitor team score in Q4 (null for future games, converted to INT64)"
+      - name: visitor_ot1
+        description: "Visitor team score in first overtime (null if no OT or future game, converted to INT64)"
+      - name: visitor_ot2
+        description: "Visitor team score in second overtime (null if no OT or future game, converted to INT64)"
+      - name: visitor_ot3
+        description: "Visitor team score in third overtime (null if no OT or future game, converted to INT64)"
+      - name: visitor_timeouts_remaining
+        description: "Number of timeouts remaining for visitor team (null for future games, converted to INT64)"
+      - name: visitor_in_bonus
+        description: "Boolean flag indicating if visitor team is in bonus (null for future games, converted to BOOL)"
+      - name: winner_team_id
+        description: "Team ID of the winning team (null for future games or ties, calculated from scores)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
+  - name: stg_season_averages_general_base
+    description: "Staging table for NBA player season averages (base statistics). Contains per-game averages for fundamental basketball statistics."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: points
+        description: "Average points per game (converted to FLOAT64)"
+      - name: rebounds
+        description: "Average rebounds per game (converted to FLOAT64)"
+      - name: points_rebounds
+        description: "Average combined points and rebounds per game (calculated: points + rebounds)"
+      - name: assists
+        description: "Average assists per game (converted to FLOAT64)"
+      - name: points_assists
+        description: "Average combined points and assists per game (calculated: points + assists)"
+      - name: rebounds_assists
+        description: "Average combined rebounds and assists per game (calculated: rebounds + assists)"
+      - name: points_rebounds_assists
+        description: "Average combined points, rebounds, and assists per game (calculated: points + rebounds + assists)"
+      - name: steals
+        description: "Average steals per game (converted to FLOAT64)"
+      - name: blocks
+        description: "Average blocks per game (converted to FLOAT64)"
+      - name: blocks_steals
+        description: "Average combined blocks and steals per game (calculated: blocks + steals)"
+      - name: turnovers
+        description: "Average turnovers per game (converted to FLOAT64)"
+      - name: three_pointers_made
+        description: "Average three-pointers made per game (converted to FLOAT64)"
+      - name: double_doubles
+        description: "Total number of double-doubles in the season (converted to INTEGER)"
+      - name: triple_doubles
+        description: "Total number of triple-doubles in the season (converted to INTEGER)"
+      - name: age
+        description: "Player's age (converted to INTEGER)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
+  - name: stg_season_averages_general_advanced
+    description: "Staging table for NBA player season averages (advanced statistics). Contains advanced metrics like offensive and defensive ratings."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: offensive_rating
+        description: "Points produced per 100 possessions (efficiency metric, converted to FLOAT64)"
+      - name: defensive_rating
+        description: "Points allowed per 100 possessions (efficiency metric, converted to FLOAT64)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
+  - name: stg_season_averages_shooting_by_zone
+    description: "Staging table for NBA player season averages (shooting by zone). Contains field goal statistics broken down by court zones including corner 3s, above-the-break 3s, restricted area, paint, mid-range, and backcourt."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: player_name
+        description: "Full name of the player (First Last format, trimmed)"
+      - name: corner_3_fga
+        description: "Average corner 3-point field goals attempted per game"
+      - name: corner_3_fgm
+        description: "Average corner 3-point field goals made per game"
+      - name: corner_3_fg_pct
+        description: "Corner 3-point field goal percentage"
+      - name: left_corner_3_fga
+        description: "Average left corner 3-point field goals attempted per game"
+      - name: left_corner_3_fgm
+        description: "Average left corner 3-point field goals made per game"
+      - name: left_corner_3_fg_pct
+        description: "Left corner 3-point field goal percentage"
+      - name: right_corner_3_fga
+        description: "Average right corner 3-point field goals attempted per game"
+      - name: right_corner_3_fgm
+        description: "Average right corner 3-point field goals made per game"
+      - name: right_corner_3_fg_pct
+        description: "Right corner 3-point field goal percentage"
+      - name: above_the_break_3_fga
+        description: "Average above-the-break 3-point field goals attempted per game"
+      - name: above_the_break_3_fgm
+        description: "Average above-the-break 3-point field goals made per game"
+      - name: above_the_break_3_fg_pct
+        description: "Above-the-break 3-point field goal percentage"
+      - name: restricted_area_fga
+        description: "Average restricted area field goals attempted per game"
+      - name: restricted_area_fgm
+        description: "Average restricted area field goals made per game"
+      - name: restricted_area_fg_pct
+        description: "Restricted area field goal percentage"
+      - name: in_the_paint_non_ra_fga
+        description: "Average in-the-paint (non-restricted area) field goals attempted per game"
+      - name: in_the_paint_non_ra_fgm
+        description: "Average in-the-paint (non-restricted area) field goals made per game"
+      - name: in_the_paint_non_ra_fg_pct
+        description: "In-the-paint (non-restricted area) field goal percentage"
+      - name: mid_range_fga
+        description: "Average mid-range field goals attempted per game"
+      - name: mid_range_fgm
+        description: "Average mid-range field goals made per game"
+      - name: mid_range_fg_pct
+        description: "Mid-range field goal percentage"
+      - name: backcourt_fga
+        description: "Average backcourt field goals attempted per game"
+      - name: backcourt_fgm
+        description: "Average backcourt field goals made per game"
+      - name: backcourt_fg_pct
+        description: "Backcourt field goal percentage"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
+  - name: stg_team_standings
+    description: "Staging table for NBA team standings. Contains current season standings, records, and conference information."
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+      - name: team_name
+        description: "Full name of the team"
+      - name: team_abbreviation
+        description: "Three-letter abbreviation for the team"
+      - name: conference
+        description: "Conference the team belongs to (Eastern or Western)"
+      - name: team_city
+        description: "City where the team is located"
+      - name: season
+        description: "Season year"
+      - name: conference_rank
+        description: "Team's rank within their conference"
+      - name: wins
+        description: "Number of wins in the season"
+      - name: losses
+        description: "Number of losses in the season"
+      - name: is_dst
+        description: "Boolean flag indicating if current date is in US Daylight Saving Time period (second Sunday of March to first Sunday of November)"
+      - name: injury_report_time_offset_hours
+        description: "Hours to add to 13:30 local time to convert to Brasília time for injury report release. Accounts for US DST rules (except Arizona which doesn't observe DST)"
+      - name: team_injury_report_time_brasilia
+        description: "Time when injury report is released for the team's home games in Brasília timezone (13:30 local time converted). Example: Los Angeles = 17:30 (13:30 PT + 4 hours during DST)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
+  - name: stg_player_injuries
+    description: "Staging table for NBA player injuries. Contains injury information including expected return dates, status, and descriptions."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the injured player"
+      - name: team_id
+        description: "Unique identifier for the player's team"
+      - name: season
+        description: "Season year"
+      - name: return_date
+        description: "Expected return date for the player (parsed from YYYY-MM-DD format)"
+      - name: description
+        description: "Detailed description of the injury and player status"
+      - name: status
+        description: "Injury status (e.g., Doubtful, Out, Questionable)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
+  - name: stg_player_props
+    description: "Staging table for NBA player props from DraftKings. Contains betting lines and odds for various player performance metrics. Prop types are normalized to match stat_type format with 'player_' prefix for consistency with player stats models. Props are filterd to only include over_under props."
+    columns:
+      - name: prop_id
+        description: "Unique identifier for the prop"
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: game_id
+        description: "Unique identifier for the game"
+      - name: season
+        description: "Season year (e.g., 2025)"
+      - name: vendor
+        description: "Sportsbook vendor (e.g., draftkings)"
+      - name: prop_type
+        description: "Original prop type from source (e.g., points, rebounds, assists, points_rebounds, assists_1q, points_first3min)"
+      - name: stat_type
+        description: "Normalized prop type with 'player_' prefix to match stat_type format used in player stats models (e.g., player_points, player_rebounds, player_assists, player_points_rebounds, player_assists_1q, player_points_first3min). Used for joining with player stats."
+      - name: line_value
+        description: "Betting line value for the prop (converted to FLOAT64)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"

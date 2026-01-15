@@ -1,0 +1,180 @@
+[0m14:05:53.027494 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10a690c20>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10b5ef890>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10b5ef9d0>]}
+
+
+============================== 14:05:53.029360 | 249252ce-6838-4ecc-831c-8c336cdf89b4 ==============================
+[0m14:05:53.029360 [info ] [MainThread]: Running with dbt=1.11.2
+[0m14:05:53.029585 [debug] [MainThread]: running dbt with arguments {'log_path': 'logs', 'profiles_dir': '/Users/mateuskasuya/.dbt', 'no_print': 'None', 'printer_width': '80', 'target_path': 'None', 'invocation_command': 'dbt init', 'warn_error': 'None', 'use_colors': 'True', 'quiet': 'False', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'log_cache_events': 'False', 'log_format': 'default', 'partial_parse': 'True', 'static_parser': 'True', 'empty': 'None', 'indirect_selection': 'eager', 'version_check': 'True', 'fail_fast': 'False', 'send_anonymous_usage_stats': 'True', 'write_json': 'True', 'introspect': 'True', 'debug': 'False', 'use_experimental_parser': 'False', 'cache_selected_only': 'False'}
+[0m14:06:16.712519 [debug] [MainThread]: Starter project path: /Users/mateuskasuya/Documents/analytics-engineering/.venv/lib/python3.13/site-packages/dbt/include/starter_project
+[0m14:06:16.718912 [info ] [MainThread]: 
+Your new dbt project "dbt_smartbetting" was created!
+
+For more information on how to configure the profiles.yml file,
+please consult the dbt documentation here:
+
+  https://docs.getdbt.com/docs/configure-your-profile
+
+One more thing:
+
+Need help? Don't hesitate to reach out to us via GitHub issues or on Slack:
+
+  https://community.getdbt.com/
+
+Happy modeling!
+
+[0m14:06:16.719272 [info ] [MainThread]: Setting up your profile.
+[0m14:23:42.660700 [info ] [MainThread]: Profile dbt_smartbetting written to /Users/mateuskasuya/.dbt/profiles.yml using target's profile_template.yml and your supplied values. Run 'dbt debug' to validate the connection.
+[0m14:23:42.670962 [debug] [MainThread]: Resource report: {"command_name": "init", "command_success": true, "command_wall_clock_time": 1069.6702, "process_in_blocks": "0", "process_kernel_time": 0.766965, "process_mem_max_rss": "378421248", "process_out_blocks": "0", "process_user_time": 2.654393}
+[0m14:23:42.673832 [debug] [MainThread]: Command `dbt init` succeeded at 14:23:42.673592 after 1069.67 seconds
+[0m14:23:42.674772 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11a38ce90>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11a390dd0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11a1ff460>]}
+[0m14:23:42.675351 [debug] [MainThread]: Flushing usage events
+[0m14:23:43.310534 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m14:23:54.803065 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10c88cc20>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10d7eb890>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10d7eb9d0>]}
+
+
+============================== 14:23:54.805208 | dd1ac927-db44-43fb-942c-6a4b20728d70 ==============================
+[0m14:23:54.805208 [info ] [MainThread]: Running with dbt=1.11.2
+[0m14:23:54.805425 [debug] [MainThread]: running dbt with arguments {'log_format': 'default', 'quiet': 'False', 'invocation_command': 'dbt debug', 'target_path': 'None', 'static_parser': 'True', 'version_check': 'True', 'use_experimental_parser': 'False', 'debug': 'False', 'profiles_dir': '/Users/mateuskasuya/.dbt', 'no_print': 'None', 'use_colors': 'True', 'partial_parse': 'True', 'fail_fast': 'False', 'empty': 'None', 'log_path': 'logs', 'printer_width': '80', 'warn_error': 'None', 'introspect': 'True', 'log_cache_events': 'False', 'cache_selected_only': 'False', 'send_anonymous_usage_stats': 'True', 'indirect_selection': 'eager', 'write_json': 'True', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])'}
+[0m14:23:54.812639 [info ] [MainThread]: dbt version: 1.11.2
+[0m14:23:54.812763 [info ] [MainThread]: python version: 3.13.11
+[0m14:23:54.812854 [info ] [MainThread]: python path: /Users/mateuskasuya/Documents/analytics-engineering/.venv/bin/python3.13
+[0m14:23:54.812938 [info ] [MainThread]: os info: macOS-26.2-arm64-arm-64bit-Mach-O
+[0m14:23:57.334284 [info ] [MainThread]: Using profiles dir at /Users/mateuskasuya/.dbt
+[0m14:23:57.334467 [info ] [MainThread]: Using profiles.yml file at /Users/mateuskasuya/.dbt/profiles.yml
+[0m14:23:57.334569 [info ] [MainThread]: Using dbt_project.yml file at /Users/mateuskasuya/Documents/analytics-engineering/dbt_project.yml
+[0m14:23:57.334656 [info ] [MainThread]: adapter type: bigquery
+[0m14:23:57.334739 [info ] [MainThread]: adapter version: 1.11.0
+[0m14:23:57.334832 [info ] [MainThread]: Configuration:
+[0m14:23:57.334911 [info ] [MainThread]:   profiles.yml file [[32mOK found and valid[0m]
+[0m14:23:57.334994 [info ] [MainThread]:   dbt_project.yml file [[31mERROR not found[0m]
+[0m14:23:57.335075 [info ] [MainThread]: Required dependencies:
+[0m14:23:57.335189 [debug] [MainThread]: Executing "git --help"
+[0m14:23:57.346176 [debug] [MainThread]: STDOUT: "b"usage: git [-v | --version] [-h | --help] [-C <path>] [-c <name>=<value>]\n           [--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]\n           [-p | --paginate | -P | --no-pager] [--no-replace-objects] [--no-lazy-fetch]\n           [--no-optional-locks] [--no-advice] [--bare] [--git-dir=<path>]\n           [--work-tree=<path>] [--namespace=<name>] [--config-env=<name>=<envvar>]\n           <command> [<args>]\n\nThese are common Git commands used in various situations:\n\nstart a working area (see also: git help tutorial)\n   clone      Clone a repository into a new directory\n   init       Create an empty Git repository or reinitialize an existing one\n\nwork on the current change (see also: git help everyday)\n   add        Add file contents to the index\n   mv         Move or rename a file, a directory, or a symlink\n   restore    Restore working tree files\n   rm         Remove files from the working tree and from the index\n\nexamine the history and state (see also: git help revisions)\n   bisect     Use binary search to find the commit that introduced a bug\n   diff       Show changes between commits, commit and working tree, etc\n   grep       Print lines matching a pattern\n   log        Show commit logs\n   show       Show various types of objects\n   status     Show the working tree status\n\ngrow, mark and tweak your common history\n   backfill   Download missing objects in a partial clone\n   branch     List, create, or delete branches\n   commit     Record changes to the repository\n   merge      Join two or more development histories together\n   rebase     Reapply commits on top of another base tip\n   reset      Reset current HEAD to the specified state\n   switch     Switch branches\n   tag        Create, list, delete or verify tags\n\ncollaborate (see also: git help workflows)\n   fetch      Download objects and refs from another repository\n   pull       Fetch from and integrate with another repository or a local branch\n   push       Update remote refs along with associated objects\n\n'git help -a' and 'git help -g' list available subcommands and some\nconcept guides. See 'git help <command>' or 'git help <concept>'\nto read about a specific subcommand or concept.\nSee 'git help git' for an overview of the system.\n""
+[0m14:23:57.346522 [debug] [MainThread]: STDERR: "b''"
+[0m14:23:57.346629 [info ] [MainThread]:  - git [[32mOK found[0m]
+
+[0m14:23:57.346752 [info ] [MainThread]: Connection:
+[0m14:23:57.346863 [info ] [MainThread]:   method: oauth
+[0m14:23:57.346957 [info ] [MainThread]:   database: smartbetting-dados
+[0m14:23:57.347036 [info ] [MainThread]:   execution_project: smartbetting-dados
+[0m14:23:57.347110 [info ] [MainThread]:   schema: nba
+[0m14:23:57.347185 [info ] [MainThread]:   location: US
+[0m14:23:57.347256 [info ] [MainThread]:   priority: interactive
+[0m14:23:57.347332 [info ] [MainThread]:   maximum_bytes_billed: None
+[0m14:23:57.347407 [info ] [MainThread]:   impersonate_service_account: None
+[0m14:23:57.347480 [info ] [MainThread]:   job_retry_deadline_seconds: None
+[0m14:23:57.347552 [info ] [MainThread]:   job_retries: 1
+[0m14:23:57.347623 [info ] [MainThread]:   job_creation_timeout_seconds: None
+[0m14:23:57.347695 [info ] [MainThread]:   job_execution_timeout_seconds: 300
+[0m14:23:57.347769 [info ] [MainThread]:   timeout_seconds: 300
+[0m14:23:57.347841 [info ] [MainThread]:   client_id: None
+[0m14:23:57.347913 [info ] [MainThread]:   token_uri: None
+[0m14:23:57.347983 [info ] [MainThread]:   compute_region: None
+[0m14:23:57.348055 [info ] [MainThread]:   dataproc_cluster_name: None
+[0m14:23:57.348126 [info ] [MainThread]:   gcs_bucket: None
+[0m14:23:57.348195 [info ] [MainThread]:   dataproc_batch: None
+[0m14:23:57.348451 [info ] [MainThread]: Registered adapter: bigquery=1.11.0
+[0m14:23:57.435726 [debug] [MainThread]: Acquiring new bigquery connection 'debug'
+[0m14:23:57.435964 [debug] [MainThread]: On debug: select 1 as id
+[0m14:23:57.436080 [debug] [MainThread]: Opening a new connection, currently in state init
+[0m14:23:58.147035 [info ] [MainThread]:   Connection test: [[31mERROR[0m]
+
+[0m14:23:58.148355 [info ] [MainThread]: [31m2 checks failed:[0m
+[0m14:23:58.148714 [info ] [MainThread]: Project loading failed for the following reason:
+ project path </Users/mateuskasuya/Documents/analytics-engineering/dbt_project.yml> not found
+
+[0m14:23:58.148989 [info ] [MainThread]: dbt was unable to connect to the specified database.
+The database returned the following error:
+
+  >Database Error
+  Unable to generate access token, if you're using impersonate_service_account, make sure your initial account has the "roles/iam.serviceAccountTokenCreator" role on the account you are trying to impersonate.
+  
+  Reauthentication is needed. Please run `gcloud auth application-default login` to reauthenticate.
+
+Check your database credentials and try again. For more information, visit:
+https://docs.getdbt.com/docs/configure-your-profile
+
+
+[0m14:23:58.156323 [debug] [MainThread]: Resource report: {"command_name": "debug", "command_success": false, "command_wall_clock_time": 3.3819735, "process_in_blocks": "0", "process_kernel_time": 0.755366, "process_mem_max_rss": "379420672", "process_out_blocks": "0", "process_user_time": 2.080735}
+[0m14:23:58.157092 [debug] [MainThread]: Command `dbt debug` failed at 14:23:58.156959 after 3.38 seconds
+[0m14:23:58.157581 [debug] [MainThread]: Connection 'debug' was properly closed.
+[0m14:23:58.157956 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11c2a2fd0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11c311490>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11c563ac0>]}
+[0m14:23:58.158395 [debug] [MainThread]: Flushing usage events
+[0m14:23:58.775733 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m14:25:09.493962 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10aea0c20>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10bdff890>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10bdff9d0>]}
+
+
+============================== 14:25:09.496228 | 45080f1f-905a-4253-bd44-4754caab3a44 ==============================
+[0m14:25:09.496228 [info ] [MainThread]: Running with dbt=1.11.2
+[0m14:25:09.496466 [debug] [MainThread]: running dbt with arguments {'log_format': 'default', 'indirect_selection': 'eager', 'write_json': 'True', 'printer_width': '80', 'use_experimental_parser': 'False', 'debug': 'False', 'fail_fast': 'False', 'log_cache_events': 'False', 'cache_selected_only': 'False', 'send_anonymous_usage_stats': 'True', 'empty': 'None', 'use_colors': 'True', 'log_path': 'logs', 'invocation_command': 'dbt debug', 'partial_parse': 'True', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'no_print': 'None', 'version_check': 'True', 'warn_error': 'None', 'target_path': 'None', 'quiet': 'False', 'static_parser': 'True', 'profiles_dir': '/Users/mateuskasuya/.dbt', 'introspect': 'True'}
+[0m14:25:09.503414 [info ] [MainThread]: dbt version: 1.11.2
+[0m14:25:09.503530 [info ] [MainThread]: python version: 3.13.11
+[0m14:25:09.503619 [info ] [MainThread]: python path: /Users/mateuskasuya/Documents/analytics-engineering/.venv/bin/python3.13
+[0m14:25:09.503698 [info ] [MainThread]: os info: macOS-26.2-arm64-arm-64bit-Mach-O
+[0m14:25:12.253074 [info ] [MainThread]: Using profiles dir at /Users/mateuskasuya/.dbt
+[0m14:25:12.253263 [info ] [MainThread]: Using profiles.yml file at /Users/mateuskasuya/.dbt/profiles.yml
+[0m14:25:12.253364 [info ] [MainThread]: Using dbt_project.yml file at /Users/mateuskasuya/Documents/analytics-engineering/dbt_project.yml
+[0m14:25:12.253450 [info ] [MainThread]: adapter type: bigquery
+[0m14:25:12.253530 [info ] [MainThread]: adapter version: 1.11.0
+[0m14:25:12.253625 [info ] [MainThread]: Configuration:
+[0m14:25:12.253701 [info ] [MainThread]:   profiles.yml file [[32mOK found and valid[0m]
+[0m14:25:12.253782 [info ] [MainThread]:   dbt_project.yml file [[31mERROR not found[0m]
+[0m14:25:12.253860 [info ] [MainThread]: Required dependencies:
+[0m14:25:12.253979 [debug] [MainThread]: Executing "git --help"
+[0m14:25:12.269830 [debug] [MainThread]: STDOUT: "b"usage: git [-v | --version] [-h | --help] [-C <path>] [-c <name>=<value>]\n           [--exec-path[=<path>]] [--html-path] [--man-path] [--info-path]\n           [-p | --paginate | -P | --no-pager] [--no-replace-objects] [--no-lazy-fetch]\n           [--no-optional-locks] [--no-advice] [--bare] [--git-dir=<path>]\n           [--work-tree=<path>] [--namespace=<name>] [--config-env=<name>=<envvar>]\n           <command> [<args>]\n\nThese are common Git commands used in various situations:\n\nstart a working area (see also: git help tutorial)\n   clone      Clone a repository into a new directory\n   init       Create an empty Git repository or reinitialize an existing one\n\nwork on the current change (see also: git help everyday)\n   add        Add file contents to the index\n   mv         Move or rename a file, a directory, or a symlink\n   restore    Restore working tree files\n   rm         Remove files from the working tree and from the index\n\nexamine the history and state (see also: git help revisions)\n   bisect     Use binary search to find the commit that introduced a bug\n   diff       Show changes between commits, commit and working tree, etc\n   grep       Print lines matching a pattern\n   log        Show commit logs\n   show       Show various types of objects\n   status     Show the working tree status\n\ngrow, mark and tweak your common history\n   backfill   Download missing objects in a partial clone\n   branch     List, create, or delete branches\n   commit     Record changes to the repository\n   merge      Join two or more development histories together\n   rebase     Reapply commits on top of another base tip\n   reset      Reset current HEAD to the specified state\n   switch     Switch branches\n   tag        Create, list, delete or verify tags\n\ncollaborate (see also: git help workflows)\n   fetch      Download objects and refs from another repository\n   pull       Fetch from and integrate with another repository or a local branch\n   push       Update remote refs along with associated objects\n\n'git help -a' and 'git help -g' list available subcommands and some\nconcept guides. See 'git help <command>' or 'git help <concept>'\nto read about a specific subcommand or concept.\nSee 'git help git' for an overview of the system.\n""
+[0m14:25:12.270187 [debug] [MainThread]: STDERR: "b''"
+[0m14:25:12.270296 [info ] [MainThread]:  - git [[32mOK found[0m]
+
+[0m14:25:12.270404 [info ] [MainThread]: Connection:
+[0m14:25:12.270517 [info ] [MainThread]:   method: oauth
+[0m14:25:12.270604 [info ] [MainThread]:   database: smartbetting-dados
+[0m14:25:12.270678 [info ] [MainThread]:   execution_project: smartbetting-dados
+[0m14:25:12.270752 [info ] [MainThread]:   schema: nba
+[0m14:25:12.270825 [info ] [MainThread]:   location: US
+[0m14:25:12.270899 [info ] [MainThread]:   priority: interactive
+[0m14:25:12.270973 [info ] [MainThread]:   maximum_bytes_billed: None
+[0m14:25:12.271047 [info ] [MainThread]:   impersonate_service_account: None
+[0m14:25:12.271117 [info ] [MainThread]:   job_retry_deadline_seconds: None
+[0m14:25:12.271187 [info ] [MainThread]:   job_retries: 1
+[0m14:25:12.271257 [info ] [MainThread]:   job_creation_timeout_seconds: None
+[0m14:25:12.271327 [info ] [MainThread]:   job_execution_timeout_seconds: 300
+[0m14:25:12.271395 [info ] [MainThread]:   timeout_seconds: 300
+[0m14:25:12.271465 [info ] [MainThread]:   client_id: None
+[0m14:25:12.271533 [info ] [MainThread]:   token_uri: None
+[0m14:25:12.271601 [info ] [MainThread]:   compute_region: None
+[0m14:25:12.271671 [info ] [MainThread]:   dataproc_cluster_name: None
+[0m14:25:12.271739 [info ] [MainThread]:   gcs_bucket: None
+[0m14:25:12.271806 [info ] [MainThread]:   dataproc_batch: None
+[0m14:25:12.272044 [info ] [MainThread]: Registered adapter: bigquery=1.11.0
+[0m14:25:12.350315 [debug] [MainThread]: Acquiring new bigquery connection 'debug'
+[0m14:25:12.350552 [debug] [MainThread]: On debug: select 1 as id
+[0m14:25:12.350667 [debug] [MainThread]: Opening a new connection, currently in state init
+[0m14:25:14.337764 [debug] [MainThread]: BigQuery adapter: https://console.cloud.google.com/bigquery?project=smartbetting-dados&j=bq:US:b5f89ac1-2591-482e-8461-5cefe3cb4aad&page=queryresults
+[0m14:25:14.703016 [debug] [MainThread]: SQL status: OK in 0.364 seconds
+[0m14:25:15.077314 [info ] [MainThread]:   Connection test: [[32mOK connection ok[0m]
+
+[0m14:25:15.078118 [info ] [MainThread]: [31m1 check failed:[0m
+[0m14:25:15.078417 [info ] [MainThread]: Project loading failed for the following reason:
+ project path </Users/mateuskasuya/Documents/analytics-engineering/dbt_project.yml> not found
+
+[0m14:25:15.086055 [debug] [MainThread]: Resource report: {"command_name": "debug", "command_success": false, "command_wall_clock_time": 5.619423, "process_in_blocks": "0", "process_kernel_time": 0.845731, "process_mem_max_rss": "385155072", "process_out_blocks": "0", "process_user_time": 2.142273}
+[0m14:25:15.086785 [debug] [MainThread]: Command `dbt debug` failed at 14:25:15.086664 after 5.62 seconds
+[0m14:25:15.087236 [debug] [MainThread]: Connection 'debug' was properly closed.
+[0m14:25:15.087642 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11ab9efd0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11abc1eb0>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x11a92fbd0>]}
+[0m14:25:15.088090 [debug] [MainThread]: Flushing usage events
+[0m14:25:15.785369 [debug] [MainThread]: An error was encountered while trying to flush usage events
+[0m16:36:13.218310 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'start', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10c248c20>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10d1b7890>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10d1b79d0>]}
+
+
+============================== 16:36:13.220818 | 10555aef-f081-43c0-9574-8aa57b5ba508 ==============================
+[0m16:36:13.220818 [info ] [MainThread]: Running with dbt=1.11.2
+[0m16:36:13.221061 [debug] [MainThread]: running dbt with arguments {'use_colors': 'True', 'empty': 'False', 'log_format': 'default', 'printer_width': '80', 'log_cache_events': 'False', 'quiet': 'False', 'use_experimental_parser': 'False', 'partial_parse': 'True', 'introspect': 'True', 'target_path': 'None', 'warn_error': 'None', 'static_parser': 'True', 'invocation_command': 'dbt run', 'write_json': 'True', 'indirect_selection': 'eager', 'warn_error_options': 'WarnErrorOptionsV2(error=[], warn=[], silence=[])', 'send_anonymous_usage_stats': 'True', 'profiles_dir': '/Users/mateuskasuya/.dbt', 'debug': 'False', 'cache_selected_only': 'False', 'log_path': 'logs', 'no_print': 'None', 'version_check': 'True', 'fail_fast': 'False'}
+[0m16:36:13.221283 [error] [MainThread]: Encountered an error:
+Runtime Error
+  No dbt_project.yml found at expected path /Users/mateuskasuya/Documents/smartbetting/analytics-engineering/dbt_project.yml
+  Verify that each entry within packages.yml (and their transitive dependencies) contains a file named dbt_project.yml
+  
+[0m16:36:13.222460 [debug] [MainThread]: Resource report: {"command_name": "run", "command_success": false, "command_wall_clock_time": 0.033090085, "process_in_blocks": "0", "process_kernel_time": 0.089952, "process_mem_max_rss": "109264896", "process_out_blocks": "0", "process_user_time": 0.465976}
+[0m16:36:13.222659 [debug] [MainThread]: Command `dbt run` failed at 16:36:13.222619 after 0.03 seconds
+[0m16:36:13.222773 [debug] [MainThread]: Sending event: {'category': 'dbt', 'action': 'invocation', 'label': 'end', 'context': [<snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10d1ca650>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10d1f1a30>, <snowplow_tracker.self_describing_json.SelfDescribingJson object at 0x10d2406b0>]}
+[0m16:36:13.222877 [debug] [MainThread]: Flushing usage events
+[0m16:36:14.018855 [debug] [MainThread]: An error was encountered while trying to flush usage events

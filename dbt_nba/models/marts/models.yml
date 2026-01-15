@@ -1,0 +1,323 @@
+version: 2
+
+models:
+  - name: dim_players
+    description: "Dimension table for NBA players. Provides a comprehensive view of active players including their team information, age, injury status, and last game played. This is the main reference table for player analysis."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+        tests:
+          - not_null
+          - unique
+      - name: player_name
+        description: "Full name of the player"
+      - name: position
+        description: "Player's position (e.g., G, F, C, G-F, F-C)"
+      - name: team_id
+        description: "Unique identifier for the player's current team"
+      - name: team_name
+        description: "Full name of the player's current team"
+      - name: team_abbreviation
+        description: "Three-letter abbreviation of the player's team"
+      - name: age
+        description: "Player's age (from season averages)"
+      - name: last_game_text
+        description: "Descriptive text showing days since player's last game (e.g., 'Ultimo Jogo: 3 dias atras')"
+      - name: status
+        description: "Current injury status if applicable (Doubtful, Questionable, Out, or NULL if healthy)"
+      - name: description
+        description: "Detailed description of the injury and player status"
+      - name: return_date
+        description: "Expected return date for the player (parsed to DATE)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+
+  - name: dim_stat_player
+    description: "Dimension table for NBA player prop betting analysis. Provides comprehensive player statistics with injury impact analysis, team rankings, and backup player performance when leaders are injured. Includes rating stars for each statistic within team context."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - stat_type
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: team_id
+        description: "Unique identifier for the player's team"
+      - name: stat_type
+        description: "Type of statistic being analyzed (e.g., player_points, player_rebounds, player_assists)"
+      - name: rating_stars
+        description: "Star rating based on z-score: 3 stars (>1.67), 2 stars (>=1), 1 star (>=0), 0 stars (<0)"
+      - name: is_leader_with_injury
+        description: "Boolean flag indicating if this player is the team leader (rank 1) for this stat and has an injury"
+      - name: is_available_backup
+        description: "Boolean flag indicating if this player is an available backup (rank > 1 and no injury)"
+      - name: stat_rank
+        description: "Player's rank within their team for this statistic (1 = best)"
+      - name: next_available_player_name
+        description: "Name of the next available backup player for this stat (shown when leader is injured)"
+      - name: next_player_stats_when_leader_out
+        description: "Average performance of the backup player when this leader is out (only shown if current player is injured leader)"
+      - name: next_player_stats_normal
+        description: "Normal average performance of the backup player"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+
+  - name: dim_teams
+    description: "Dimension table for NBA teams. Provides comprehensive team information including standings, recent performance, ratings, next opponent details, and injury report release times in Brasília timezone."
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+          - unique
+      - name: team_name
+        description: "Full name of the team"
+      - name: team_abbreviation
+        description: "Three-letter abbreviation for the team"
+      - name: conference
+        description: "Conference the team belongs to (Eastern or Western)"
+      - name: team_city
+        description: "City where the team is located"
+      - name: season
+        description: "Season year"
+      - name: conference_rank
+        description: "Team's rank within their conference"
+      - name: wins
+        description: "Number of wins in the season"
+      - name: losses
+        description: "Number of losses in the season"
+      - name: team_last_five_games
+        description: "Results of last 5 games (e.g., 'V D V V D')"
+      - name: team_rating_rank
+        description: "Overall team rating rank (based on net rating: offensive - defensive)"
+      - name: team_offensive_rating_rank
+        description: "Team's rank for offensive rating"
+      - name: team_defensive_rating_rank
+        description: "Team's rank for defensive rating"
+      - name: next_opponent_id
+        description: "Team ID of the next opponent"
+      - name: next_opponent_name
+        description: "Full name of the next opponent"
+      - name: next_opponent_abbreviation
+        description: "Three-letter abbreviation of the next opponent"
+      - name: is_next_game_home
+        description: "Boolean flag indicating if the next game is at home (true) or away (false)"
+      - name: next_opponent_team_last_five_games
+        description: "Next opponent's results from last 5 games"
+      - name: next_opponent_conference_rank
+        description: "Next opponent's conference rank"
+      - name: next_opponent_team_rating_rank
+        description: "Next opponent's overall rating rank"
+      - name: next_opponent_team_offensive_rating_rank
+        description: "Next opponent's offensive rating rank"
+      - name: next_opponent_team_defensive_rating_rank
+        description: "Next opponent's defensive rating rank"
+      - name: team_injury_report_time_brasilia
+        description: "Time when injury report is released for the team's home games in Brasília timezone (13:30 local time converted). Example: Los Angeles = 17:30 (13:30 PT + 4 hours during DST)"
+      - name: next_game_injury_report_time_brasilia
+        description: "Time when injury report is released for the next game in Brasília timezone. Based on the home team's city (where the game is played). If playing at home, same as team_injury_report_time_brasilia; if away, uses opponent's city time"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+
+  - name: ft_game_player_stats
+    description: "Fact table for NBA player prop betting performance vs betting lines. Shows historical performance of players against betting lines for each statistic, including game context (home/away, opponent, back-to-back, whether player played). This is the primary table for analyzing Over/Under betting outcomes."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
+              - stat_type
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: game_date
+        description: "Date when the game was played"
+      - name: game_id
+        description: "Unique identifier for the game"
+      - name: stat_type
+        description: "Type of statistic (e.g., player_points, player_rebounds, player_assists, player_threes, player_blocks, player_steals, player_turnovers, player_points_rebounds, player_points_assists, player_rebounds_assists, player_points_rebounds_assists, player_blocks_steals, player_double_double, player_triple_double, player_minutes)"
+      - name: stat_value
+        description: "Actual value achieved by the player in the game"
+      - name: line_value
+        description: "Betting line (Over/Under threshold) for this stat from DraftKings (null if no line available)"
+      - name: is_b2b_game
+        description: "Boolean flag indicating if this was a back-to-back game for the player's team"
+      - name: stat_vs_line
+        description: "Result vs betting line: 'over' (stat_value >= line_value), 'under' (stat_value < line_value), or NULL (no line available)"
+      - name: played_against
+        description: "Opponent team abbreviation. Prefixed with '@' if playing away (e.g., '@LAL' for away at Lakers, 'BOS' for home vs Celtics)"
+      - name: home_away
+        description: "Location of game from player's perspective: 'Casa' (Home) or 'Fora' (Away)"
+      - name: is_played
+        description: "Whether the player actually played in the game: 'Jogou' (Played) or 'Não jogou' (Did not play - on roster but minutes = 0)"
+
+  - name: dim_player_shooting_by_zones
+    description: "Dimension table for NBA player shooting by zones. Provides a comprehensive view of player shooting by zones including corner 3s, above-the-break 3s, restricted area, paint, mid-range, and backcourt."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+        tests:
+          - not_null
+          - unique
+      - name: player_name
+        description: "Full name of the player"
+      - name: corner_3_fga
+        description: "Average corner 3-point field goals attempted per game"
+      - name: corner_3_fgm
+        description: "Average corner 3-point field goals made per game"
+      - name: corner_3_fg_pct
+        description: "Corner 3-point field goal percentage"
+      - name: left_corner_3_fga
+        description: "Average left corner 3-point field goals attempted per game"
+      - name: left_corner_3_fgm
+        description: "Average left corner 3-point field goals made per game"
+      - name: left_corner_3_fg_pct
+        description: "Left corner 3-point field goal percentage"
+      - name: right_corner_3_fga
+        description: "Average right corner 3-point field goals attempted per game"
+      - name: right_corner_3_fgm
+        description: "Average right corner 3-point field goals made per game"
+      - name: right_corner_3_fg_pct
+        description: "Right corner 3-point field goal percentage"
+      - name: above_the_break_3_fga
+        description: "Average above-the-break 3-point field goals attempted per game"
+      - name: above_the_break_3_fgm
+        description: "Average above-the-break 3-point field goals made per game"
+      - name: above_the_break_3_fg_pct
+        description: "Above-the-break 3-point field goal percentage"
+      - name: restricted_area_fga
+        description: "Average restricted area field goals attempted per game"
+      - name: restricted_area_fgm
+        description: "Average restricted area field goals made per game"
+      - name: restricted_area_fg_pct
+        description: "Restricted area field goal percentage"
+      - name: in_the_paint_non_ra_fga
+        description: "Average in the paint (non-restricted area) field goals attempted per game"
+      - name: in_the_paint_non_ra_fgm
+        description: "Average in the paint (non-restricted area) field goals made per game"
+      - name: in_the_paint_non_ra_fg_pct
+        description: "In the paint (non-restricted area) field goal percentage"
+      - name: mid_range_fga
+        description: "Average mid-range field goals attempted per game"
+      - name: mid_range_fgm
+        description: "Average mid-range field goals made per game"
+      - name: mid_range_fg_pct
+        description: "Mid-range field goal percentage"
+      - name: backcourt_fga
+        description: "Average backcourt field goals attempted per game"
+      - name: backcourt_fgm
+        description: "Average backcourt field goals made per game"
+      - name: backcourt_fg_pct
+        description: "Backcourt field goal percentage"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+
+  - name: ft_games
+    description: "Fact table for NBA games. Provides a comprehensive view of games including all fields from stg_games plus back-to-back and next game flags for both teams. This is the primary table for game-level analysis."
+    columns:
+      - name: game_id
+        description: "Unique identifier for the game"
+        tests:
+          - not_null
+          - unique
+      - name: season
+        description: "Season year (e.g., 2025)"
+      - name: game_date
+        description: "Date when the game was/will be played"
+      - name: game_status
+        description: "Current status of the game (e.g., Final, InProgress, Scheduled, or null)"
+      - name: period
+        description: "Current period/quarter (0-4 for regulation, 5+ for overtime)"
+      - name: time
+        description: "Time remaining in current period (e.g., 'Final', '12:00', or null for future games)"
+      - name: is_postseason
+        description: "Boolean flag indicating if this is a postseason game"
+      - name: game_datetime_utc
+        description: "Game datetime in UTC timezone (ISO 8601 format string)"
+      - name: game_datetime_brasilia
+        description: "Game datetime converted to Brasília timezone (UTC-3)"
+      - name: ist_stage
+        description: "In-Season Tournament stage (e.g., 'Championship', 'East Semifinal', 'West Quarterfinal', or null if not IST game)"
+      - name: home_team_id
+        description: "Unique identifier for the home team"
+      - name: home_team_conference
+        description: "Conference of the home team (East or West)"
+      - name: home_team_division
+        description: "Division of the home team (e.g., Atlantic, Pacific, Central)"
+      - name: home_team_city
+        description: "City of the home team"
+      - name: home_team_name
+        description: "Name of the home team (without city)"
+      - name: home_team_full_name
+        description: "Full name of the home team (city + name)"
+      - name: home_team_abbreviation
+        description: "Three-letter abbreviation for the home team"
+      - name: home_team_score
+        description: "Final score of the home team (null for future games)"
+      - name: home_q1
+        description: "Home team score in Q1 (null for future games)"
+      - name: home_q2
+        description: "Home team score in Q2 (null for future games)"
+      - name: home_q3
+        description: "Home team score in Q3 (null for future games)"
+      - name: home_q4
+        description: "Home team score in Q4 (null for future games)"
+      - name: home_ot1
+        description: "Home team score in first overtime (null if no OT or future game)"
+      - name: home_ot2
+        description: "Home team score in second overtime (null if no OT or future game)"
+      - name: home_ot3
+        description: "Home team score in third overtime (null if no OT or future game)"
+      - name: home_timeouts_remaining
+        description: "Number of timeouts remaining for home team (null for future games)"
+      - name: home_in_bonus
+        description: "Boolean flag indicating if home team is in bonus (null for future games)"
+      - name: visitor_team_id
+        description: "Unique identifier for the visiting team"
+      - name: visitor_team_conference
+        description: "Conference of the visitor team (East or West)"
+      - name: visitor_team_division
+        description: "Division of the visitor team (e.g., Atlantic, Pacific, Central)"
+      - name: visitor_team_city
+        description: "City of the visitor team"
+      - name: visitor_team_name
+        description: "Name of the visitor team (without city)"
+      - name: visitor_team_full_name
+        description: "Full name of the visitor team (city + name)"
+      - name: visitor_team_abbreviation
+        description: "Three-letter abbreviation for the visiting team"
+      - name: visitor_team_score
+        description: "Final score of the visiting team (null for future games)"
+      - name: visitor_q1
+        description: "Visitor team score in Q1 (null for future games)"
+      - name: visitor_q2
+        description: "Visitor team score in Q2 (null for future games)"
+      - name: visitor_q3
+        description: "Visitor team score in Q3 (null for future games)"
+      - name: visitor_q4
+        description: "Visitor team score in Q4 (null for future games)"
+      - name: visitor_ot1
+        description: "Visitor team score in first overtime (null if no OT or future game)"
+      - name: visitor_ot2
+        description: "Visitor team score in second overtime (null if no OT or future game)"
+      - name: visitor_ot3
+        description: "Visitor team score in third overtime (null if no OT or future game)"
+      - name: visitor_timeouts_remaining
+        description: "Number of timeouts remaining for visitor team (null for future games)"
+      - name: visitor_in_bonus
+        description: "Boolean flag indicating if visitor team is in bonus (null for future games)"
+      - name: winner_team_id
+        description: "Team ID of the winning team (null for future games or ties)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+      - name: home_team_is_b2b_game
+        description: "Boolean flag indicating if the home team played a back-to-back game (played the previous day)"
+      - name: visitor_team_is_b2b_game
+        description: "Boolean flag indicating if the visiting team played a back-to-back game (played the previous day)"
+      - name: home_team_is_next_game
+        description: "Boolean flag indicating if this is the home team's next scheduled game"
+      - name: visitor_team_is_next_game
+        description: "Boolean flag indicating if this is the visiting team's next scheduled game"

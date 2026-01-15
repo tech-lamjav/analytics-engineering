@@ -1,0 +1,59 @@
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# Python virtual environments
+.venv
+venv/
+env/
+ENV/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+dbt.log
+
+# Build and deployment scripts (not needed in container)
+build-and-push.sh
+*.sh
+
+# Documentation (optional, but usually not needed in container)
+README.md
+*.md
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Docker files themselves
+Dockerfile
+.dockerignore
+docker-compose.yml
+
+# dbt specific (if any)
+target/
+dbt_packages/
+# profiles.yml is now included in the build (service account config)
+
+# OS files
+Thumbs.db
+.DS_Store

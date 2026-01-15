@@ -1,0 +1,21 @@
+dbt_nba:
+  outputs:
+    dev:
+      dataset: nba
+      job_execution_timeout_seconds: 300
+      job_retries: 1
+      location: us-east1
+      method: oauth
+      priority: interactive
+      project: smartbetting-dados
+      threads: 4
+      type: bigquery
+    prod:
+      type: bigquery
+      method: oauth
+      project: smartbetting-dados
+      dataset: nba
+      threads: 4
+      location: us-east1
+
+  target: dev

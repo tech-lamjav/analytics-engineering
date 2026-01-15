@@ -1,0 +1,91 @@
+version: 2
+
+models:
+  - name: int_game_player_stats_pilled
+    description: "Intermediate model that unpivots (pilles) player game statistics from wide to long format. Transforms individual stat columns (points, rebounds, assists, etc.) into a single stat_type and stat_value structure. Only includes games where the player had playing time (minutes > 0)."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: team_id
+        description: "Unique identifier for the player's team"
+      - name: game_id
+        description: "Unique identifier for the game"
+      - name: game_number
+        description: "Sequential game number for the player (1 = most recent game)"
+      - name: game_date
+        description: "Date when the game was played"
+      - name: stat_type
+        description: "Type of statistic (e.g., player_points, player_rebounds, player_assists, player_threes, player_blocks, player_steals, player_turnovers, player_points_rebounds, player_points_assists, player_rebounds_assists, player_points_rebounds_assists, player_blocks_steals, player_double_double, player_triple_double, player_minutes)"
+      - name: stat_value
+        description: "Value of the statistic for this player in this game"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+
+  - name: int_games_teams_pilled
+    description: "Intermediate model that unpivots game data from a team perspective. Creates one row per team per game (both home and visitor). Identifies back-to-back games (B2B), next scheduled games, and calculates last 5 games results for each team."
+    columns:
+      - name: game_id
+        description: "Unique identifier for the game"
+      - name: game_date
+        description: "Date when the game was/will be played (converted to DATE type)"
+      - name: team_id
+        description: "Unique identifier for the team (perspective team)"
+      - name: team_abbreviation
+        description: "Three-letter abbreviation for the team"
+      - name: team_name
+        description: "Full name of the team"
+      - name: team_score
+        description: "Score for this team in the game"
+      - name: win_loss
+        description: "Result for this team: V (Victory), D (Defeat), or NULL (future/in-progress game)"
+      - name: home_team_id
+        description: "Unique identifier for the home team"
+      - name: home_team_abbreviation
+        description: "Three-letter abbreviation for the home team"
+      - name: home_team_name
+        description: "Full name of the home team"
+      - name: visitor_team_id
+        description: "Unique identifier for the visiting team"
+      - name: visitor_team_abbreviation
+        description: "Three-letter abbreviation for the visiting team"
+      - name: visitor_team_name
+        description: "Full name of the visiting team"
+      - name: is_b2b_game
+        description: "Boolean flag indicating if this is a back-to-back game (team played the previous day)"
+      - name: is_next_game
+        description: "Boolean flag indicating if this is the team's next scheduled game"
+      - name: team_last_five_games
+        description: "String showing results of last 5 games for the team (e.g., 'V D V V D')"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+
+  - name: int_season_averages_general_base
+    description: "Intermediate model that unpivots season average statistics from wide to long format. Transforms individual stat columns into a single stat_type and stat_value structure for easier analysis and comparison across different statistics."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: stat_type
+        description: "Type of statistic (e.g., player_points, player_rebounds, player_assists, player_steals, player_blocks, player_turnovers, player_threes, player_points_rebounds, player_points_assists, player_rebounds_assists, player_points_rebounds_assists, player_blocks_steals, player_double_double, player_triple_double)"
+      - name: stat_value
+        description: "Average value of the statistic per game for the season"
+
+  - name: int_game_player_stats_last_game_text
+    description: "Intermediate model that calculates descriptive text for when each player last played. Shows the number of days since the player's last game with playing time (minutes > 0)."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: last_game_text
+        description: "Formatted text describing last game (e.g., 'Ultimo Jogo: 3 dias atras' or 'Ultimo Jogo: 1 dia atras')"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+
+  - name: int_game_player_stats_not_played
+    description: "Intermediate model that identifies games where players were on the roster but did not play (minutes = 0). Useful for injury analysis and backup player performance when starters are out."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player who did not play"
+      - name: team_id
+        description: "Unique identifier for the player's team"
+      - name: game_id
+        description: "Unique identifier for the game where the player did not play"
+
