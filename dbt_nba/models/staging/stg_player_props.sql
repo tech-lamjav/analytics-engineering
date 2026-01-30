@@ -13,7 +13,7 @@ cleaned_data AS (
         game_id,
         season,
         vendor,
-        prop_type,
+        --prop_type,
         -- Normalize prop_type to match stat_type format (with 'player_' prefix)
         CASE
             WHEN prop_type = 'assists' THEN 'player_assists'

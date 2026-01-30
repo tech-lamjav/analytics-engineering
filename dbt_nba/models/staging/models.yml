@@ -78,7 +78,7 @@ models:
         description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_games
-    description: "Staging table for NBA games. Contains comprehensive game-level information including teams, scores, game status, quarter-by-quarter scores, and game metadata. Data is extracted from NDJSON format with nested games array structure."
+    description: "Staging table for NBA games with B2B flag from NDJSON external table. Contains game-level information including teams, scores, datetimes, and winner. Data is extracted from NDJSON format with nested games array structure."
     columns:
       - name: game_id
         description: "Unique identifier for the game"
@@ -86,88 +86,26 @@ models:
         description: "Season year (e.g., 2025, converted to INT64)"
       - name: game_date
         description: "Date when the game was/will be played (parsed from string to DATE)"
-      - name: game_status
-        description: "Current status of the game (e.g., Final, InProgress, Scheduled, or null)"
-      - name: period
-        description: "Current period/quarter (0-4 for regulation, 5+ for overtime, converted to INT64)"
-      - name: time
-        description: "Time remaining in current period (e.g., 'Final', '12:00', or null for future games)"
-      - name: is_postseason
-        description: "Boolean flag indicating if this is a postseason game (converted to BOOL)"
       - name: game_datetime_utc
         description: "Game datetime in UTC timezone (ISO 8601 format string)"
       - name: game_datetime_brasilia
         description: "Game datetime converted to Brasília timezone (UTC-3), converted from UTC datetime"
-      - name: ist_stage
-        description: "In-Season Tournament stage (e.g., 'Championship', 'East Semifinal', 'West Quarterfinal', or null if not IST game)"
       - name: home_team_id
         description: "Unique identifier for the home team (converted to INT64)"
-      - name: home_team_conference
-        description: "Conference of the home team (East or West)"
-      - name: home_team_division
-        description: "Division of the home team (e.g., Atlantic, Pacific, Central)"
-      - name: home_team_city
-        description: "City of the home team"
       - name: home_team_name
-        description: "Name of the home team (without city)"
-      - name: home_team_full_name
         description: "Full name of the home team (city + name)"
       - name: home_team_abbreviation
         description: "Three-letter abbreviation for the home team"
       - name: home_team_score
         description: "Final score of the home team (null for future games, converted to INT64)"
-      - name: home_q1
-        description: "Home team score in Q1 (null for future games, converted to INT64)"
-      - name: home_q2
-        description: "Home team score in Q2 (null for future games, converted to INT64)"
-      - name: home_q3
-        description: "Home team score in Q3 (null for future games, converted to INT64)"
-      - name: home_q4
-        description: "Home team score in Q4 (null for future games, converted to INT64)"
-      - name: home_ot1
-        description: "Home team score in first overtime (null if no OT or future game, converted to INT64)"
-      - name: home_ot2
-        description: "Home team score in second overtime (null if no OT or future game, converted to INT64)"
-      - name: home_ot3
-        description: "Home team score in third overtime (null if no OT or future game, converted to INT64)"
-      - name: home_timeouts_remaining
-        description: "Number of timeouts remaining for home team (null for future games, converted to INT64)"
-      - name: home_in_bonus
-        description: "Boolean flag indicating if home team is in bonus (null for future games, converted to BOOL)"
       - name: visitor_team_id
         description: "Unique identifier for the visiting team (converted to INT64)"
-      - name: visitor_team_conference
-        description: "Conference of the visitor team (East or West)"
-      - name: visitor_team_division
-        description: "Division of the visitor team (e.g., Atlantic, Pacific, Central)"
-      - name: visitor_team_city
-        description: "City of the visitor team"
       - name: visitor_team_name
-        description: "Name of the visitor team (without city)"
-      - name: visitor_team_full_name
         description: "Full name of the visitor team (city + name)"
       - name: visitor_team_abbreviation
         description: "Three-letter abbreviation for the visiting team"
       - name: visitor_team_score
         description: "Final score of the visiting team (null for future games, converted to INT64)"
-      - name: visitor_q1
-        description: "Visitor team score in Q1 (null for future games, converted to INT64)"
-      - name: visitor_q2
-        description: "Visitor team score in Q2 (null for future games, converted to INT64)"
-      - name: visitor_q3
-        description: "Visitor team score in Q3 (null for future games, converted to INT64)"
-      - name: visitor_q4
-        description: "Visitor team score in Q4 (null for future games, converted to INT64)"
-      - name: visitor_ot1
-        description: "Visitor team score in first overtime (null if no OT or future game, converted to INT64)"
-      - name: visitor_ot2
-        description: "Visitor team score in second overtime (null if no OT or future game, converted to INT64)"
-      - name: visitor_ot3
-        description: "Visitor team score in third overtime (null if no OT or future game, converted to INT64)"
-      - name: visitor_timeouts_remaining
-        description: "Number of timeouts remaining for visitor team (null for future games, converted to INT64)"
-      - name: visitor_in_bonus
-        description: "Boolean flag indicating if visitor team is in bonus (null for future games, converted to BOOL)"
       - name: winner_team_id
         description: "Team ID of the winning team (null for future games or ties, calculated from scores)"
       - name: loaded_at
@@ -330,7 +268,7 @@ models:
         description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_player_props
-    description: "Staging table for NBA player props from DraftKings. Contains betting lines and odds for various player performance metrics. Prop types are normalized to match stat_type format with 'player_' prefix for consistency with player stats models. Props are filterd to only include over_under props."
+    description: "Staging table for NBA player props from DraftKings NDJSON external table. Contains betting lines for various player performance metrics. Prop types are normalized to stat_type with 'player_' prefix for consistency with player stats models. Filtered to over_under props only."
     columns:
       - name: prop_id
         description: "Unique identifier for the prop"
@@ -342,8 +280,6 @@ models:
         description: "Season year (e.g., 2025)"
       - name: vendor
         description: "Sportsbook vendor (e.g., draftkings)"
-      - name: prop_type
-        description: "Original prop type from source (e.g., points, rebounds, assists, points_rebounds, assists_1q, points_first3min)"
       - name: stat_type
         description: "Normalized prop type with 'player_' prefix to match stat_type format used in player stats models (e.g., player_points, player_rebounds, player_assists, player_points_rebounds, player_assists_1q, player_points_first3min). Used for joining with player stats."
       - name: line_value

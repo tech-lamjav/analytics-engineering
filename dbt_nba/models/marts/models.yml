@@ -142,7 +142,9 @@ models:
       - name: stat_value
         description: "Actual value achieved by the player in the game"
       - name: line_value
-        description: "Betting line (Over/Under threshold) for this stat from DraftKings (null if no line available)"
+        description: "Betting line (Over/Under threshold) for this stat from DraftKings for this game (null if no line available)"
+      - name: line_value_most_recent
+        description: "Most recent betting line for this player and stat_type (from latest game with a line), used for comparison with current lines"
       - name: is_b2b_game
         description: "Boolean flag indicating if this was a back-to-back game for the player's team"
       - name: stat_vs_line
