@@ -55,6 +55,12 @@ jobs:
             target: dev
           PROFILE
 
+      - name: Install dbt packages
+        run: |
+          cd dbt_nba
+          export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-${{ github.workspace }}}"
+          dbt deps
+
       - name: Generate dbt docs (static)
         run: |
           cd dbt_nba
