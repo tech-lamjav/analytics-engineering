@@ -41,8 +41,12 @@ jobs:
         env:
           BIGQUERY_SA_KEY: ${{ secrets.BIGQUERY_SA_KEY }}
         run: |
+          if [ -z "$BIGQUERY_SA_KEY" ]; then
+            echo "::error::BIGQUERY_SA_KEY secret is not set. Add it in Settings > Secrets and variables > Actions. See README section 'Credencial para GitHub Pages (BIGQUERY_SA_KEY)' for step-by-step."
+            exit 1
+          fi
           printf '%s\n' "$BIGQUERY_SA_KEY" > keyfile.json
-          python3 -c "import json; json.load(open('keyfile.json'))" || (echo "::error::BIGQUERY_SA_KEY is not valid JSON" && exit 1)
+          python3 -c "import json; json.load(open('keyfile.json'))" || { echo "::error::BIGQUERY_SA_KEY is not valid JSON. Paste the full service account JSON. See README section 'Credencial para GitHub Pages (BIGQUERY_SA_KEY)'."; exit 1; }
           echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/keyfile.json" >> $GITHUB_ENV
           cat > profiles.yml << EOF
           dbt_nba:

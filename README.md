@@ -237,7 +237,33 @@ A documentação do dbt (linhagem, descrições dos modelos, testes) é publicad
 
 **Importante:** para o link mostrar os docs do dbt (e não este README), em **Settings > Pages** use **Source** = “Deploy from a branch”, **Branch** = `gh-pages`, **Folder** = `/ (root)`. Se estiver em `main`/`master`, o site exibirá o README.
 
-Para catalog completo (metadados de colunas do BigQuery), adicione o secret `BIGQUERY_SA_KEY` em **Settings > Secrets and variables > Actions** com o JSON da service account (somente leitura no projeto/dataset).
+#### Credencial para GitHub Pages (BIGQUERY_SA_KEY)
+
+O workflow que publica os docs precisa de uma chave de service account do GCP para conectar ao BigQuery e gerar o catalog (metadados de colunas). Sem essa credencial, o job falha. Passo a passo:
+
+1. **Criar uma Service Account no GCP**
+   - Acesse [Google Cloud Console](https://console.cloud.google.com/) e selecione o projeto **smartbetting-dados**.
+   - Menu **IAM e administração** → **Service accounts** → **Criar conta de serviço**.
+   - Nome sugerido: `github-actions-dbt-docs`. Clique em **Criar e continuar**.
+
+2. **Conceder permissões ao BigQuery**
+   - Em **Conceder acesso**, adicione a role **BigQuery Data Viewer** (ou `roles/bigquery.dataViewer`) e **BigQuery Job User** (ou `roles/bigquery.jobUser`).  
+   - Ou use **BigQuery User** (`roles/bigquery.user`) para incluir as duas.
+   - Avançar → Concluir.
+
+3. **Criar e baixar a chave JSON**
+   - Na lista de service accounts, clique na que você criou.
+   - Aba **Chaves** → **Adicionar chave** → **Criar nova chave** → **JSON** → **Criar**. O arquivo JSON será baixado.
+
+4. **Adicionar o secret no GitHub**
+   - No repositório: **Settings** → **Secrets and variables** → **Actions**.
+   - **New repository secret**.
+   - Nome: `BIGQUERY_SA_KEY`.
+   - Valor: abra o arquivo JSON baixado, copie **todo** o conteúdo (incluindo `{` e `}`) e cole no campo. Não adicione texto antes ou depois.
+   - **Add secret**.
+
+5. **Rodar o workflow**
+   - Faça um push em `main`/`master` (ou dispare o workflow manualmente). O job "Deploy dbt docs" usará o secret, gerará os docs e publicará na branch `gh-pages`. Depois, em **Settings > Pages**, escolha a branch **gh-pages** como fonte do site.
 
 ### Documentação local
 
