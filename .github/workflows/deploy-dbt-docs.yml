@@ -1,6 +1,6 @@
 # Deploy dbt docs to GitHub Pages
 # Requires: GitHub Pages enabled (Settings > Pages > Source: gh-pages branch)
-# Optional: Add BIGQUERY_SA_KEY secret for full catalog (column metadata from BigQuery)
+# Requires: BIGQUERY_SA_KEY secret (Settings > Secrets > Actions) with service account JSON for BigQuery catalog
 
 name: Deploy dbt docs
 
@@ -38,7 +38,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Configure BigQuery credentials
-        if: ${{ secrets.BIGQUERY_SA_KEY != '' }}
         run: |
           echo '${{ secrets.BIGQUERY_SA_KEY }}' > keyfile.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/keyfile.json" >> $GITHUB_ENV
