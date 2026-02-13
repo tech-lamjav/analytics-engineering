@@ -8,21 +8,15 @@
 WITH team_rating AS (
     SELECT
         team_id,
+        season,
         team_offensive_rating,
         team_defensive_rating,
-        team_offensive_rating - team_defensive_rating AS net_rating,
-        ROW_NUMBER() OVER (ORDER BY (team_offensive_rating - team_defensive_rating) DESC) AS team_rating_rank,
-        ROW_NUMBER() OVER (ORDER BY team_offensive_rating DESC) AS team_offensive_rating_rank,
-        ROW_NUMBER() OVER (ORDER BY team_defensive_rating DESC) AS team_defensive_rating_rank
-    FROM (
-        SELECT
-            ap.team_id,
-            AVG(sga.offensive_rating) AS team_offensive_rating,
-            AVG(sga.defensive_rating) AS team_defensive_rating
-        FROM {{ ref('stg_season_averages_general_advanced') }} AS sga
-        INNER JOIN {{ ref('stg_active_players') }} AS ap ON sga.player_id = ap.player_id
-        GROUP BY ap.team_id
-    )
+        team_net_rating,
+        ROW_NUMBER() OVER (PARTITION BY season ORDER BY team_net_rating DESC) AS team_rating_rank,
+        ROW_NUMBER() OVER (PARTITION BY season ORDER BY team_offensive_rating DESC) AS team_offensive_rating_rank,
+        ROW_NUMBER() OVER (PARTITION BY season ORDER BY team_defensive_rating DESC) AS team_defensive_rating_rank
+    FROM {{ ref('stg_team_season_averages_general_advanced') }}
+    WHERE season_type = 'regular'
 ),
 
 -- Aggregate team last five games (one row per team)
@@ -86,6 +80,9 @@ dim_teams AS (
         t.wins,
         t.losses,
         tlf.team_last_five_games,
+        tr.team_offensive_rating,
+        tr.team_defensive_rating,
+        tr.team_net_rating,
         tr.team_rating_rank,
         tr.team_offensive_rating_rank,
         tr.team_defensive_rating_rank,
@@ -95,6 +92,9 @@ dim_teams AS (
         noi.is_next_game_home,
         tlf_opp.team_last_five_games AS next_opponent_team_last_five_games,
         ts_opp.conference_rank AS next_opponent_conference_rank,
+        tr_opp.team_offensive_rating AS next_opponent_team_offensive_rating,
+        tr_opp.team_defensive_rating AS next_opponent_team_defensive_rating,
+        tr_opp.team_net_rating AS next_opponent_team_net_rating,
         tr_opp.team_rating_rank AS next_opponent_team_rating_rank,
         tr_opp.team_offensive_rating_rank AS next_opponent_team_offensive_rating_rank,
         tr_opp.team_defensive_rating_rank AS next_opponent_team_defensive_rating_rank,
@@ -111,12 +111,12 @@ dim_teams AS (
         CURRENT_TIMESTAMP() AS loaded_at
     FROM {{ ref('stg_team_standings') }} AS t
     LEFT JOIN team_last_five AS tlf ON t.team_id = tlf.team_id
-    LEFT JOIN team_rating AS tr ON t.team_id = tr.team_id
+    LEFT JOIN team_rating AS tr ON t.team_id = tr.team_id AND t.season = tr.season
     LEFT JOIN next_opponent_info AS noi ON t.team_id = noi.team_id
     -- Next opponent data
     LEFT JOIN team_last_five AS tlf_opp ON noi.next_opponent_id = tlf_opp.team_id
     LEFT JOIN {{ ref('stg_team_standings') }} AS ts_opp ON noi.next_opponent_id = ts_opp.team_id
-    LEFT JOIN team_rating AS tr_opp ON noi.next_opponent_id = tr_opp.team_id
+    LEFT JOIN team_rating AS tr_opp ON noi.next_opponent_id = tr_opp.team_id AND t.season = tr_opp.season
 )
 
 SELECT * FROM dim_teams

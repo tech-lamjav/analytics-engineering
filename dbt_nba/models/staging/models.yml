@@ -149,8 +149,30 @@ models:
       - name: loaded_at
         description: "Timestamp when the record was loaded into the staging table"
 
+  - name: stg_team_season_averages_general_advanced
+    description: "Staging table for NBA team season averages (general/advanced). Team-level offensive rating, defensive rating, net rating, possessions, and pace per 100 possessions from Balldontlie API. Used by dim_teams for official team ratings."
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+      - name: season
+        description: "Season year (e.g., 2024)"
+      - name: season_type
+        description: "Season type (regular, playoffs, ist, playin)"
+      - name: team_offensive_rating
+        description: "Team points scored per 100 possessions (official metric from API)"
+      - name: team_defensive_rating
+        description: "Team points allowed per 100 possessions (official metric from API)"
+      - name: team_net_rating
+        description: "Point differential per 100 possessions (offensive - defensive)"
+      - name: team_possessions
+        description: "Estimated possessions per game (if available from API)"
+      - name: team_pace
+        description: "Possessions per 48 minutes (if available from API)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded into the staging table"
+
   - name: stg_season_averages_general_advanced
-    description: "Staging table for NBA player season averages (advanced statistics). Contains advanced metrics like offensive and defensive ratings."
+    description: "Staging table for NBA player season averages (advanced statistics). Contains player-level offensive and defensive ratings. Kept for compatibility; dim_teams now uses team-level ratings from stg_team_season_averages_general_advanced."
     columns:
       - name: player_id
         description: "Unique identifier for the player"

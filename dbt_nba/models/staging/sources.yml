@@ -53,6 +53,26 @@ sources:
             description: "Player team information (STRUCT with id, name, abbreviation, etc.)"
             data_type: struct
 
+      - name: raw_team_season_averages_general_advanced
+        description: "NBA team season averages general advanced raw data from Balldontlie API (NDJSON format). Team-level offensive/defensive ratings per 100 possessions."
+        external:
+          location: "gs://smartbetting-landingzone/nba/team_season_averages/2025/raw_nba_team_season_averages_2025-general-advanced.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: team
+            description: "Team information (STRUCT with id, name, abbreviation, conference, division, etc.)"
+            data_type: struct
+          - name: season
+            description: "Season year (e.g., 2024)"
+            data_type: integer
+          - name: season_type
+            description: "Season type (regular, playoffs, ist, playin)"
+            data_type: string
+          - name: stats
+            description: "Team advanced statistics (STRUCT with off_rating, def_rating, net_rating, poss, pace, etc.)"
+            data_type: struct
+
       - name: raw_team_standings
         description: "NBA team standings raw data from Balldontlie API (NDJSON format)"
         external:

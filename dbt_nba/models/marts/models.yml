@@ -65,7 +65,7 @@ models:
         description: "Timestamp when the record was loaded"
 
   - name: dim_teams
-    description: "Dimension table for NBA teams. Provides comprehensive team information including standings, recent performance, ratings, next opponent details, and injury report release times in Brasília timezone."
+    description: "Dimension table for NBA teams. Provides comprehensive team information including standings, recent performance, official team ratings (ORtg/DRtg from Team Season Averages API), next opponent details, and injury report release times in Brasília timezone."
     columns:
       - name: team_id
         description: "Unique identifier for the team"
@@ -90,8 +90,14 @@ models:
         description: "Number of losses in the season"
       - name: team_last_five_games
         description: "Results of last 5 games (e.g., 'V D V V D')"
+      - name: team_offensive_rating
+        description: "Team points scored per 100 possessions (official metric from Team Season Averages API)"
+      - name: team_defensive_rating
+        description: "Team points allowed per 100 possessions (official metric from Team Season Averages API)"
+      - name: team_net_rating
+        description: "Point differential per 100 possessions (offensive - defensive)"
       - name: team_rating_rank
-        description: "Overall team rating rank (based on net rating: offensive - defensive)"
+        description: "Overall team rating rank (based on net rating from Team Season Averages API)"
       - name: team_offensive_rating_rank
         description: "Team's rank for offensive rating"
       - name: team_defensive_rating_rank
@@ -108,6 +114,12 @@ models:
         description: "Next opponent's results from last 5 games"
       - name: next_opponent_conference_rank
         description: "Next opponent's conference rank"
+      - name: next_opponent_team_offensive_rating
+        description: "Next opponent's points scored per 100 possessions"
+      - name: next_opponent_team_defensive_rating
+        description: "Next opponent's points allowed per 100 possessions"
+      - name: next_opponent_team_net_rating
+        description: "Next opponent's point differential per 100 possessions"
       - name: next_opponent_team_rating_rank
         description: "Next opponent's overall rating rank"
       - name: next_opponent_team_offensive_rating_rank
