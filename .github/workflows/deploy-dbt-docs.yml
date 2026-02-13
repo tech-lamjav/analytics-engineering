@@ -41,7 +41,7 @@ jobs:
         run: |
           echo '${{ secrets.BIGQUERY_SA_KEY }}' > keyfile.json
           echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/keyfile.json" >> $GITHUB_ENV
-          cat > profiles.yml << 'PROFILE'
+          cat > profiles.yml << EOF
           dbt_nba:
             outputs:
               dev:
@@ -51,9 +51,9 @@ jobs:
                 dataset: nba
                 threads: 4
                 location: us-east1
-                keyfile: keyfile.json
+                keyfile: ${{ github.workspace }}/keyfile.json
             target: dev
-          PROFILE
+          EOF
 
       - name: Install dbt packages
         run: |
@@ -66,6 +66,14 @@ jobs:
           cd dbt_nba
           export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-${{ github.workspace }}}"
           dbt docs generate --static
+
+      - name: Verify docs and deploy to GitHub Pages
+        run: |
+          if [ ! -f dbt_nba/target/index.html ]; then
+            echo "::error::dbt docs generate did not produce index.html - check the step above"
+            exit 1
+          fi
+          echo "Generated index.html found, deploy will run next"
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4

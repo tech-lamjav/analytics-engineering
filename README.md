@@ -233,9 +233,9 @@ Os testes incluem:
 
 A documentação do dbt (linhagem, descrições dos modelos, testes) é publicada automaticamente no GitHub Pages a cada push em `main`/`master`. Acesse:
 
-**[Ver documentação do dbt](https://mateuskasuya.github.io/analytics-engineering/)** (substitua `SEU_USER` pelo seu usuário do GitHub)
+**[Ver documentação do dbt](https://tech-lamjav.github.io/analytics-engineering/)**
 
-Para ativar o GitHub Pages no repositório: **Settings > Pages > Source** = Branch `gh-pages`, Folder = `/ (root)`.
+**Importante:** para o link mostrar os docs do dbt (e não este README), em **Settings > Pages** use **Source** = “Deploy from a branch”, **Branch** = `gh-pages`, **Folder** = `/ (root)`. Se estiver em `main`/`master`, o site exibirá o README.
 
 Para catalog completo (metadados de colunas do BigQuery), adicione o secret `BIGQUERY_SA_KEY` em **Settings > Secrets and variables > Actions** com o JSON da service account (somente leitura no projeto/dataset).
 
