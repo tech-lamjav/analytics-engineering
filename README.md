@@ -229,7 +229,19 @@ Os testes incluem:
 
 ## 📚 Documentação
 
-Gere e visualize a documentação do projeto:
+### Documentação online (GitHub Pages)
+
+A documentação do dbt (linhagem, descrições dos modelos, testes) é publicada automaticamente no GitHub Pages a cada push em `main`/`master`. Acesse:
+
+**[Ver documentação do dbt](https://mateuskasuya.github.io/analytics-engineering/)** (substitua `SEU_USER` pelo seu usuário do GitHub)
+
+Para ativar o GitHub Pages no repositório: **Settings > Pages > Source** = Branch `gh-pages`, Folder = `/ (root)`.
+
+Para catalog completo (metadados de colunas do BigQuery), adicione o secret `BIGQUERY_SA_KEY` em **Settings > Secrets and variables > Actions** com o JSON da service account (somente leitura no projeto/dataset).
+
+### Documentação local
+
+Gere e visualize a documentação localmente:
 
 ```bash
 cd dbt_nba

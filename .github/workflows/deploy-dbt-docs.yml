@@ -1,0 +1,70 @@
+# Deploy dbt docs to GitHub Pages
+# Requires: GitHub Pages enabled (Settings > Pages > Source: gh-pages branch)
+# Optional: Add BIGQUERY_SA_KEY secret for full catalog (column metadata from BigQuery)
+
+name: Deploy dbt docs
+
+on:
+  push:
+    branches: [master, main]
+    paths:
+      - 'dbt_nba/**'
+      - 'profiles.yml'
+      - 'requirements.txt'
+      - '.github/workflows/deploy-dbt-docs.yml'
+
+jobs:
+  deploy-docs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pages: write
+      id-token: write
+    concurrency:
+      group: deploy-dbt-docs
+      cancel-in-progress: false
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Configure BigQuery credentials
+        if: ${{ secrets.BIGQUERY_SA_KEY != '' }}
+        run: |
+          echo '${{ secrets.BIGQUERY_SA_KEY }}' > keyfile.json
+          echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/keyfile.json" >> $GITHUB_ENV
+          cat > profiles.yml << 'PROFILE'
+          dbt_nba:
+            outputs:
+              dev:
+                type: bigquery
+                method: service-account
+                project: smartbetting-dados
+                dataset: nba
+                threads: 4
+                location: us-east1
+                keyfile: keyfile.json
+            target: dev
+          PROFILE
+
+      - name: Generate dbt docs (static)
+        run: |
+          cd dbt_nba
+          export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-${{ github.workspace }}}"
+          dbt docs generate --static
+
+      - name: Deploy to GitHub Pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./dbt_nba/target
+          publish_branch: gh-pages
