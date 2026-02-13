@@ -38,8 +38,11 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Configure BigQuery credentials
+        env:
+          BIGQUERY_SA_KEY: ${{ secrets.BIGQUERY_SA_KEY }}
         run: |
-          echo '${{ secrets.BIGQUERY_SA_KEY }}' > keyfile.json
+          printf '%s\n' "$BIGQUERY_SA_KEY" > keyfile.json
+          python3 -c "import json; json.load(open('keyfile.json'))" || (echo "::error::BIGQUERY_SA_KEY is not valid JSON" && exit 1)
           echo "GOOGLE_APPLICATION_CREDENTIALS=${{ github.workspace }}/keyfile.json" >> $GITHUB_ENV
           cat > profiles.yml << EOF
           dbt_nba:
