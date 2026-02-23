@@ -515,7 +515,7 @@ cleaned_data AS (
         END AS injury_report_time_offset_hours,
         
         -- Calculate injury report time in Brasília timezone (13:30 local + offset) as STRING
-        FORMAT_TIME('%H:%M:%S', TIME_ADD(TIME(13, 30, 0), INTERVAL 
+        FORMAT_TIME('%H:%M:%S', TIME_ADD(TIME(13, 0, 0), INTERVAL 
             CASE team.city
                 -- Pacific Time (PT): -8 UTC standard, -7 UTC DST | Brasil -3 UTC
                 WHEN 'Los Angeles' THEN CASE WHEN (

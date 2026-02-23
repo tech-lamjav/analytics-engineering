@@ -14,7 +14,7 @@ WITH team_rating AS (
         team_net_rating,
         ROW_NUMBER() OVER (PARTITION BY season ORDER BY team_net_rating DESC) AS team_rating_rank,
         ROW_NUMBER() OVER (PARTITION BY season ORDER BY team_offensive_rating DESC) AS team_offensive_rating_rank,
-        ROW_NUMBER() OVER (PARTITION BY season ORDER BY team_defensive_rating DESC) AS team_defensive_rating_rank
+        ROW_NUMBER() OVER (PARTITION BY season ORDER BY team_defensive_rating ASC) AS team_defensive_rating_rank
     FROM {{ ref('stg_team_season_averages_general_advanced') }}
     WHERE season_type = 'regular'
 ),
