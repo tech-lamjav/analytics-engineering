@@ -26,19 +26,19 @@ echo "Nome completo: ${FULL_IMAGE_NAME}"
 echo "=========================================="
 echo ""
 
-# Configurar Docker para usar gcloud como credential helper
+# Autenticar Docker no Artifact Registry via access token
 echo "Configurando autenticação Docker..."
-gcloud auth configure-docker ${GCP_REGION}-docker.pkg.dev --quiet
+gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://${GCP_REGION}-docker.pkg.dev
 
-# Criar builder buildx se não existir (necessário para multiplataforma)
+# Build da imagem para linux/amd64 (requerido pelo Cloud Run)
 echo ""
-echo "Configurando Docker buildx..."
-docker buildx create --use --name multiarch-builder 2>/dev/null || docker buildx use multiarch-builder
+echo "Fazendo build da imagem para linux/amd64..."
+docker build --platform linux/amd64 -t ${FULL_IMAGE_NAME} .
 
-# Build da imagem para linux/amd64 (requerido pelo Cloud Run) e push direto
+# Push para Artifact Registry
 echo ""
-echo "Fazendo build da imagem para linux/amd64 e push para Artifact Registry..."
-docker buildx build --platform linux/amd64 -t ${FULL_IMAGE_NAME} --push .
+echo "Fazendo push para Artifact Registry..."
+docker push ${FULL_IMAGE_NAME}
 
 echo ""
 echo "=========================================="

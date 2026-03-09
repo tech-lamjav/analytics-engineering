@@ -24,12 +24,12 @@ cleaned_data AS (
             WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE  -- April to October
             WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN  -- March: check if after second Sunday
                 CASE
-                    WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                    WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                     ELSE FALSE
                 END
             WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN  -- November: check if before first Sunday
                 CASE
-                    WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                    WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                     ELSE FALSE
                 END
             ELSE FALSE
@@ -44,12 +44,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -60,12 +60,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -76,12 +76,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -92,12 +92,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -108,12 +108,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -126,12 +126,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -142,12 +142,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -158,12 +158,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -179,12 +179,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -195,12 +195,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -211,12 +211,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -227,12 +227,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -243,12 +243,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -259,12 +259,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -275,12 +275,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -291,12 +291,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -309,12 +309,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -325,12 +325,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -341,12 +341,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -357,12 +357,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -373,12 +373,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -389,12 +389,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -405,12 +405,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -421,12 +421,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -437,12 +437,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -453,12 +453,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -469,12 +469,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -485,12 +485,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -501,12 +501,12 @@ cleaned_data AS (
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                         CASE
-                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                            WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                             ELSE FALSE
                         END
                     ELSE FALSE
@@ -523,12 +523,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -539,12 +539,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -555,12 +555,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -571,12 +571,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -587,12 +587,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -605,12 +605,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -621,12 +621,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -637,12 +637,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -658,12 +658,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -674,12 +674,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -690,12 +690,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -706,12 +706,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -722,12 +722,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -738,12 +738,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -754,12 +754,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -770,12 +770,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -788,12 +788,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -804,12 +804,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -820,12 +820,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -836,12 +836,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -852,12 +852,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -868,12 +868,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -884,12 +884,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -900,12 +900,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -916,12 +916,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -932,12 +932,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -948,12 +948,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -964,12 +964,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
@@ -980,12 +980,12 @@ cleaned_data AS (
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) BETWEEN 4 AND 10 THEN TRUE
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 3 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) >= (8 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 3, 8)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         WHEN EXTRACT(MONTH FROM CURRENT_DATE()) = 11 THEN
                             CASE
-                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + (7 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)))) THEN TRUE
+                                WHEN EXTRACT(DAY FROM CURRENT_DATE()) < (1 + MOD(8 - EXTRACT(DAYOFWEEK FROM DATE(EXTRACT(YEAR FROM CURRENT_DATE()), 11, 1)), 7)) THEN TRUE
                                 ELSE FALSE
                             END
                         ELSE FALSE
