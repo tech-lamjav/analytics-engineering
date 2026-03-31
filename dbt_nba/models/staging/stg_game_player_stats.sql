@@ -24,11 +24,15 @@ cleaned_data AS (
         CAST(ast AS INTEGER) AS assists,
         CAST(pts AS INTEGER) + CAST(ast AS INTEGER) AS points_assists,
         CAST(reb AS INTEGER) + CAST(ast AS INTEGER) AS rebounds_assists,
+        CAST(oreb AS INTEGER) AS offensive_rebounds,
+        CAST(dreb AS INTEGER) AS defensive_rebounds,
         CAST(pts AS INTEGER) + CAST(reb AS INTEGER) + CAST(ast AS INTEGER) AS points_rebounds_assists,
         CAST(stl AS INTEGER) AS steals,
         CAST(blk AS INTEGER) AS blocks,
         CAST(blk AS INTEGER) + CAST(stl AS INTEGER) AS blocks_steals,
         CAST(turnover AS INTEGER) AS turnovers,
+        CAST(fg_pct AS FLOAT64) AS field_goal_percentage,
+        CAST(ft_pct AS FLOAT64) AS free_throw_percentage,
         CASE
             WHEN (
                 (CAST(CAST(pts AS INTEGER) > 10 AS INT64))

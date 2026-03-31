@@ -7,29 +7,25 @@
 
 WITH
 
--- Performance of backup players when specific leaders are injured
+-- Performance of backup players when specific leaders are injured (DNP: minutes = 0)
+-- Join backup stats on ipr.game_id so averages are only games where the leader did not play
 backup_performance_when_leader_injured AS (
     SELECT
         ipr.player_id AS injured_leader_id,
         ipr.team_id,
-        gps.stat_type,
+        backup_player.stat_type,
         backup_player.player_id AS backup_player_id,
         AVG(backup_player.stat_value) AS backup_stats_when_leader_out
     FROM {{ ref('int_game_player_stats_not_played') }} AS ipr
-    INNER JOIN {{ ref('int_game_player_stats_pilled') }} AS gps
-        ON
-            ipr.player_id = gps.player_id
-            AND ipr.team_id = gps.team_id
     INNER JOIN {{ ref('int_game_player_stats_pilled') }} AS backup_player
         ON
             ipr.team_id = backup_player.team_id
-            AND gps.game_id = backup_player.game_id
-            AND gps.stat_type = backup_player.stat_type
+            AND ipr.game_id = backup_player.game_id
             AND ipr.player_id != backup_player.player_id
     GROUP BY
         ipr.player_id,
         ipr.team_id,
-        gps.stat_type,
+        backup_player.stat_type,
         backup_player.player_id
 ),
 

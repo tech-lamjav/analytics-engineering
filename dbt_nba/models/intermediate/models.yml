@@ -15,7 +15,7 @@ models:
       - name: game_date
         description: "Date when the game was played"
       - name: stat_type
-        description: "Type of statistic (e.g., player_points, player_rebounds, player_assists, player_threes, player_blocks, player_steals, player_turnovers, player_points_rebounds, player_points_assists, player_rebounds_assists, player_points_rebounds_assists, player_blocks_steals, player_double_double, player_triple_double, player_minutes)"
+        description: "Type of statistic (e.g., player_points, player_rebounds, player_assists, player_threes, player_blocks, player_steals, player_turnovers, player_points_rebounds, player_points_assists, player_rebounds_assists, player_points_rebounds_assists, player_blocks_steals, player_double_double, player_triple_double, player_minutes, player_offensive_rebounds, player_defensive_rebounds, player_field_goal_percentage, player_free_throw_percentage)"
       - name: stat_value
         description: "Value of the statistic for this player in this game"
       - name: loaded_at

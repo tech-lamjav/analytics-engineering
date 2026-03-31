@@ -184,6 +184,54 @@ stats_pilled AS (
         game_id,
         game_number,
         game_date,
+        'player_offensive_rebounds' AS stat_type,
+        CAST(offensive_rebounds AS FLOAT64) AS stat_value
+    FROM base_data
+
+    UNION ALL
+
+    SELECT
+        player_id,
+        team_id,
+        game_id,
+        game_number,
+        game_date,
+        'player_defensive_rebounds' AS stat_type,
+        CAST(defensive_rebounds AS FLOAT64) AS stat_value
+    FROM base_data
+
+    UNION ALL
+
+    SELECT
+        player_id,
+        team_id,
+        game_id,
+        game_number,
+        game_date,
+        'player_field_goal_percentage' AS stat_type,
+        CAST(field_goal_percentage AS FLOAT64) AS stat_value
+    FROM base_data
+
+    UNION ALL
+
+    SELECT
+        player_id,
+        team_id,
+        game_id,
+        game_number,
+        game_date,
+        'player_free_throw_percentage' AS stat_type,
+        CAST(free_throw_percentage AS FLOAT64) AS stat_value
+    FROM base_data
+
+    UNION ALL
+
+    SELECT
+        player_id,
+        team_id,
+        game_id,
+        game_number,
+        game_date,
         'player_minutes' AS stat_type,
         CAST(minutes AS FLOAT64) AS stat_value
     FROM base_data

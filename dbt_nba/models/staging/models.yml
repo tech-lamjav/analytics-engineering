@@ -56,6 +56,10 @@ models:
         description: "Combined points and assists (calculated: points + assists)"
       - name: rebounds_assists
         description: "Combined rebounds and assists (calculated: rebounds + assists)"
+      - name: offensive_rebounds
+        description: "Offensive rebounds by the player (converted to INTEGER)"
+      - name: defensive_rebounds
+        description: "Defensive rebounds by the player (converted to INTEGER)"
       - name: points_rebounds_assists
         description: "Combined points, rebounds, and assists (calculated: points + rebounds + assists)"
       - name: steals
@@ -66,6 +70,10 @@ models:
         description: "Combined blocks and steals (calculated: blocks + steals)"
       - name: turnovers
         description: "Turnovers by the player (converted to INTEGER)"
+      - name: field_goal_percentage
+        description: "Field goal percentage for the player in this game (converted to FLOAT64)"
+      - name: free_throw_percentage
+        description: "Free throw percentage for the player in this game (converted to FLOAT64)"
       - name: triple_double
         description: "Binary indicator (1/0) if player achieved a triple-double (10+ in 3 of: points, rebounds, assists, steals, blocks)"
       - name: double_double

@@ -16,6 +16,7 @@ cleaned_data AS (
         status,
         CURRENT_TIMESTAMP() AS loaded_at
     FROM source_data
+    WHERE status <> 'Probable'
 )
 
 SELECT * FROM cleaned_data
