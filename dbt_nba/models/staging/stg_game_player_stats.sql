@@ -33,6 +33,7 @@ cleaned_data AS (
         CAST(turnover AS INTEGER) AS turnovers,
         CAST(fg_pct AS FLOAT64) AS field_goal_percentage,
         CAST(ft_pct AS FLOAT64) AS free_throw_percentage,
+        CAST(plus_minus AS INTEGER) AS plus_minus,
         CASE
             WHEN (
                 (CAST(CAST(pts AS INTEGER) > 10 AS INT64))

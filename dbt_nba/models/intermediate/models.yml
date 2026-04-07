@@ -89,3 +89,69 @@ models:
       - name: game_id
         description: "Unique identifier for the game where the player did not play"
 
+  - name: int_daily_triggers
+    description: "Injury triggers for games on CURRENT_DATE with Stage 1 fatigue and Stage 2.5 market validation (freshness, participation, out-for-season)."
+    columns:
+      - name: game_id
+        description: "Game on the daily slate"
+      - name: game_date
+        description: "Slate date (equals CURRENT_DATE at run time)"
+      - name: game_datetime_brasilia
+        description: "Game datetime in Brasilia"
+      - name: game_time_brasilia
+        description: "Formatted Brasilia time (HH:MM)"
+      - name: home_team_abbr
+        description: "Home team abbreviation"
+      - name: visitor_team_abbr
+        description: "Visitor team abbreviation"
+      - name: trigger_player_id
+        description: "Player with Out/Doubtful/Questionable status"
+      - name: trigger_name
+        description: "Trigger player display name"
+      - name: trigger_status
+        description: "Raw injury status"
+      - name: trigger_team_id
+        description: "Trigger team id"
+      - name: trigger_team_abbr
+        description: "Trigger team abbreviation"
+      - name: trigger_days_out
+        description: "Days since last game with minutes"
+      - name: trigger_freshness
+        description: "NOVA / RECENTE / EXTENDIDA"
+      - name: trigger_participation_pct
+        description: "Season games played share for trigger"
+      - name: is_b2b
+        description: "Back-to-back flag for trigger team in this game"
+      - name: fatigue_level
+        description: "ALTA / MEDIA / BAIXA"
+      - name: is_home
+        description: "Trigger team is home"
+      - name: loaded_at
+        description: "Load timestamp"
+
+  - name: int_daily_360_analysis
+    description: "Stage 3/3C COM vs SEM teammate aggregates, line cross, and signal per validated trigger."
+    columns:
+      - name: game_id
+        description: "Slate game id"
+      - name: trigger_player_id
+        description: "Injury trigger"
+      - name: backup_player_id
+        description: "Teammate with positive SEM lift"
+      - name: stat_type
+        description: "Analyzed stat"
+      - name: avg_com
+        description: "Average in COM games"
+      - name: avg_sem
+        description: "Average in SEM games"
+      - name: gap
+        description: "avg_sem - avg_com"
+      - name: gap_pct
+        description: "Percent gap vs COM"
+      - name: line_value
+        description: "Latest prop line"
+      - name: gap_vs_line_pct
+        description: "Gap vs line percent"
+      - name: signal
+        description: "FORTE / MEDIO / FRACO"
+

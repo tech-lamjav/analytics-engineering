@@ -235,6 +235,18 @@ stats_pilled AS (
         'player_minutes' AS stat_type,
         CAST(minutes AS FLOAT64) AS stat_value
     FROM base_data
+
+    UNION ALL
+
+    SELECT
+        player_id,
+        team_id,
+        game_id,
+        game_number,
+        game_date,
+        'player_plus_minus' AS stat_type,
+        CAST(plus_minus AS FLOAT64) AS stat_value
+    FROM base_data
 )
 
 SELECT

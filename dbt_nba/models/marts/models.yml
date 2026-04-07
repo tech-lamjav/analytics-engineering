@@ -61,6 +61,8 @@ models:
         description: "Average performance of the backup player when this leader is out (only shown if current player is injured leader)"
       - name: next_player_stats_normal
         description: "Normal average performance of the backup player"
+      - name: leader_injury_status
+        description: "Injury status of this player as a stat leader (lowercase): 'out', 'questionable', 'doubtful', or NULL if healthy. Only populated on the leader's row (stat_rank = 1)."
       - name: loaded_at
         description: "Timestamp when the record was loaded"
 
@@ -335,3 +337,107 @@ models:
         description: "Boolean flag indicating if this is the home team's next scheduled game"
       - name: visitor_team_is_next_game
         description: "Boolean flag indicating if this is the visiting team's next scheduled game"
+
+  - name: dim_daily_opportunities
+    description: "Pre-computed daily injury-driven betting opportunities (COM vs SEM 360, lines, opponent context, 0-100 score). One row per game, trigger, backup teammate, and stat_type passing filters."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - trigger_player_id
+              - backup_player_id
+              - stat_type
+    columns:
+      - name: game_id
+        description: "Game identifier for the slate date"
+        tests:
+          - not_null
+      - name: game_date
+        description: "Date of the game"
+      - name: game_time
+        description: "Game time in Brasilia (HH:MM)"
+      - name: home_team_abbr
+        description: "Home team abbreviation"
+      - name: visitor_team_abbr
+        description: "Visitor team abbreviation"
+      - name: trigger_player_id
+        description: "Injured or doubtful player driving the opportunity"
+        tests:
+          - not_null
+      - name: trigger_name
+        description: "Trigger player name"
+      - name: trigger_status
+        description: "Injury status (Out, Doubtful, Questionable)"
+      - name: trigger_team_abbr
+        description: "Trigger team abbreviation"
+      - name: trigger_team_id
+        description: "Trigger team id"
+      - name: trigger_days_out
+        description: "Estimated days since trigger last played"
+      - name: trigger_freshness
+        description: "NOVA / RECENTE / EXTENDIDA"
+      - name: trigger_participation_pct
+        description: "Share of team games the trigger played this season"
+      - name: is_b2b
+        description: "Whether trigger team is on a back-to-back"
+      - name: fatigue_level
+        description: "ALTA / MEDIA / BAIXA fatigue classification"
+      - name: backup_player_id
+        description: "Teammate with positive SEM vs COM lift"
+        tests:
+          - not_null
+      - name: backup_player_name
+        description: "Backup player name"
+      - name: stat_type
+        description: "Prop stat type analyzed"
+        tests:
+          - not_null
+      - name: avg_com
+        description: "Average stat with trigger available (COM games)"
+      - name: avg_sem
+        description: "Average stat with trigger out (SEM games)"
+      - name: stddev_sem
+        description: "Std dev in SEM sample"
+      - name: cv_sem
+        description: "Coefficient of variation on SEM sample (percent)"
+      - name: gap
+        description: "avg_sem - avg_com"
+      - name: gap_pct
+        description: "Percent lift vs COM average"
+      - name: jogos_com
+        description: "Games in COM sample"
+      - name: jogos_sem
+        description: "Games in SEM sample"
+      - name: line_value
+        description: "Most recent betting line for backup/stat"
+      - name: gap_vs_line
+        description: "avg_sem - line_value"
+      - name: gap_vs_line_pct
+        description: "Percent vs line"
+      - name: signal
+        description: "FORTE / MEDIO / FRACO line-based signal"
+      - name: score
+        description: "Final score after blowout deflator"
+        tests:
+          - not_null
+      - name: score_base
+        description: "Weighted score before blowout deflator"
+      - name: score_label
+        description: "ALTA / MEDIA / BAIXA CONFIANCA (rows with score < 40 excluded)"
+      - name: opponent_abbr
+        description: "Opponent team abbreviation"
+      - name: opponent_def_rank
+        description: "Opponent defensive rating rank"
+      - name: opponent_off_rank
+        description: "Opponent offensive rating rank"
+      - name: is_home
+        description: "Whether trigger team is home"
+      - name: rating_stars
+        description: "Backup rating stars from dim_stat_player"
+      - name: spread
+        description: "Game spread when available (null until sourced)"
+      - name: blowout_deflator
+        description: "Multiplier applied to score_base (default 1.0)"
+      - name: loaded_at
+        description: "Row load timestamp"

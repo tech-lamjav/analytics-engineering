@@ -82,7 +82,7 @@ players_with_injury_status AS (
         pr.*,
         ir.status,
         COALESCE(pr.stat_rank = 1 AND ir.status IS NOT null, false) AS is_leader_with_injury,
-        COALESCE(pr.stat_rank > 1, false OR ir.status IS null, false) AS is_available_backup
+        (pr.stat_rank > 1 AND ir.status IS null) AS is_available_backup
     FROM player_ratings AS pr
     LEFT JOIN {{ ref('stg_player_injuries') }} AS ir
         ON pr.player_id = ir.player_id
@@ -137,6 +137,7 @@ SELECT
     next_available_player_name,
     next_player_stats_when_leader_out,
     next_player_stats_normal,
+    leader_injury_status,
     CURRENT_TIMESTAMP() AS loaded_at
 FROM (
     SELECT
@@ -147,7 +148,10 @@ FROM (
         -- Only show leader_out stats when current player is a leader with injury
         CASE
             WHEN pwis.is_leader_with_injury = true THEN nap.next_player_stats_when_leader_out
-        END AS next_player_stats_when_leader_out
+        END AS next_player_stats_when_leader_out,
+        CASE
+            WHEN pwis.is_leader_with_injury = true THEN LOWER(pwis.status)
+        END AS leader_injury_status
     FROM players_with_injury_status AS pwis
     LEFT JOIN next_available_players AS nap
         ON
