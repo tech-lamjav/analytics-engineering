@@ -1,5 +1,12 @@
 {{
   config(
+    materialized='incremental',
+    incremental_strategy='insert_overwrite',
+    partition_by={'field': 'game_date', 'data_type': 'date'},
+    on_schema_change='append_new_columns',
+    post_hook=[
+      "DELETE FROM {{ this }} WHERE game_date < DATE_SUB(CURRENT_DATE('America/Sao_Paulo'), INTERVAL 1 DAY)"
+    ],
     description='Daily betting opportunities: COM vs SEM 360 analysis, lines, contextual validation, and 0-100 score',
     labels={'domain': 'bi', 'category': 'analytics'}
   )
@@ -42,21 +49,14 @@ with_context AS (
 with_scores AS (
     SELECT
         c.*,
-        CAST(NULL AS FLOAT64) AS spread,
-        1.0 AS blowout_deflator,
+        CAST(NULL AS FLOAT64) AS spread,  -- TODO: plugar spread coletado (task coleta spread/total)
+        1.0 AS blowout_deflator,           -- TODO: plugar deflator baseado em spread quando disponivel
+        -- gap_score usa apenas gap_vs_line_pct; backups sem line sao filtrados em final
         CASE
-            WHEN c.line_value IS NOT NULL THEN CASE
-                WHEN c.gap_vs_line_pct > 20 THEN 90
-                WHEN c.gap_vs_line_pct > 10 THEN 70
-                WHEN c.gap_vs_line_pct > 5 THEN 50
-                ELSE 20
-            END
-            ELSE CASE
-                WHEN c.gap_pct > 20 THEN 90
-                WHEN c.gap_pct > 10 THEN 70
-                WHEN c.gap_pct > 5 THEN 50
-                ELSE 20
-            END
+            WHEN c.gap_vs_line_pct > 20 THEN 90
+            WHEN c.gap_vs_line_pct > 10 THEN 70
+            WHEN c.gap_vs_line_pct > 5  THEN 50
+            ELSE 20
         END AS gap_score,
         CASE
             WHEN c.jogos_sem >= 10 THEN 90
@@ -75,7 +75,7 @@ with_scores AS (
             WHEN c.opponent_def_rank IS NOT NULL THEN 30
             ELSE 60
         END AS matchup_score,
-        60 AS ambient_score,
+        60 AS ambient_score,  -- TODO: substituir por CASE em Total O/U quando coleta de total disponivel
         CASE
             WHEN c.cv_sem IS NULL THEN 60
             WHEN c.cv_sem < 20 THEN 90
@@ -149,6 +149,8 @@ final AS (
         CURRENT_TIMESTAMP() AS loaded_at
     FROM scored
     WHERE ROUND(score_base_raw * blowout_deflator) >= 40
+      AND line_value IS NOT NULL                              -- Stage 3C: sem line publicada nao e oportunidade apostavel
+      AND trigger_freshness IN ('NOVA', 'RECENTE')           -- Stage 2.5: EXTENDIDA (8-14d) vai para dim_teammate_impact_360 mas nao para oportunidades
 )
 
 SELECT * FROM final

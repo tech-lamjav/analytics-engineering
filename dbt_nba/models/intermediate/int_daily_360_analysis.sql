@@ -13,7 +13,7 @@ WITH trigger_team_season_games AS (
         ON tg.team_id = tr.trigger_team_id
     WHERE
         tg.game_date >= '2025-10-01'
-        AND tg.game_date < CURRENT_DATE()
+        AND tg.game_date < CURRENT_DATE('America/Sao_Paulo')
         AND tg.win_loss IS NOT NULL
 ),
 

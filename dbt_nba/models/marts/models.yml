@@ -441,3 +441,56 @@ models:
         description: "Multiplier applied to score_base (default 1.0)"
       - name: loaded_at
         description: "Row load timestamp"
+
+  - name: dim_teammate_impact_360
+    description: "Full teammate COM vs SEM impact for Analise 360 (PTS, AST, REB only). No betting score, gap, or rating filters; includes negative impact. One row per trigger_player_id, teammate_player_id, and stat_type. Filtered to teammate_avg_minutes >= 15 and jogos_sem >= 5."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - trigger_player_id
+              - teammate_player_id
+              - stat_type
+    columns:
+      - name: trigger_player_id
+        description: "Injury trigger player id (absent player)"
+        tests:
+          - not_null
+      - name: trigger_name
+        description: "Trigger player display name"
+      - name: trigger_team_id
+        description: "Trigger team id"
+      - name: trigger_team_abbr
+        description: "Trigger team abbreviation"
+      - name: trigger_status
+        description: "Current injury status (lowercase: out, doubtful, questionable)"
+      - name: teammate_player_id
+        description: "Teammate player id"
+        tests:
+          - not_null
+      - name: teammate_name
+        description: "Teammate display name"
+      - name: teammate_position
+        description: "Teammate position (e.g. G, F, C)"
+      - name: stat_type
+        description: "player_points, player_assists, or player_rebounds"
+        tests:
+          - not_null
+      - name: avg_com
+        description: "Average stat when trigger plays (COM games)"
+      - name: avg_sem
+        description: "Average stat when trigger does not play (SEM games)"
+      - name: stddev_sem
+        description: "Standard deviation of stat in SEM sample"
+      - name: gap
+        description: "Absolute difference avg_sem - avg_com (can be negative)"
+      - name: gap_pct
+        description: "Percent change vs COM average (can be negative)"
+      - name: jogos_com
+        description: "Count of COM games in sample"
+      - name: jogos_sem
+        description: "Count of SEM games in sample (minimum 5)"
+      - name: teammate_avg_minutes
+        description: "Teammate average minutes per game this season (minimum 15)"
+      - name: loaded_at
+        description: "Row load timestamp"

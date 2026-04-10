@@ -1,5 +1,5 @@
 {{ config(
-    description='Daily injury triggers for games on CURRENT_DATE with fatigue (Stage 1) and market validation (Stage 2.5)'
+    description='Daily injury triggers for games on today/tomorrow (Brasília) with fatigue (Stage 1) and market validation (Stage 2.5)'
 ) }}
 
 WITH todays_games AS (
@@ -12,7 +12,8 @@ WITH todays_games AS (
         g.visitor_team_id,
         g.visitor_team_abbreviation
     FROM {{ ref('ft_games') }} g
-    WHERE g.game_date = CURRENT_DATE()
+    WHERE g.game_date BETWEEN CURRENT_DATE('America/Sao_Paulo')
+                          AND DATE_ADD(CURRENT_DATE('America/Sao_Paulo'), INTERVAL 1 DAY)
 ),
 
 triggers_raw AS (
@@ -57,7 +58,7 @@ trigger_games_played AS (
     WHERE
         stat_type = 'player_points'
         AND game_date >= '2025-10-01'
-        AND game_date < CURRENT_DATE()
+        AND game_date < CURRENT_DATE('America/Sao_Paulo')
     GROUP BY player_id
 ),
 
@@ -68,7 +69,7 @@ team_games_count AS (
     FROM {{ ref('int_games_teams_pilled') }}
     WHERE
         game_date >= '2025-10-01'
-        AND game_date < CURRENT_DATE()
+        AND game_date < CURRENT_DATE('America/Sao_Paulo')
         AND win_loss IS NOT NULL
     GROUP BY team_id
 ),
@@ -77,7 +78,7 @@ joined AS (
     SELECT
         tr.*,
         tlp.last_played_date,
-        DATE_DIFF(CURRENT_DATE(), tlp.last_played_date, DAY) AS trigger_days_out,
+        DATE_DIFF(CURRENT_DATE('America/Sao_Paulo'), tlp.last_played_date, DAY) AS trigger_days_out,
         SAFE_DIVIDE(
             COALESCE(tgp.jogos_trigger, 0),
             NULLIF(tgc.total_team_games, 0)
