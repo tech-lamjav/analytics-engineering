@@ -68,5 +68,4 @@ SELECT
         WHEN winner_team_id = team_id THEN 'V'
         WHEN winner_team_id != team_id THEN 'D'
     END AS win_loss,*/
-    CURRENT_TIMESTAMP() AS loaded_at
 FROM cleaned_data

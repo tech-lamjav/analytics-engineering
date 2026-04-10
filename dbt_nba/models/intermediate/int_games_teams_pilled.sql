@@ -132,7 +132,6 @@ final_result AS (
         lfg.team_last_five_games,
         COALESCE(bb.is_b2b_game, false) AS is_b2b_game,
         COALESCE(ng.is_next_game, false) AS is_next_game,
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM all_team_games AS atg
     LEFT JOIN b2b_games AS bb ON atg.game_id = bb.game_id AND atg.team_id = bb.team_id
     LEFT JOIN next_games AS ng ON atg.game_id = ng.game_id AND atg.team_id = ng.team_id

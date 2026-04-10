@@ -994,7 +994,6 @@ cleaned_data AS (
             END 
         HOUR)) AS team_injury_report_time_brasilia,
         
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM source_data
 )
 

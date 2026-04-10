@@ -18,8 +18,6 @@ models:
         description: "Type of statistic (e.g., player_points, player_rebounds, player_assists, player_threes, player_blocks, player_steals, player_turnovers, player_points_rebounds, player_points_assists, player_rebounds_assists, player_points_rebounds_assists, player_blocks_steals, player_double_double, player_triple_double, player_minutes, player_offensive_rebounds, player_defensive_rebounds, player_field_goal_percentage, player_free_throw_percentage)"
       - name: stat_value
         description: "Value of the statistic for this player in this game"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded"
 
   - name: int_games_teams_pilled
     description: "Intermediate model that unpivots game data from a team perspective. Creates one row per team per game (both home and visitor). Identifies back-to-back games (B2B), next scheduled games, and calculates last 5 games results for each team."
@@ -56,8 +54,6 @@ models:
         description: "Boolean flag indicating if this is the team's next scheduled game"
       - name: team_last_five_games
         description: "String showing results of last 5 games for the team (e.g., 'V D V V D')"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded"
 
   - name: int_season_averages_general_base
     description: "Intermediate model that unpivots season average statistics from wide to long format. Transforms individual stat columns into a single stat_type and stat_value structure for easier analysis and comparison across different statistics."
@@ -76,8 +72,6 @@ models:
         description: "Unique identifier for the player"
       - name: last_game_text
         description: "Formatted text describing last game (e.g., 'Ultimo Jogo: 3 dias atras' or 'Ultimo Jogo: 1 dia atras')"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded"
 
   - name: int_game_player_stats_not_played
     description: "Intermediate model that identifies games where players were on the roster but did not play (minutes = 0). Useful for injury analysis and backup player performance when starters are out."
@@ -126,8 +120,6 @@ models:
         description: "ALTA / MEDIA / BAIXA"
       - name: is_home
         description: "Trigger team is home"
-      - name: loaded_at
-        description: "Load timestamp"
 
   - name: int_daily_360_analysis
     description: "Stage 3/3C COM vs SEM teammate aggregates, line cross, and signal per validated trigger."

@@ -26,7 +26,6 @@ last_game_text AS (
                 ELSE 'dias atras'
             END
         ) AS last_game_text,
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM
         last_games_text
 )

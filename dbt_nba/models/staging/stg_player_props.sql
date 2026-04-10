@@ -38,7 +38,6 @@ cleaned_data AS (
         END AS stat_type,
         CAST(line_value AS FLOAT64) AS line_value,
         --(CAST(market.odds AS FLOAT64) / 100) + 1 AS market_odds,
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM source_data
     WHERE market.type = 'over_under'
 )

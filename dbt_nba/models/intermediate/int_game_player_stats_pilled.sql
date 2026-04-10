@@ -257,5 +257,4 @@ SELECT
     game_date,
     stat_type,
     stat_value,
-    CURRENT_TIMESTAMP() AS loaded_at
 FROM stats_pilled

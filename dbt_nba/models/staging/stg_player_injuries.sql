@@ -14,7 +14,6 @@ cleaned_data AS (
         CAST(return_date AS DATE) AS return_date,
         description,
         status,
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM source_data
     WHERE status <> 'Probable'
 )

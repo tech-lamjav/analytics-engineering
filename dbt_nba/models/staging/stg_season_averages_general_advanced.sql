@@ -18,7 +18,6 @@ cleaned_data AS (
         --CAST(stats.poss AS INTEGER) * CAST(stats.off_rating AS FLOAT64) AS offensive_rating_points,
         --CAST(stats.poss AS INTEGER) * CAST(stats.def_rating AS FLOAT64) AS defensive_rating_points,
 
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM source_data
 )
 

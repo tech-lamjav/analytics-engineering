@@ -18,8 +18,6 @@ models:
         description: "Player name in Last, First (TEAM) format for display purposes"
       - name: position
         description: "Player's position (e.g., G, F, C, G-F, F-C)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_game_player_stats
     description: "Staging table for individual player statistics from each NBA game. Contains detailed performance metrics for every player in every game they participated in."
@@ -82,8 +80,6 @@ models:
         description: "Team ID of the winning team (calculated from scores)"
       - name: game_number
         description: "Sequential game number for the player (1 = most recent game, calculated using ROW_NUMBER)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_games
     description: "Staging table for NBA games with B2B flag from NDJSON external table. Contains game-level information including teams, scores, datetimes, and winner. Data is extracted from NDJSON format with nested games array structure."
@@ -116,8 +112,6 @@ models:
         description: "Final score of the visiting team (null for future games, converted to INT64)"
       - name: winner_team_id
         description: "Team ID of the winning team (null for future games or ties, calculated from scores)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_season_averages_general_base
     description: "Staging table for NBA player season averages (base statistics). Contains per-game averages for fundamental basketball statistics."
@@ -154,8 +148,6 @@ models:
         description: "Total number of triple-doubles in the season (converted to INTEGER)"
       - name: age
         description: "Player's age (converted to INTEGER)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_team_season_averages_general_advanced
     description: "Staging table for NBA team season averages (general/advanced). Team-level offensive rating, defensive rating, net rating, possessions, and pace per 100 possessions from Balldontlie API. Used by dim_teams for official team ratings."
@@ -176,8 +168,6 @@ models:
         description: "Estimated possessions per game (if available from API)"
       - name: team_pace
         description: "Possessions per 48 minutes (if available from API)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_season_averages_general_advanced
     description: "Staging table for NBA player season averages (advanced statistics). Contains player-level offensive and defensive ratings. Kept for compatibility; dim_teams now uses team-level ratings from stg_team_season_averages_general_advanced."
@@ -188,8 +178,6 @@ models:
         description: "Points produced per 100 possessions (efficiency metric, converted to FLOAT64)"
       - name: defensive_rating
         description: "Points allowed per 100 possessions (efficiency metric, converted to FLOAT64)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_season_averages_shooting_by_zone
     description: "Staging table for NBA player season averages (shooting by zone). Contains field goal statistics broken down by court zones including corner 3s, above-the-break 3s, restricted area, paint, mid-range, and backcourt."
@@ -246,8 +234,6 @@ models:
         description: "Average backcourt field goals made per game"
       - name: backcourt_fg_pct
         description: "Backcourt field goal percentage"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_team_standings
     description: "Staging table for NBA team standings. Contains current season standings, records, and conference information."
@@ -276,8 +262,6 @@ models:
         description: "Hours to add to 13:30 local time to convert to Brasília time for injury report release. Accounts for US DST rules (except Arizona which doesn't observe DST)"
       - name: team_injury_report_time_brasilia
         description: "Time when injury report is released for the team's home games in Brasília timezone (13:30 local time converted). Example: Los Angeles = 17:30 (13:30 PT + 4 hours during DST)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_player_injuries
     description: "Staging table for NBA player injuries. Contains injury information including expected return dates, status, and descriptions."
@@ -294,8 +278,6 @@ models:
         description: "Detailed description of the injury and player status"
       - name: status
         description: "Injury status (e.g., Doubtful, Out, Questionable)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"
 
   - name: stg_player_props
     description: "Staging table for NBA player props from DraftKings NDJSON external table. Contains betting lines for various player performance metrics. Prop types are normalized to stat_type with 'player_' prefix for consistency with player stats models. Filtered to over_under props only."
@@ -314,5 +296,3 @@ models:
         description: "Normalized prop type with 'player_' prefix to match stat_type format used in player stats models (e.g., player_points, player_rebounds, player_assists, player_points_rebounds, player_assists_1q, player_points_first3min). Used for joining with player stats."
       - name: line_value
         description: "Betting line value for the prop (converted to FLOAT64)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded into the staging table"

@@ -128,7 +128,6 @@ SELECT
     COALESCE(is_b2b_game, FALSE) AS is_b2b,
     fatigue_level,
     is_home,
-    CURRENT_TIMESTAMP() AS loaded_at
 FROM fatigue
 WHERE
     last_played_date IS NOT NULL

@@ -15,7 +15,6 @@ cleaned_data AS (
         TRIM(first_name || ' ' || last_name) AS player_name,
         CONCAT(TRIM(last_name || ', ' || first_name), ' (', team.abbreviation, ')') AS last_name_first_team,
         TRIM(position) AS position,
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM source_data
 )
 

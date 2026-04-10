@@ -19,7 +19,6 @@ cleaned_data AS (
         ) AS team_net_rating,
         SAFE_CAST(stats.poss AS FLOAT64) AS team_possessions,
         SAFE_CAST(stats.pace AS FLOAT64) AS team_pace,
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM source_data
 )
 

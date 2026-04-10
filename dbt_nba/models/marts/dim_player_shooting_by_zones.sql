@@ -8,7 +8,7 @@
 WITH dim_player_shooting_by_zones AS (
 
     SELECT
-       * EXCEPT(loaded_at)
+       *
     FROM {{ ref('stg_season_averages_shooting_by_zone') }}
 )
 

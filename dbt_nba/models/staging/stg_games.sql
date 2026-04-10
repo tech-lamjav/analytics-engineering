@@ -85,7 +85,6 @@ cleaned_data AS (
             THEN CAST(game.visitor_team.id AS INT64)
         END AS winner_team_id,
 
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM unnested_games
 )
 

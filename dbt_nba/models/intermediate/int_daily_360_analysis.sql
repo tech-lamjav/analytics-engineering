@@ -235,7 +235,6 @@ SELECT
     ws.gap_vs_line,
     ws.gap_vs_line_pct,
     ws.signal,
-    CURRENT_TIMESTAMP() AS loaded_at
 FROM with_signals ws
 INNER JOIN {{ ref('int_daily_triggers') }} dt
     ON ws.trigger_player_id = dt.trigger_player_id

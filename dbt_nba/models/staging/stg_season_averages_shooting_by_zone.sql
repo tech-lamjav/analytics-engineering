@@ -49,7 +49,6 @@ cleaned_data AS (
         CAST(stats.backcourt_fg_pct AS FLOAT64) AS backcourt_fg_pct,
 
         -- Metadata
-        CURRENT_TIMESTAMP() AS loaded_at
     FROM source_data
 )
 
