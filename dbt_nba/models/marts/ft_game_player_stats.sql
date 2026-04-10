@@ -42,7 +42,8 @@ SELECT
     CASE
         WHEN not_played.player_id IS NOT null THEN 'Não jogou'
         ELSE 'Jogou'
-    END AS is_played
+    END AS is_played,
+    CURRENT_TIMESTAMP() AS loaded_at
 FROM
     {{ ref('int_game_player_stats_pilled') }} AS gps
 LEFT JOIN

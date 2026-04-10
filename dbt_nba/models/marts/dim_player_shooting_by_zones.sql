@@ -12,4 +12,7 @@ WITH dim_player_shooting_by_zones AS (
     FROM {{ ref('stg_season_averages_shooting_by_zone') }}
 )
 
-SELECT * FROM dim_player_shooting_by_zones
+SELECT
+    *,
+    CURRENT_TIMESTAMP() AS loaded_at
+FROM dim_player_shooting_by_zones
