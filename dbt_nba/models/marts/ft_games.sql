@@ -5,7 +5,7 @@
   )
 }}
 
-SELECT g.*,
+SELECT g.* EXCEPT(loaded_at),
     gth.is_b2b_game AS home_team_is_b2b_game,
     gtv.is_b2b_game AS visitor_team_is_b2b_game,
     gth.is_next_game AS home_team_is_next_game,
