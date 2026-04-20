@@ -58,6 +58,7 @@ LEFT JOIN
 LEFT JOIN
     most_recent_line_value AS mrlv
     ON gps.player_id = mrlv.player_id AND gps.stat_type = mrlv.stat_type
+WHERE gps.season = 2025
 ORDER BY
     player_id,
     game_id

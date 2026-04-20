@@ -250,11 +250,15 @@ stats_pilled AS (
 )
 
 SELECT
-    player_id,
-    team_id,
-    game_id,
-    game_number,
-    game_date,
-    stat_type,
-    stat_value,
-FROM stats_pilled
+    sp.player_id,
+    sp.team_id,
+    sp.game_id,
+    sp.game_number,
+    sp.game_date,
+    bd.season,
+    sp.stat_type,
+    sp.stat_value,
+FROM stats_pilled sp
+LEFT JOIN (
+    SELECT DISTINCT game_id, player_id, season FROM base_data
+) bd ON sp.game_id = bd.game_id AND sp.player_id = bd.player_id

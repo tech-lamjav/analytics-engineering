@@ -436,9 +436,11 @@ models:
       - name: rating_stars
         description: "Backup rating stars from dim_stat_player"
       - name: spread
-        description: "Game spread when available (null until sourced)"
+        description: "Game spread from raw_betting_odds (null when not yet collected). Positive = home team favored."
       - name: blowout_deflator
-        description: "Multiplier applied to score_base (default 1.0)"
+        description: "Multiplier applied to score_base: 1.0 (spread<=7), 0.85 (8-12), 0.70 (13+). Score capped at 50 when spread>=18."
+      - name: game_total
+        description: "Total O/U line from raw_betting_odds (null when not yet collected). Used for ambient_score."
       - name: loaded_at
         description: "Row load timestamp"
 

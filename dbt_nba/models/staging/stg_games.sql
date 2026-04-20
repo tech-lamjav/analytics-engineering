@@ -9,8 +9,8 @@ WITH source_data AS (
 -- Unnest the games array to get individual games
 unnested_games AS (
     SELECT
-        season,
-        date,
+        source_data.season,
+        source_data.date,
         total_games,
         game
     FROM source_data,
@@ -21,7 +21,7 @@ cleaned_data AS (
     SELECT
         CAST(game.id AS INT64) AS game_id,
         CAST(season AS INT64) AS season,
-        PARSE_DATE('%Y-%m-%d', date) AS game_date,
+        date AS game_date,
         --game.status AS game_status,
         --CAST(game.period AS INT64) AS period,
         --game.time,
@@ -31,7 +31,7 @@ cleaned_data AS (
         -- Use PARSE_TIMESTAMP for timezone support, then convert to DATETIME
         CASE
             WHEN game.datetime IS NOT NULL
-            THEN DATETIME(DATETIME_ADD(PARSE_TIMESTAMP('%Y-%m-%dT%H:%M:%E*S%Ez', game.datetime), INTERVAL -3 HOUR))
+            THEN DATETIME(DATETIME_ADD(game.datetime, INTERVAL -3 HOUR))
         END AS game_datetime_brasilia,
         --game.ist_stage,
 

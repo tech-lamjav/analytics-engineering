@@ -5,7 +5,11 @@
   )
 }}
 
-WITH team_rating AS (
+WITH team_opp_stats AS (
+    SELECT * FROM {{ ref('dim_team_opponent_stats') }}
+),
+
+team_rating AS (
     SELECT
         team_id,
         season,
@@ -98,7 +102,15 @@ dim_teams AS (
         tr_opp.team_rating_rank AS next_opponent_team_rating_rank,
         tr_opp.team_offensive_rating_rank AS next_opponent_team_offensive_rating_rank,
         tr_opp.team_defensive_rating_rank AS next_opponent_team_defensive_rating_rank,
-        
+
+        -- Next opponent stat-specific rankings (rank 30 = weakest defense in that category)
+        tos_opp.opp_pts_rank AS next_opponent_opp_pts_rank,
+        tos_opp.opp_reb_rank AS next_opponent_opp_reb_rank,
+        tos_opp.opp_ast_rank AS next_opponent_opp_ast_rank,
+        tos_opp.opp_fg3_pct_rank AS next_opponent_opp_fg3_pct_rank,
+        tos_opp.def_rating_rank AS next_opponent_def_rating_rank,
+        tos_opp.opp_pts_paint_rank AS next_opponent_opp_pts_paint_rank,
+
         -- Injury report time for the team's home city (STRING type, from staging)
         t.team_injury_report_time_brasilia,
         
@@ -117,6 +129,7 @@ dim_teams AS (
     LEFT JOIN team_last_five AS tlf_opp ON noi.next_opponent_id = tlf_opp.team_id
     LEFT JOIN {{ ref('stg_team_standings') }} AS ts_opp ON noi.next_opponent_id = ts_opp.team_id
     LEFT JOIN team_rating AS tr_opp ON noi.next_opponent_id = tr_opp.team_id AND t.season = tr_opp.season
+    LEFT JOIN team_opp_stats AS tos_opp ON noi.next_opponent_id = tos_opp.team_id AND t.season = tos_opp.season
 )
 
 SELECT * FROM dim_teams
