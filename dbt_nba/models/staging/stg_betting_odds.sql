@@ -1,4 +1,5 @@
 {{ config(
+    materialized='table',
     description='Game-level spread and total O/U from raw_betting_odds. One row per game, preferred vendor (draftkings > fanduel > others).'
 ) }}
 
