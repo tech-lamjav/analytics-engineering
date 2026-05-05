@@ -1,6 +1,6 @@
 {{
   config(
-    description='NBA team play type breakdown. One row per team with offensive PPP, possession frequency, eFG% and rank for each of the 10 play types. ppp_rank: 1 = lowest PPP allowed (hardest to score against).',
+    description='NBA team play type breakdown. One row per team with offensive PPP, possession frequency, eFG% and rank for each of the 10 play types. ppp_rank: 1 = highest PPP (most efficient offense in that play type).',
     labels={'domain': 'bi', 'category': 'analytics'}
   )
 }}
@@ -16,7 +16,7 @@ standings AS (
 
 ranked AS (
     SELECT *,
-        RANK() OVER (PARTITION BY season, play_type ORDER BY ppp ASC) AS ppp_rank
+        RANK() OVER (PARTITION BY season, play_type ORDER BY ppp DESC) AS ppp_rank
     FROM base
 )
 

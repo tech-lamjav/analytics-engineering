@@ -29,7 +29,9 @@ first_half AS (
         team_id,
         game_id,
         game_date,
-        SUM(points) AS h1_points
+        SUM(points)   AS h1_points,
+        SUM(rebounds) AS h1_rebounds,
+        SUM(assists)  AS h1_assists
     FROM period_stats
     WHERE period IN (1, 2)
     GROUP BY player_id, team_id, game_id, game_date
@@ -44,6 +46,8 @@ SELECT
     q1.q1_rebounds,
     q1.q1_assists,
     fh.h1_points,
+    fh.h1_rebounds,
+    fh.h1_assists,
     CASE
         WHEN q1.team_id = gt.home_team_id THEN gt.visitor_team_abbreviation
         WHEN q1.team_id = gt.visitor_team_id THEN '@' || gt.home_team_abbreviation

@@ -52,4 +52,4 @@ cleaned_data AS (
     FROM source_data
 )
 
-SELECT * FROM cleaned_data
+SELECT * FROM cleaned_data WHERE player_id IS NOT NULL

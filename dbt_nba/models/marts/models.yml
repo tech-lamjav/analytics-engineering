@@ -444,6 +444,50 @@ models:
       - name: loaded_at
         description: "Row load timestamp"
 
+  - name: ft_game_player_stats_period
+    description: "Fact table for NBA player stats broken down by quarter (Q1) and first half (1H) per game. Used for period-level prop betting analysis."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+        tests:
+          - not_null
+      - name: game_date
+        description: "Date when the game was played"
+        tests:
+          - not_null
+      - name: game_id
+        description: "Unique identifier for the game"
+        tests:
+          - not_null
+      - name: q1_minutes
+        description: "Minutes played by the player in Q1"
+      - name: q1_points
+        description: "Points scored by the player in Q1"
+      - name: q1_rebounds
+        description: "Rebounds by the player in Q1"
+      - name: q1_assists
+        description: "Assists by the player in Q1"
+      - name: h1_points
+        description: "Total points scored by the player in the first half (Q1 + Q2)"
+      - name: h1_rebounds
+        description: "Total rebounds by the player in the first half (Q1 + Q2)"
+      - name: h1_assists
+        description: "Total assists by the player in the first half (Q1 + Q2)"
+      - name: played_against
+        description: "Opponent team abbreviation. Prefixed with '@' if playing away (e.g., '@LAL'), plain if home (e.g., 'BOS')"
+      - name: home_away
+        description: "Location of game from player's perspective: 'Casa' (Home) or 'Fora' (Away)"
+      - name: is_b2b_game
+        description: "Boolean flag indicating if this was a back-to-back game for the player's team"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
+
   - name: dim_teammate_impact_360
     description: "Full teammate COM vs SEM impact for Analise 360 (PTS, AST, REB only). No betting score, gap, or rating filters; includes negative impact. One row per trigger_player_id, teammate_player_id, and stat_type. Filtered to teammate_avg_minutes >= 15 and jogos_sem >= 5."
     tests:
@@ -494,5 +538,226 @@ models:
         description: "Count of SEM games in sample (minimum 5)"
       - name: teammate_avg_minutes
         description: "Teammate average minutes per game this season (minimum 15)"
+      - name: loaded_at
+        description: "Row load timestamp"
+
+  - name: dim_team_playtypes
+    description: "NBA team play type breakdown. One row per team with offensive PPP, possession frequency, eFG% and rank for each of the 10 play types. ppp_rank: 1 = highest PPP (most efficient offense in that play type)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique team identifier"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Team full name"
+      - name: team_abbreviation
+        description: "Team abbreviation (e.g. OKC, ATL)"
+        tests:
+          - not_null
+      - name: season
+        description: "NBA season year"
+        tests:
+          - not_null
+      - name: iso_ppp_rank
+        description: "Isolation rank — 1 = highest PPP (most efficient offense in isolation)"
+      - name: spotup_ppp_rank
+        description: "Spot Up rank — 1 = highest PPP (most efficient offense in spot-up)"
+      - name: pnr_bh_ppp_rank
+        description: "Pick & Roll Ball Handler rank — 1 = highest PPP"
+      - name: pnr_rm_ppp_rank
+        description: "Pick & Roll Roll Man rank — 1 = highest PPP"
+      - name: postup_ppp_rank
+        description: "Post Up rank — 1 = highest PPP"
+      - name: transition_ppp_rank
+        description: "Transition rank — 1 = highest PPP"
+      - name: handoff_ppp_rank
+        description: "Handoff rank — 1 = highest PPP"
+      - name: cut_ppp_rank
+        description: "Cut rank — 1 = highest PPP"
+      - name: offscreen_ppp_rank
+        description: "Off Screen rank — 1 = highest PPP"
+      - name: putback_ppp_rank
+        description: "Off Rebound (Putback) rank — 1 = highest PPP"
+      - name: loaded_at
+        description: "Row load timestamp"
+
+  - name: dim_team_shooting_zone_defense
+    description: "Defesa por zona de arremesso e faixa de distância. One row per team/season. % cedido pela defesa do time, com rankings calculados localmente (rank 1 = menor FG% cedido = melhor defesa). Source: balldontlie shooting/by_zone_opponent + shooting/5ft_range_opponent."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique team identifier"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Team full name"
+      - name: team_abbreviation
+        description: "Team abbreviation"
+        tests:
+          - not_null
+      - name: season
+        description: "NBA season year"
+        tests:
+          - not_null
+      # Zonas de arremesso (FG% cedido)
+      - name: opp_restricted_area_fg_pct
+        description: "FG% cedido na restricted area"
+      - name: opp_restricted_area_fg_pct_rank
+        description: "Rank — 1 = melhor defesa na RA (menor FG% cedido)"
+      - name: opp_in_the_paint_non_ra_fg_pct
+        description: "FG% cedido no paint (non-RA)"
+      - name: opp_in_the_paint_non_ra_fg_pct_rank
+        description: "Rank — 1 = melhor defesa no paint non-RA"
+      - name: opp_mid_range_fg_pct
+        description: "FG% cedido no mid-range"
+      - name: opp_mid_range_fg_pct_rank
+        description: "Rank — 1 = melhor defesa no mid-range"
+      - name: opp_corner_3_fg_pct
+        description: "FG% cedido em corner 3 (LC3 + RC3 agregado)"
+      - name: opp_corner_3_fg_pct_rank
+        description: "Rank — 1 = melhor defesa em corner 3"
+      - name: opp_above_the_break_3_fg_pct
+        description: "FG% cedido em above-the-break 3"
+      - name: opp_above_the_break_3_fg_pct_rank
+        description: "Rank — 1 = melhor defesa em above-the-break 3"
+      # Faixas de distância (rank apenas para 0-29ft, com volume relevante)
+      - name: opp_lt_5ft_fg_pct
+        description: "FG% cedido em arremessos de menos de 5ft"
+      - name: opp_lt_5ft_fg_pct_rank
+        description: "Rank — 1 = melhor defesa em <5ft"
+      - name: opp_5_9ft_fg_pct
+        description: "FG% cedido em arremessos de 5-9ft"
+      - name: opp_5_9ft_fg_pct_rank
+        description: "Rank — 1 = melhor defesa em 5-9ft"
+      - name: opp_10_14ft_fg_pct
+        description: "FG% cedido em arremessos de 10-14ft"
+      - name: opp_10_14ft_fg_pct_rank
+        description: "Rank — 1 = melhor defesa em 10-14ft"
+      - name: opp_15_19ft_fg_pct
+        description: "FG% cedido em arremessos de 15-19ft"
+      - name: opp_15_19ft_fg_pct_rank
+        description: "Rank — 1 = melhor defesa em 15-19ft"
+      - name: opp_20_24ft_fg_pct
+        description: "FG% cedido em arremessos de 20-24ft"
+      - name: opp_20_24ft_fg_pct_rank
+        description: "Rank — 1 = melhor defesa em 20-24ft"
+      - name: opp_25_29ft_fg_pct
+        description: "FG% cedido em arremessos de 25-29ft"
+      - name: opp_25_29ft_fg_pct_rank
+        description: "Rank — 1 = melhor defesa em 25-29ft"
+      - name: loaded_at
+        description: "Row load timestamp"
+
+  - name: dim_player_passing_stats
+    description: "NBA player tracking/passing season averages mart. One row per active player for the current season with potential assists, pass volume, and assist efficiency metrics from Balldontlie /v1/season_averages/tracking?type=passing. Used as player profile context for assists props analysis (season-level only — game-by-game passing fields live in ft_game_player_passing_stats)."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+        tests:
+          - not_null
+          - unique
+      - name: player_name
+        description: "Full name of the player"
+      - name: position
+        description: "Player's position (e.g., G, F, C)"
+      - name: team_id
+        description: "Unique identifier for the player's current team"
+      - name: season
+        description: "Season year (e.g., 2025)"
+      - name: games_played
+        description: "Number of games played in the season"
+      - name: minutes
+        description: "Average minutes per game"
+      - name: ast
+        description: "Average assists per game"
+      - name: potential_ast
+        description: "Average potential assists per game (passes that would become assists if the shot was made)"
+      - name: potential_ast_rank
+        description: "League-wide rank by potential_ast (1 = league leader)"
+      - name: passes_made
+        description: "Average passes made per game"
+      - name: passes_received
+        description: "Average passes received per game"
+      - name: secondary_ast
+        description: "Average secondary (hockey) assists per game"
+      - name: ft_ast
+        description: "Average free throw assists per game"
+      - name: ast_points_created
+        description: "Average points created per game from assists"
+      - name: ast_adj
+        description: "Adjusted assists per game"
+      - name: ast_to_pass_pct
+        description: "Percentage of passes that became assists"
+      - name: ast_to_pass_pct_adj
+        description: "Adjusted assist-to-pass percentage"
+      - name: potential_ast_per_pass
+        description: "Calculated: potential_ast / passes_made"
+      - name: ast_conversion_rate
+        description: "Calculated: ast / potential_ast (rate at which potential assists convert to actual assists)"
+      - name: loaded_at
+        description: "Row load timestamp"
+
+  - name: ft_game_player_passing_stats
+    description: "NBA fact table for player passing/playmaking stats per game from Balldontlie /nba/v2/stats/advanced. Game-by-game series for trend analysis on assists props. Filtered to full-game rows (period = 0). Note: potential_ast is NOT available game-by-game from this API; use dim_player_passing_stats for that metric (season-level only)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: team_id
+        description: "Unique identifier for the player's team in this game"
+      - name: game_id
+        description: "Unique identifier for the game"
+      - name: game_date
+        description: "Date when the game was played"
+      - name: season
+        description: "Season year (e.g., 2025)"
+      - name: passes
+        description: "Total passes thrown by the player in this game"
+      - name: secondary_assists
+        description: "Hockey assists (passes that lead to an assist)"
+      - name: free_throw_assists
+        description: "Passes that lead to free throws made"
+      - name: screen_assists
+        description: "Screens that lead to a made field goal"
+      - name: screen_assist_points
+        description: "Points scored from screen assists"
+      - name: assist_percentage
+        description: "Percentage of teammate field goals the player assisted while on court"
+      - name: assist_ratio
+        description: "Assists per 100 possessions"
+      - name: assist_to_turnover
+        description: "Assist-to-turnover ratio for this game"
+      - name: turnover_ratio
+        description: "Turnovers per 100 possessions"
+      - name: usage_percentage
+        description: "Percentage of team plays used by the player while on court"
+      - name: touches
+        description: "Total ball touches in the game"
+      - name: possessions
+        description: "Possessions used in the game"
+      - name: extra_assists_per_pass
+        description: "Calculated: (secondary_assists + free_throw_assists) / passes — measures uncredited playmaking per pass"
+      - name: is_b2b_game
+        description: "Boolean flag — true if this was a back-to-back game for the player's team"
+      - name: played_against
+        description: "Opponent team abbreviation. Prefixed with '@' if playing away (e.g., '@LAL', 'BOS')"
+      - name: home_away
+        description: "Game location from player's perspective: 'Casa' (home) or 'Fora' (away)"
       - name: loaded_at
         description: "Row load timestamp"

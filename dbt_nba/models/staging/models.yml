@@ -279,6 +279,116 @@ models:
       - name: status
         description: "Injury status (e.g., Doubtful, Out, Questionable)"
 
+  - name: stg_game_player_advanced_stats
+    description: "Staging table for NBA player advanced/tracking stats per game from Balldontlie /nba/v2/stats/advanced. Flattens the stats array into one row per player per game with passing, playmaking, hustle, and rating fields."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: team_id
+        description: "Unique identifier for the player's team in this game"
+      - name: game_id
+        description: "Unique identifier for the game"
+      - name: game_date
+        description: "Date when the game was played (string format from source)"
+      - name: season
+        description: "Season year (e.g., 2025, converted to INT64)"
+      - name: season_type
+        description: "Season type derived from game date (regular, playin, playoffs)"
+      - name: period
+        description: "Period number (0 = full game, 1-4 = quarters)"
+      - name: passes
+        description: "Total passes thrown by the player in this game"
+      - name: secondary_assists
+        description: "Hockey assists (passes that lead to an assist)"
+      - name: free_throw_assists
+        description: "Passes that lead to free throws made"
+      - name: screen_assists
+        description: "Screens that lead to a made field goal"
+      - name: screen_assist_points
+        description: "Points scored from screen assists"
+      - name: assist_percentage
+        description: "Percentage of teammate field goals the player assisted while on court"
+      - name: assist_ratio
+        description: "Assists per 100 possessions"
+      - name: assist_to_turnover
+        description: "Assist-to-turnover ratio for the player in this game"
+      - name: turnover_ratio
+        description: "Turnovers per 100 possessions"
+      - name: usage_percentage
+        description: "Percentage of team plays used by the player while on court"
+      - name: touches
+        description: "Total ball touches in the game"
+      - name: possessions
+        description: "Possessions used by the player in this game"
+      - name: partial_possessions
+        description: "Partial possessions count (FLOAT64)"
+      - name: speed
+        description: "Average movement speed (mph) while on court"
+      - name: distance
+        description: "Total distance traveled (miles) while on court"
+      - name: pie
+        description: "Player Impact Estimate (FLOAT64)"
+      - name: offensive_rating
+        description: "Points scored per 100 possessions while the player is on court"
+      - name: defensive_rating
+        description: "Points allowed per 100 possessions while the player is on court"
+      - name: net_rating
+        description: "Offensive minus defensive rating"
+      - name: true_shooting_percentage
+        description: "Shooting efficiency that accounts for 2pt, 3pt, and free throws"
+      - name: effective_field_goal_percentage
+        description: "Field goal percentage adjusted for the extra value of 3-pointers"
+      - name: deflections
+        description: "Number of deflections by the player"
+      - name: contested_shots
+        description: "Number of contested shots by the player"
+      - name: box_outs
+        description: "Number of box outs"
+      - name: charges_drawn
+        description: "Number of offensive fouls drawn"
+      - name: points_paint
+        description: "Points scored in the paint"
+      - name: points_fast_break
+        description: "Points scored on fast breaks"
+      - name: points_second_chance
+        description: "Points scored on second-chance opportunities"
+      - name: points_off_turnovers
+        description: "Points scored from opponent turnovers"
+
+  - name: stg_season_averages_tracking_passing
+    description: "Staging table for NBA player season averages from Balldontlie /v1/season_averages/tracking?type=passing. Includes potential_ast, passes_made, secondary_ast, ft_ast, ast_points_created, and assist efficiency metrics aggregated per player per regular season."
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: season
+        description: "Season year (e.g., 2025, converted to INT64)"
+      - name: season_type
+        description: "Season type, filtered to 'regular' in this staging"
+      - name: games_played
+        description: "Number of games played in the season (converted to INT64)"
+      - name: minutes
+        description: "Average minutes per game (FLOAT64)"
+      - name: ast
+        description: "Average assists per game (FLOAT64)"
+      - name: potential_ast
+        description: "Average potential assists per game (passes that would become assists if the shot was made)"
+      - name: passes_made
+        description: "Average passes made per game"
+      - name: passes_received
+        description: "Average passes received per game"
+      - name: secondary_ast
+        description: "Average secondary assists (hockey assists) per game"
+      - name: ft_ast
+        description: "Average free throw assists per game"
+      - name: ast_points_created
+        description: "Average points created per game from assists (assists × points per assisted FG)"
+      - name: ast_adj
+        description: "Adjusted assists per game"
+      - name: ast_to_pass_pct
+        description: "Percentage of passes that became assists"
+      - name: ast_to_pass_pct_adj
+        description: "Adjusted assist-to-pass percentage"
+
   - name: stg_player_props
     description: "Staging table for NBA player props from DraftKings NDJSON external table. Contains betting lines for various player performance metrics. Prop types are normalized to stat_type with 'player_' prefix for consistency with player stats models. Filtered to over_under props only."
     columns:

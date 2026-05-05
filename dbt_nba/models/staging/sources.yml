@@ -373,6 +373,48 @@ sources:
           - name: stats
             data_type: struct
 
+      - name: raw_team_season_averages_shooting_by_zone_opponent
+        description: "NBA team season averages — % cedido pela defesa do time por zona de arremesso. Source: balldontlie shooting/by_zone_opponent."
+        external:
+          location: "gs://smartbetting-landingzone/nba/team_season_averages/2025/raw_nba_team_season_averages_2025-shooting-by_zone_opponent-*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: team
+            data_type: struct
+          - name: season
+            data_type: integer
+          - name: season_type
+            data_type: string
+          - name: type
+            data_type: string
+          - name: category
+            data_type: string
+          - name: stats
+            description: "Shooting by-zone defesa STRUCT (restricted_area, in_the_paint_non_ra, mid_range, left_corner_3, right_corner_3, corner_3, above_the_break_3, backcourt — todos com opp_fga/opp_fgm/opp_fg_pct)"
+            data_type: struct
+
+      - name: raw_team_season_averages_shooting_5ft_range_opponent
+        description: "NBA team season averages — % cedido pela defesa do time por faixa de distância (less_than_5_ft a 40_ft+). Source: balldontlie shooting/5ft_range_opponent."
+        external:
+          location: "gs://smartbetting-landingzone/nba/team_season_averages/2025/raw_nba_team_season_averages_2025-shooting-5ft_range_opponent-*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: team
+            data_type: struct
+          - name: season
+            data_type: integer
+          - name: season_type
+            data_type: string
+          - name: type
+            data_type: string
+          - name: category
+            data_type: string
+          - name: stats
+            description: "Shooting 5ft-range defesa STRUCT (less_than_5_ft, 5_9_ft, 10_14_ft, 15_19_ft, 20_24_ft, 25_29_ft, 30_34_ft, 35_39_ft, 40_ft — todos com opp_fga/opp_fgm/opp_fg_pct)"
+            data_type: struct
+
       - name: raw_team_season_averages_tracking_defense
         description: "NBA team season averages tracking defense. Rim protection stats (def_rim_fg_pct, def_rim_fga) from Balldontlie API."
         external:
@@ -593,6 +635,26 @@ sources:
             data_type: integer
           - name: stats
             description: "Array of player stat objects (id, min, pts, reb, ast, fgm, fga, fg_pct, fg3m, fg3a, fg3_pct, ftm, fta, ft_pct, oreb, dreb, stl, blk, turnover, pf, plus_minus, season_type, player STRUCT, team STRUCT, game STRUCT)"
+            data_type: array
+
+      - name: raw_game_player_advanced_stats
+        description: "NBA game player advanced stats from Balldontlie /nba/v2/stats/advanced. Each file is one date; stats array contains ~110 fields per player per game including passes, secondary_assists, free_throw_assists, screen_assists, assist_percentage, assist_ratio, assist_to_turnover, touches, possessions, usage_percentage, plus advanced ratings, hustle and matchup stats."
+        external:
+          location: "gs://smartbetting-landingzone/nba/game_player_advanced_stats/2025/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: season
+            description: "Season year (e.g., 2025)"
+            data_type: integer
+          - name: date
+            description: "Game date (YYYY-MM-DD)"
+            data_type: string
+          - name: total_stats
+            description: "Total number of advanced stat records in this file"
+            data_type: integer
+          - name: stats
+            description: "Array of advanced stat objects per player per game (player STRUCT, team STRUCT, game STRUCT, plus tracking, hustle, defense, passing fields)"
             data_type: array
 
       - name: raw_player_injuries
