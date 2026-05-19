@@ -157,8 +157,6 @@ models:
         description: "Actual value achieved by the player in the game"
       - name: line_value
         description: "Betting line (Over/Under threshold) for this stat from DraftKings for this game (null if no line available)"
-      - name: line_value_most_recent
-        description: "Most recent betting line for this player and stat_type (from latest game with a line), used for comparison with current lines"
       - name: is_b2b_game
         description: "Boolean flag indicating if this was a back-to-back game for the player's team"
       - name: stat_vs_line
@@ -169,6 +167,24 @@ models:
         description: "Location of game from player's perspective: 'Casa' (Home) or 'Fora' (Away)"
       - name: is_played
         description: "Whether the player actually played in the game: 'Jogou' (Played) or 'Não jogou' (Did not play - on roster but minutes = 0)"
+
+  - name: dim_player_latest_line
+    description: "Most recent DraftKings betting line per (player_id, stat_type). Extracted from stg_player_props using the latest game_date with a line, used for comparing current lines with historical performance. Replaces the line_value_most_recent column previously stored in ft_game_player_stats."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - stat_type
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+      - name: stat_type
+        description: "Type of statistic (e.g., player_points, player_rebounds)"
+      - name: line_value_most_recent
+        description: "Most recent betting line for this player and stat_type (from latest game with a line)"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
 
   - name: dim_player_shooting_by_zones
     description: "Dimension table for NBA player shooting by zones. Provides a comprehensive view of player shooting by zones including corner 3s, above-the-break 3s, restricted area, paint, mid-range, and backcourt."

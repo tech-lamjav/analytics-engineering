@@ -161,10 +161,9 @@ most_recent_line AS (
     SELECT
         player_id,
         stat_type,
-        ANY_VALUE(line_value_most_recent) AS line_value_most_recent
-    FROM {{ ref('ft_game_player_stats') }}
+        line_value_most_recent
+    FROM {{ ref('dim_player_latest_line') }}
     WHERE line_value_most_recent IS NOT NULL
-    GROUP BY player_id, stat_type
 ),
 
 with_lines AS (

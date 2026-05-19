@@ -158,4 +158,8 @@ FROM (
             pwis.team_id = nap.team_id
             AND pwis.stat_type = nap.stat_type
 )
+-- Filtra jogadores sem season averages (stat_type vem null do LEFT JOIN em
+-- int_season_averages_general_base). Linhas com stat_type=null sao ruido:
+-- nenhuma query do app filtra sem stat_type, e quebram PK em nba_mart no sync.
+WHERE stat_type IS NOT NULL
 ORDER BY player_id, stat_type
