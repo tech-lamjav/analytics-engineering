@@ -1,0 +1,738 @@
+version: 2
+
+models:
+  - name: dim_leagues
+    description: >
+      Dimensão de ligas/temporadas para o pipeline de futebol. 1 linha por
+      (league_id, season_year). Inclui coverage (flags do que a API tem disponível
+      por feature) — usado pelas demais subtasks para decidir quais endpoints
+      consumir por liga/temporada.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - league_id
+              - season_year
+    columns:
+      - name: league_id
+        description: "ID da liga na API-Football (71 = Brasileirão Série A, 1 = Copa do Mundo)"
+        tests:
+          - not_null
+      - name: season_year
+        description: "Ano da temporada"
+        tests:
+          - not_null
+      - name: league_name
+        description: "Nome oficial da liga"
+      - name: league_type
+        description: "'League' ou 'Cup'"
+      - name: country_name
+        description: "País (ex: 'Brazil', 'World')"
+      - name: country_code
+        description: "Código ISO do país (pode ser nulo p/ competições internacionais)"
+      - name: league_logo_url
+        description: "URL do logo da liga"
+      - name: country_flag_url
+        description: "URL da bandeira do país"
+      - name: season_start
+        description: "Data de início da temporada"
+      - name: season_end
+        description: "Data de fim da temporada"
+      - name: season_current
+        description: "Flag de temporada corrente"
+      - name: coverage
+        description: "STRUCT com flags de cobertura (fixtures, standings, players, predictions, odds, etc.)"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou o dado da API"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: dim_teams
+    description: >
+      Dimensão de times. 1 linha por team_id (dedup por loaded_at mais recente).
+      Inclui clubes do Brasileirão (national=FALSE) e seleções da Copa do Mundo
+      (national=TRUE). Sem coluna de competition — time é a mesma entidade
+      independente da liga em que aparece; competition vive nas tabelas fato.
+    columns:
+      - name: team_id
+        description: "ID do time na API-Football (chave primária da dim)"
+        tests:
+          - not_null
+          - unique
+      - name: team_name
+        description: "Nome do time"
+      - name: team_code
+        description: "Código curto do time (ex: 'PAL'). Pode ser nulo para seleções."
+      - name: team_country
+        description: "País do clube ou seleção"
+      - name: team_founded_year
+        description: "Ano de fundação. NULL para seleções."
+      - name: national
+        description: "TRUE para seleções (Copa), FALSE para clubes (Brasileirão)"
+      - name: team_logo_url
+        description: "URL do logo do time"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou o dado mais recente desse time"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: dim_players
+    description: >
+      Dimensão de jogadores. 1 linha por player_id. Fonte primária: catálogo
+      /players?league=&season= (metadados ricos, dedup pela season mais recente —
+      mantém age/posição atuais). Fallback: jogadores que entraram em campo
+      (stg_futebol_fixture_player_stats) mas faltam no catálogo entram só com
+      id/nome/foto/posição (demais NULL), marcados source='fixture_only' — garante
+      que todo player_id de fact_fixture_player_stats tenha entrada aqui. Inclui
+      Brasileirão e Copa do Mundo. Sem coluna de competition — jogador é a mesma
+      entidade independente da liga; competition vive nas tabelas fato.
+    columns:
+      - name: player_id
+        description: "ID do jogador na API-Football (chave primária da dim)"
+        tests:
+          - not_null
+          - unique
+      - name: player_name
+        description: "Nome de exibição do jogador"
+      - name: first_name
+        description: "Primeiro nome"
+      - name: last_name
+        description: "Sobrenome"
+      - name: age
+        description: "Idade na season mais recente coletada"
+      - name: birth_date
+        description: "Data de nascimento ISO (YYYY-MM-DD). Pode ser nula."
+      - name: nationality
+        description: "Nacionalidade do jogador"
+      - name: height
+        description: "Altura como string da API (ex: '175 cm'). Pode ser nula."
+      - name: weight
+        description: "Peso como string da API (ex: '68 kg'). Pode ser nulo."
+      - name: position
+        description: "Posição (ex: 'Attacker', 'Midfielder', 'Defender', 'Goalkeeper'). Pode ser nula."
+      - name: photo_url
+        description: "URL da foto do jogador"
+      - name: source
+        description: "Origem da linha: 'catalog' (catálogo /players, metadados completos) ou 'fixture_only' (só apareceu em /fixtures/players; demais metadados NULL)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['catalog', 'fixture_only']
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou o dado mais recente desse jogador"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_fixtures
+    description: >
+      Tabela mãe de jogos. 1 linha por fixture_id — chave que destrava todos os
+      endpoints de jogo (stats/events/lineups/player_stats, subtasks 5-8). Derivada de
+      /fixtures?league=&season= (espinha: fixture, league, teams, goals, score).
+      Particionada por DATE(date_utc) em UTC e clusterizada por (competition, season,
+      home_team_id). Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (chave primária; destrava endpoints de jogo)"
+        tests:
+          - not_null
+          - unique
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado de requested_league_id; cluster key)"
+      - name: competition_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+      - name: season
+        description: "Ano da temporada requisitada (cluster key)"
+      - name: round
+        description: "Rodada/fase (ex: 'Regular Season - 1', 'Group Stage')"
+      - name: date_utc
+        description: "Data do jogo em UTC (chave de partição), derivada de TIMESTAMP_SECONDS(timestamp_unix)"
+      - name: kickoff_utc
+        description: "Timestamp UTC do início do jogo"
+      - name: timestamp_unix
+        description: "Epoch unix (segundos) do início do jogo"
+      - name: timezone
+        description: "Timezone original retornado pela API (ex: 'UTC')"
+      - name: status_long
+        description: "Status por extenso (ex: 'Match Finished', 'Not Started')"
+      - name: status_short
+        description: "Status curto (ex: 'FT', 'NS', '1H', 'HT')"
+      - name: status_elapsed
+        description: "Minutos decorridos. NULL antes do início; preenchido durante/após o jogo."
+      - name: referee
+        description: "Árbitro. Pode ser nulo."
+      - name: venue_id
+        description: "ID do estádio. Pode ser nulo."
+      - name: venue_name
+        description: "Nome do estádio"
+      - name: venue_city
+        description: "Cidade do estádio"
+      - name: home_team_id
+        description: "ID do time mandante (cluster key; FK p/ dim_teams)"
+      - name: home_team_name
+        description: "Nome do time mandante"
+      - name: home_team_winner
+        description: "TRUE/FALSE/NULL — vencedor mandante. NULL p/ jogos não finalizados ou empate."
+      - name: away_team_id
+        description: "ID do time visitante (FK p/ dim_teams)"
+      - name: away_team_name
+        description: "Nome do time visitante"
+      - name: away_team_winner
+        description: "TRUE/FALSE/NULL — vencedor visitante. NULL p/ jogos não finalizados ou empate."
+      - name: goals_home
+        description: "Gols do mandante no tempo normal. NULL antes do jogo."
+      - name: goals_away
+        description: "Gols do visitante no tempo normal. NULL antes do jogo."
+      - name: score_halftime_home
+        description: "Placar do mandante no intervalo"
+      - name: score_halftime_away
+        description: "Placar do visitante no intervalo"
+      - name: score_fulltime_home
+        description: "Placar do mandante ao fim do tempo normal"
+      - name: score_fulltime_away
+        description: "Placar do visitante ao fim do tempo normal"
+      - name: score_extratime_home
+        description: "Placar do mandante na prorrogação. NULL se não houve."
+      - name: score_extratime_away
+        description: "Placar do visitante na prorrogação. NULL se não houve."
+      - name: score_penalty_home
+        description: "Pênaltis convertidos pelo mandante. NULL se não houve disputa."
+      - name: score_penalty_away
+        description: "Pênaltis convertidos pelo visitante. NULL se não houve disputa."
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_fixture_stats
+    description: >
+      Estatística agregada por time por jogo (/fixtures/statistics). 2 linhas por
+      fixture_id (mandante e visitante) — base direta do modelo Poisson e do value
+      betting. Particionada por DATE(date_utc) (data do jogo) e clusterizada por
+      (fixture_id, team_id). Só jogos finalizados (FT/AET/PEN). expected_goals (xG) e
+      goals_prevented vêm da própria API-Football. Cobre Brasileirão (71) 2024/25/26 e
+      Copa do Mundo (1) 2026. Testes singulares garantem exatamente 2 linhas/jogo e
+      que o pivot não veio todo NULL (sentinela das strings de `type`).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - team_id
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures; 2 linhas por fixture)"
+        tests:
+          - not_null
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+      - name: competition_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+      - name: season
+        description: "Ano da temporada (de fact_fixtures)"
+      - name: date_utc
+        description: "Data do jogo em UTC (chave de partição), de fact_fixtures"
+      - name: team_id
+        description: "ID do time deste bloco de stats (FK p/ dim_teams; cluster key)"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Nome do time"
+      - name: team_side
+        description: "'home' | 'away' — lado do time no jogo (derivado via fact_fixtures)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['home', 'away']
+      - name: shots_on_goal
+        description: "Chutes no gol"
+      - name: shots_off_goal
+        description: "Chutes para fora"
+      - name: total_shots
+        description: "Total de finalizações. Coberto pelo teste singular de pivot (se a string de type quebrar, a coluna inteira vira NULL e o teste falha alto)."
+      - name: blocked_shots
+        description: "Finalizações bloqueadas"
+      - name: shots_insidebox
+        description: "Finalizações dentro da área"
+      - name: shots_outsidebox
+        description: "Finalizações fora da área"
+      - name: fouls
+        description: "Faltas cometidas"
+      - name: corner_kicks
+        description: "Escanteios"
+      - name: offsides
+        description: "Impedimentos"
+      - name: ball_possession
+        description: "Posse de bola em % (int; '%' removido na origem)"
+      - name: yellow_cards
+        description: "Cartões amarelos"
+      - name: red_cards
+        description: "Cartões vermelhos"
+      - name: goalkeeper_saves
+        description: "Defesas do goleiro"
+      - name: total_passes
+        description: "Total de passes"
+      - name: passes_accurate
+        description: "Passes certos"
+      - name: passes_pct
+        description: "% de acerto de passes (int; '%' removido na origem)"
+      - name: expected_goals
+        description: "xG (expected goals) — fornecido pela própria API-Football no /fixtures/statistics. FLOAT64."
+      - name: goals_prevented
+        description: "Gols evitados (stat avançado da API-Football). FLOAT64."
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_fixture_events
+    description: >
+      Linha do tempo do jogo (/fixtures/events). 1 linha por evento (gol, cartão,
+      substituição, VAR), N por fixture_id — base p/ momentum, gols tardios e jogos
+      abertos. Particionada por DATE(date_utc) (data do jogo) e clusterizada por
+      (fixture_id, event_type). event_order preserva a ordem cronológica do array da
+      API (que não traz id/ordem própria). Só jogos finalizados (FT/AET/PEN). Cobre
+      Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026. O teste de combinação
+      única (fixture_id, event_order) garante que a ordem dos eventos foi preservada.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - event_order
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures; N linhas por fixture; cluster key)"
+        tests:
+          - not_null
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+      - name: competition_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+      - name: season
+        description: "Ano da temporada (de fact_fixtures)"
+      - name: date_utc
+        description: "Data do jogo em UTC (chave de partição), de fact_fixtures"
+      - name: event_order
+        description: "Ordem cronológica do evento no jogo (0-based, índice do array da API). Único por fixture_id."
+        tests:
+          - not_null
+      - name: minute
+        description: "Minuto do jogo em que o evento ocorreu (time.elapsed)"
+      - name: minute_extra
+        description: "Minutos de acréscimo (time.extra). NULL fora dos acréscimos."
+      - name: team_id
+        description: "ID do time do evento (FK p/ dim_teams)"
+      - name: team_name
+        description: "Nome do time do evento"
+      - name: team_side
+        description: "'home' | 'away' — lado do time no jogo (derivado via fact_fixtures)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['home', 'away']
+      - name: player_id
+        description: "ID do jogador principal do evento (autor do gol/cartão; quem entra na substituição). Pode ser nulo."
+      - name: player_name
+        description: "Nome do jogador principal do evento"
+      - name: assist_player_id
+        description: "ID da assistência (gol) ou de quem sai (substituição). Frequentemente nulo."
+      - name: assist_player_name
+        description: "Nome da assistência / de quem sai na substituição"
+      - name: event_type
+        description: "Tipo do evento: 'Goal' | 'Card' | 'subst' | 'Var' (cluster key)"
+        tests:
+          - not_null
+      - name: event_detail
+        description: "Detalhe do tipo (ex: 'Normal Goal', 'Yellow Card', 'Substitution 1', 'Penalty')"
+      - name: event_comments
+        description: "Comentário livre da API. Frequentemente nulo."
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_fixture_lineups
+    description: >
+      Formação e técnico por time por jogo (/fixtures/lineups). 2 linhas por fixture_id
+      (mandante e visitante) — insumo de desfalques p/ o modelo de value betting.
+      Particionada por DATE(date_utc) (data do jogo) e clusterizada por (fixture_id,
+      team_id). Latest-wins: dedup por (fixture_id, team_id) mantendo o loaded_at mais
+      recente — "real" (pós-jogo) vence "confirmed" (~T-30min); lineup_phase mostra qual
+      snapshot venceu. Backfill histórico (2024/2025) só tem fase "real" (não dá pra obter
+      a confirmada retroativa). Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - team_id
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures; 2 linhas por fixture; cluster key)"
+        tests:
+          - not_null
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+      - name: competition_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+      - name: season
+        description: "Ano da temporada (de fact_fixtures)"
+      - name: date_utc
+        description: "Data do jogo em UTC (chave de partição), de fact_fixtures"
+      - name: team_id
+        description: "ID do time desta escalação (FK p/ dim_teams; cluster key)"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Nome do time"
+      - name: team_side
+        description: "'home' | 'away' — lado do time no jogo (derivado via fact_fixtures)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['home', 'away']
+      - name: formation
+        description: "Formação tática (ex: '4-2-3-1'). Pode variar entre confirmed e real."
+      - name: coach_id
+        description: "ID do técnico na API-Football. Pode ser nulo."
+      - name: coach_name
+        description: "Nome do técnico"
+      - name: lineup_phase
+        description: "Fase do snapshot que venceu o dedup: 'real' (pós-jogo) ou 'confirmed' (~T-30min)"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_fixture_lineups_players
+    description: >
+      Escalação de jogadores por jogo (/fixtures/lineups). ~22-30 linhas por fixture_id
+      (titulares + reservas dos dois times) — base p/ ajustar o modelo por desfalques.
+      is_starter separa startXI de substitutes; position/grid/shirt_number do jogador.
+      Particionada por DATE(date_utc) e clusterizada por (fixture_id, team_id). Latest-wins:
+      dedup por (fixture_id, player_id) mantendo o loaded_at mais recente — "real" vence
+      "confirmed". Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - player_id
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures; N linhas por fixture; cluster key)"
+        tests:
+          - not_null
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+      - name: competition_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+      - name: season
+        description: "Ano da temporada (de fact_fixtures)"
+      - name: date_utc
+        description: "Data do jogo em UTC (chave de partição), de fact_fixtures"
+      - name: team_id
+        description: "ID do time do jogador (FK p/ dim_teams; cluster key)"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Nome do time"
+      - name: team_side
+        description: "'home' | 'away' — lado do time no jogo (derivado via fact_fixtures)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['home', 'away']
+      - name: is_starter
+        description: "TRUE = titular (startXI), FALSE = reserva (substitutes)"
+        tests:
+          - not_null
+      - name: player_slot
+        description: "Índice do jogador no array da fase (0-based, WITH OFFSET) — preserva a ordem dentro de titulares/reservas."
+      - name: player_id
+        description: "ID do jogador na API-Football (FK p/ dim_players; chave do dedup)"
+        tests:
+          - not_null
+      - name: player_name
+        description: "Nome do jogador"
+      - name: shirt_number
+        description: "Número da camisa. Pode ser nulo."
+      - name: position
+        description: "Posição na escalação: 'G' (goleiro), 'D', 'M', 'F'. Pode ser nula."
+      - name: grid
+        description: "Posição no grid tático (ex: '1:1', '4:2'). NULL p/ reservas."
+      - name: lineup_phase
+        description: "Fase do snapshot que venceu o dedup: 'real' (pós-jogo) ou 'confirmed' (~T-30min)"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_fixture_player_stats
+    description: >
+      Estatística por jogador por jogo (/fixtures/players). ~22-30 linhas por fixture_id
+      (titulares + entrantes dos dois times) — base p/ props de jogador e forma individual
+      ponderada de time. Particionada por DATE(date_utc) (data do jogo) e clusterizada por
+      (fixture_id, team_id, player_id). position/minutes vêm do próprio jogo (games.*); a
+      tabela é self-contained (não faz join em dim_players). Latest-wins por (fixture_id,
+      player_id). Só jogos finalizados (FT/AET/PEN). Cobre Brasileirão (71) 2024/25/26 e
+      Copa do Mundo (1) 2026. O teste singular garante que o flatten não veio todo NULL
+      (sentinela de rename de campo aninhado).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - player_id
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures; N linhas por fixture; cluster key)"
+        tests:
+          - not_null
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+      - name: competition_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+      - name: season
+        description: "Ano da temporada (de fact_fixtures)"
+      - name: date_utc
+        description: "Data do jogo em UTC (chave de partição), de fact_fixtures"
+      - name: team_id
+        description: "ID do time do jogador (FK p/ dim_teams; cluster key)"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Nome do time"
+      - name: team_side
+        description: "'home' | 'away' — lado do time no jogo (derivado via fact_fixtures)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['home', 'away']
+      - name: player_id
+        description: "ID do jogador na API-Football (FK p/ dim_players; chave do dedup; cluster key)"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: player_id
+      - name: player_name
+        description: "Nome do jogador"
+      - name: position
+        description: "Posição no jogo (games.position): 'G' (goleiro), 'D', 'M', 'F'. Pode ser nula."
+      - name: shirt_number
+        description: "Número da camisa no jogo. Pode ser nulo."
+      - name: minutes
+        description: "Minutos jogados. Coberto pelo teste singular (se um campo aninhado for renomeado na API, a coluna inteira vira NULL e o teste falha alto)."
+      - name: rating
+        description: "Nota do jogador na partida (FLOAT64; a API manda string, cast no stg). Pode ser nula."
+      - name: is_captain
+        description: "TRUE se foi capitão na partida"
+      - name: is_substitute
+        description: "TRUE se começou no banco (entrou como substituto ou não jogou)"
+      - name: shots_total
+        description: "Finalizações totais"
+      - name: shots_on
+        description: "Finalizações no gol"
+      - name: goals_total
+        description: "Gols marcados"
+      - name: goals_conceded
+        description: "Gols sofridos (relevante p/ goleiros)"
+      - name: assists
+        description: "Assistências"
+      - name: saves
+        description: "Defesas (goleiros)"
+      - name: offsides
+        description: "Impedimentos"
+      - name: passes_total
+        description: "Passes totais"
+      - name: passes_key
+        description: "Passes decisivos (key passes)"
+      - name: passes_accuracy
+        description: "Acerto de passes (int; a API manda string, cast no stg)"
+      - name: tackles_total
+        description: "Desarmes"
+      - name: tackles_blocks
+        description: "Bloqueios"
+      - name: interceptions
+        description: "Interceptações"
+      - name: duels_total
+        description: "Duelos disputados"
+      - name: duels_won
+        description: "Duelos ganhos"
+      - name: dribbles_attempts
+        description: "Dribles tentados"
+      - name: dribbles_success
+        description: "Dribles bem-sucedidos"
+      - name: dribbles_past
+        description: "Vezes que foi driblado (dribbles.past)"
+      - name: fouls_drawn
+        description: "Faltas sofridas"
+      - name: fouls_committed
+        description: "Faltas cometidas"
+      - name: yellow_cards
+        description: "Cartões amarelos"
+      - name: red_cards
+        description: "Cartões vermelhos"
+      - name: penalty_won
+        description: "Pênaltis conquistados"
+      - name: penalty_committed
+        description: "Pênaltis cometidos (origem: penalty.commited, grafia errada da API)"
+      - name: penalty_scored
+        description: "Pênaltis convertidos"
+      - name: penalty_missed
+        description: "Pênaltis perdidos"
+      - name: penalty_saved
+        description: "Pênaltis defendidos (goleiros)"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_team_season_stats
+    description: >
+      Agregados de temporada por time (/teams/statistics). 1 linha por (team_id, liga,
+      season) — input direto pro modelo Poisson (força ataque/defesa, médias casa/fora).
+      Self-contained: competition/season vêm da própria resposta da API (sem join em
+      fact_fixtures). Latest-only: particionada por snapshot_date (data da coleta) e
+      clusterizada por (team_id, season); reconstruída full a cada run semanal. Dedup por
+      (team_id, liga, season). Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+      O teste singular garante que o flatten não veio todo NULL.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - competition_id
+              - season
+    columns:
+      - name: team_id
+        description: "ID do time na API-Football (FK p/ dim_teams; cluster key)"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
+      - name: team_name
+        description: "Nome do time"
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado de requested_league_id)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['brasileirao', 'copa_mundo']
+      - name: competition_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+      - name: season
+        description: "Ano da temporada (cluster key)"
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Data (UTC) da coleta dos agregados — chave de partição"
+      - name: form
+        description: "Sequência de resultados da temporada (ex: 'WDLWW...'). STRING."
+      - name: played_home
+        description: "Jogos disputados como mandante"
+      - name: played_away
+        description: "Jogos disputados como visitante"
+      - name: played_total
+        description: "Jogos disputados no total"
+      - name: wins_home
+        description: "Vitórias como mandante"
+      - name: wins_away
+        description: "Vitórias como visitante"
+      - name: wins_total
+        description: "Vitórias no total"
+      - name: draws_home
+        description: "Empates como mandante"
+      - name: draws_away
+        description: "Empates como visitante"
+      - name: draws_total
+        description: "Empates no total"
+      - name: loses_home
+        description: "Derrotas como mandante"
+      - name: loses_away
+        description: "Derrotas como visitante"
+      - name: loses_total
+        description: "Derrotas no total"
+      - name: goals_for_home
+        description: "Gols marcados como mandante (força de ataque)"
+      - name: goals_for_away
+        description: "Gols marcados como visitante"
+      - name: goals_for_total
+        description: "Gols marcados no total"
+      - name: goals_for_avg_home
+        description: "Média de gols marcados/jogo como mandante (FLOAT; cast de STRING). Insumo Poisson."
+      - name: goals_for_avg_away
+        description: "Média de gols marcados/jogo como visitante (FLOAT). Insumo Poisson."
+      - name: goals_for_avg_total
+        description: "Média de gols marcados/jogo no total (FLOAT). Insumo Poisson."
+      - name: goals_against_home
+        description: "Gols sofridos como mandante (força de defesa)"
+      - name: goals_against_away
+        description: "Gols sofridos como visitante"
+      - name: goals_against_total
+        description: "Gols sofridos no total"
+      - name: goals_against_avg_home
+        description: "Média de gols sofridos/jogo como mandante (FLOAT; cast de STRING). Insumo Poisson."
+      - name: goals_against_avg_away
+        description: "Média de gols sofridos/jogo como visitante (FLOAT). Insumo Poisson."
+      - name: goals_against_avg_total
+        description: "Média de gols sofridos/jogo no total (FLOAT). Insumo Poisson."
+      - name: clean_sheet_home
+        description: "Jogos sem sofrer gol como mandante"
+      - name: clean_sheet_away
+        description: "Jogos sem sofrer gol como visitante"
+      - name: clean_sheet_total
+        description: "Jogos sem sofrer gol no total"
+      - name: failed_to_score_home
+        description: "Jogos sem marcar como mandante"
+      - name: failed_to_score_away
+        description: "Jogos sem marcar como visitante"
+      - name: failed_to_score_total
+        description: "Jogos sem marcar no total"
+      - name: biggest_streak_wins
+        description: "Maior sequência de vitórias na temporada"
+      - name: biggest_streak_draws
+        description: "Maior sequência de empates"
+      - name: biggest_streak_loses
+        description: "Maior sequência de derrotas"
+      - name: biggest_win_home
+        description: "Maior goleada como mandante (placar STRING, ex: '4-0'). Pode ser nula."
+      - name: biggest_win_away
+        description: "Maior goleada como visitante (placar STRING). Pode ser nula."
+      - name: biggest_lose_home
+        description: "Maior derrota como mandante (placar STRING). Pode ser nula."
+      - name: biggest_lose_away
+        description: "Maior derrota como visitante (placar STRING). Pode ser nula."
+      - name: biggest_goals_for_home
+        description: "Máximo de gols marcados num jogo como mandante"
+      - name: biggest_goals_for_away
+        description: "Máximo de gols marcados num jogo como visitante"
+      - name: biggest_goals_against_home
+        description: "Máximo de gols sofridos num jogo como mandante"
+      - name: biggest_goals_against_away
+        description: "Máximo de gols sofridos num jogo como visitante"
+      - name: penalty_scored_total
+        description: "Pênaltis convertidos na temporada"
+      - name: penalty_scored_pct
+        description: "% de pênaltis convertidos (FLOAT; '%' removido + cast de STRING)"
+      - name: penalty_missed_total
+        description: "Pênaltis perdidos na temporada"
+      - name: penalty_missed_pct
+        description: "% de pênaltis perdidos (FLOAT; cast de STRING)"
+      - name: penalty_total
+        description: "Total de pênaltis cobrados"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"

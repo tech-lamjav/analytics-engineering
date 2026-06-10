@@ -1,0 +1,302 @@
+version: 2
+
+sources:
+  - name: futebol
+    description: "Dados brutos de futebol da API-Football v3 (external tables sobre GCS NDJSON)."
+    database: smartbetting-dados
+    schema: futebol
+    tables:
+      - name: raw_futebol_leagues
+        description: >
+          1 linha por (league_id, season) requisitada. Cobre Brasileirão (id=71)
+          2024/2025/2026 e Copa do Mundo (id=1) 2026. Arquivos:
+          gs://smartbetting-landingzone/futebol/leagues/raw_futebol_leagues_current.json
+          (ano corrente, diário) + raw_futebol_leagues_backfill.json (anos anteriores, one-shot).
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/create_futebol_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/leagues/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: requested_league_id
+            description: "ID da liga requisitada (parâmetro `id` da chamada /leagues)"
+          - name: requested_season
+            description: "Ano da temporada requisitada (parâmetro `season` da chamada)"
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: league
+            description: "STRUCT<id INT64, name STRING, type STRING, logo STRING>"
+          - name: country
+            description: "STRUCT<name STRING, code STRING, flag STRING>"
+          - name: seasons
+            description: "ARRAY<STRUCT<year INT64, start STRING, end STRING, current BOOL, coverage STRUCT<...>>>"
+
+      - name: raw_futebol_teams
+        description: >
+          1 linha por (team, league_id, season) requisitada. Mesmo time pode aparecer em
+          múltiplas (liga, temporada) — dedup acontece em dim_teams. Arquivos:
+          gs://smartbetting-landingzone/futebol/teams/raw_futebol_teams_current.json
+          (ano corrente, diário) + raw_futebol_teams_backfill.json (anos anteriores, one-shot).
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/teams/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: requested_league_id
+            description: "ID da liga requisitada (parâmetro `league` da chamada /teams)"
+          - name: requested_season
+            description: "Ano da temporada requisitada"
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: team
+            description: "STRUCT<id INT64, name STRING, code STRING, country STRING, founded INT64, national BOOL, logo STRING>"
+          - name: venue
+            description: "STRUCT<id INT64, name STRING, address STRING, city STRING, capacity INT64, surface STRING, image STRING>"
+
+      - name: raw_futebol_players
+        description: >
+          1 linha por (player, league_id, season) requisitada. Mesmo jogador pode aparecer em
+          múltiplas (liga, temporada) — dedup acontece em dim_players. Arquivos:
+          gs://smartbetting-landingzone/futebol/players/raw_futebol_players_current.json
+          (ano corrente, diário) + raw_futebol_players_backfill.json (anos anteriores, one-shot).
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/players/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: requested_league_id
+            description: "ID da liga requisitada (parâmetro `league` da chamada /players)"
+          - name: requested_season
+            description: "Ano da temporada requisitada"
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: player
+            description: "STRUCT<id INT64, name STRING, firstname STRING, lastname STRING, age INT64, birth STRUCT<date STRING, place STRING, country STRING>, nationality STRING, height STRING, weight STRING, injured BOOL, photo STRING>"
+          - name: statistics
+            description: "ARRAY<STRUCT<team, league, games STRUCT<position STRING, ...>, ...>>. position do jogador vem daqui (statistics[0].games.position)."
+
+      - name: raw_futebol_fixtures
+        description: >
+          Tabela mãe — 1 linha por fixture (jogo) requisitada. Cobre Brasileirão (id=71)
+          2024/2025/2026 e Copa do Mundo (id=1) 2026. fixture_id destrava os endpoints
+          de jogo (stats/events/lineups/player_stats — subtasks 5-8). Arquivos:
+          gs://smartbetting-landingzone/futebol/fixtures/raw_futebol_fixtures_current.json
+          (ano corrente, diário) + raw_futebol_fixtures_backfill.json (anos anteriores, one-shot).
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/fixtures/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: requested_league_id
+            description: "ID da liga requisitada (parâmetro `league` da chamada /fixtures)"
+          - name: requested_season
+            description: "Ano da temporada requisitada"
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: fixture
+            description: "STRUCT<id INT64, referee STRING, timezone STRING, date STRING, timestamp INT64, periods STRUCT<first INT64, second INT64>, venue STRUCT<id INT64, name STRING, city STRING>, status STRUCT<long STRING, short STRING, elapsed INT64>>"
+          - name: league
+            description: "STRUCT<id INT64, name STRING, country STRING, logo STRING, flag STRING, season INT64, round STRING>"
+          - name: teams
+            description: "STRUCT<home STRUCT<id INT64, name STRING, logo STRING, winner BOOL>, away STRUCT<id INT64, name STRING, logo STRING, winner BOOL>>. winner é NULL p/ jogos não finalizados."
+          - name: goals
+            description: "STRUCT<home INT64, away INT64>. Placar final do tempo normal; NULL antes do jogo."
+          - name: score
+            description: "STRUCT<halftime STRUCT<home INT64, away INT64>, fulltime STRUCT<home INT64, away INT64>, extratime STRUCT<home INT64, away INT64>, penalty STRUCT<home INT64, away INT64>>"
+
+      - name: raw_futebol_fixture_statistics
+        description: >
+          Estatística agregada por time por jogo (/fixtures/statistics). 2 linhas por
+          fixture (mandante e visitante), 1 arquivo por fixture_id. Só jogos finalizados
+          (FT/AET/PEN). statistics fica como array aninhado [{type, value}] (value
+          stringificado) — o pivot pra colunas tipadas acontece em
+          stg_futebol_fixture_statistics. Arquivos:
+          gs://smartbetting-landingzone/futebol/fixture_statistics/raw_futebol_fixture_statistics_{fixture_id}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/fixture_statistics/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: fixture_id
+            description: "ID do jogo na API-Football (FK p/ fact_fixtures). 2 linhas por fixture."
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: total_teams
+            description: "Metadata: nº de blocos de time no jogo (sempre 2). Ignorado downstream."
+          - name: team
+            description: "STRUCT<id INT64, name STRING, logo STRING>. id é o team_id do bloco."
+          - name: statistics
+            description: "ARRAY<STRUCT<type STRING, value STRING>>. value stringificado (int, '55%' ou null). Pivot por type em stg."
+
+      - name: raw_futebol_fixture_events
+        description: >
+          Linha do tempo por jogo (/fixtures/events). N linhas por fixture (1 por
+          evento: gol/cartão/substituição/VAR), 1 arquivo por fixture_id. Só jogos
+          finalizados (FT/AET/PEN). A API não traz id nem campo de ordem nos eventos —
+          event_order carimba o índice no array (ordem cronológica). team/player/assist
+          ficam aninhados — o flatten acontece em stg_futebol_fixture_events. Arquivos:
+          gs://smartbetting-landingzone/futebol/fixture_events/raw_futebol_fixture_events_{fixture_id}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/fixture_events/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: fixture_id
+            description: "ID do jogo na API-Football (FK p/ fact_fixtures). N linhas por fixture."
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: event_order
+            description: "Índice do evento no array da API (0-based) — preserva a ordem cronológica."
+          - name: total_events
+            description: "Metadata: nº de eventos do jogo. Ignorado downstream."
+          - name: elapsed
+            description: "Minuto do jogo em que o evento ocorreu (time.elapsed)."
+          - name: extra
+            description: "Minutos de acréscimo (time.extra). NULL fora dos acréscimos."
+          - name: team
+            description: "STRUCT<id INT64, name STRING, logo STRING>. Time do evento."
+          - name: player
+            description: "STRUCT<id INT64, name STRING>. Jogador principal do evento (autor do gol/cartão/quem entra na subst)."
+          - name: assist
+            description: "STRUCT<id INT64, name STRING>. Assistência do gol / quem sai na substituição. Frequentemente NULL."
+          - name: type
+            description: "Tipo do evento: 'Goal' | 'Card' | 'subst' | 'Var'."
+          - name: detail
+            description: "Detalhe do tipo (ex: 'Normal Goal', 'Yellow Card', 'Substitution 1', 'Penalty')."
+          - name: comments
+            description: "Comentário livre da API. Frequentemente NULL."
+
+      - name: raw_futebol_fixture_lineups
+        description: >
+          Escalações por time por jogo (/fixtures/lineups). 2 linhas por (fixture, fase)
+          (mandante e visitante), 1 arquivo por (fixture_id, fase). Wildcard cobre
+          _confirmed (escalação ~T-30min) + _real (pós-jogo). team/coach + startXI/
+          substitutes ficam aninhados — o flatten/UNNEST acontece em
+          stg_futebol_fixture_lineups(_players). lineup_phase distingue a fase; o fato é
+          latest-wins (dedup por loaded_at). Arquivos:
+          gs://smartbetting-landingzone/futebol/fixture_lineups/raw_futebol_fixture_lineups_{fixture_id}_{confirmed|real}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/fixture_lineups/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: fixture_id
+            description: "ID do jogo na API-Football (FK p/ fact_fixtures). 2 linhas por (fixture, fase)."
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: lineup_phase
+            description: "'confirmed' (escalação ~T-30min) | 'real' (pós-jogo). Fato é latest-wins por loaded_at."
+          - name: total_teams
+            description: "Metadata: nº de blocos de time no jogo (sempre 2). Ignorado downstream."
+          - name: formation
+            description: "Formação tática do time (ex: '4-2-3-1')."
+          - name: team
+            description: "STRUCT<id INT64, name STRING, logo STRING>. id é o team_id do bloco."
+          - name: coach
+            description: "STRUCT<id INT64, name STRING, photo STRING>. Técnico do time."
+          - name: startXI
+            description: "ARRAY<STRUCT<player STRUCT<id INT64, name STRING, number INT64, pos STRING, grid STRING>>>. 11 titulares; UNNEST em stg_..._players (is_starter=TRUE)."
+          - name: substitutes
+            description: "ARRAY<STRUCT<player STRUCT<id INT64, name STRING, number INT64, pos STRING, grid STRING>>>. Banco; UNNEST em stg_..._players (is_starter=FALSE). grid quase sempre NULL."
+
+      - name: raw_futebol_fixture_player_stats
+        description: >
+          Estatística por jogador por jogo (/fixtures/players). N linhas por fixture
+          (1 por jogador que entrou em campo, ambos os times; ~22-30/jogo), 1 arquivo
+          por fixture_id. Só jogos finalizados (FT/AET/PEN). team/player + statistics
+          ficam aninhados (statistics é STRUCT único, statistics[0] da API) — o flatten
+          acontece em stg_futebol_fixture_player_stats. Schema explícito (não autodetect):
+          muitos campos aninhados vêm null e games.rating + passes.accuracy são STRING.
+          ⚠️ penalty.commited tem a grafia ERRADA da própria API (1 "t"); fouls.committed
+          vem certo (2 "t"). Diferente de /fixtures/statistics, statistics NÃO é {type, value}.
+          Arquivos:
+          gs://smartbetting-landingzone/futebol/fixture_player_stats/raw_futebol_fixture_player_stats_{fixture_id}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/fixture_player_stats/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: fixture_id
+            description: "ID do jogo na API-Football (FK p/ fact_fixtures). N linhas por fixture."
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: total_players
+            description: "Metadata: nº de jogadores do jogo (ambos os times). Ignorado downstream."
+          - name: team
+            description: "STRUCT<id INT64, name STRING, logo STRING>. Time do jogador."
+          - name: player
+            description: "STRUCT<id INT64, name STRING, photo STRING>. id é o player_id."
+          - name: statistics
+            description: >
+              STRUCT único (statistics[0] da API) com games STRUCT<minutes, number,
+              position, rating STRING, captain BOOL, substitute BOOL>, offsides, shots
+              STRUCT<total, on>, goals STRUCT<total, conceded, assists, saves>, passes
+              STRUCT<total, key, accuracy STRING>, tackles, duels, dribbles, fouls
+              STRUCT<drawn, committed>, cards STRUCT<yellow, red>, penalty STRUCT<won,
+              commited(SIC), scored, missed, saved>. Achatado/tipado em stg.
+
+      - name: raw_futebol_team_season_stats
+        description: >
+          Agregados de temporada por time (/teams/statistics). 1 linha por (time, liga,
+          season), 1 arquivo por mode (latest-only). Input direto pro modelo Poisson
+          (força ataque/defesa, médias casa/fora). O objeto único da API foi curado numa
+          forma aninhada (fixtures/goals/clean_sheet/failed_to_score/biggest/penalty) —
+          buckets por minuto, under_over, cards e lineups[] descartados. snapshot_date é a
+          data da coleta (chave de partição em fact_team_season_stats). Schema explícito:
+          goals.*.average e penalty.*.percentage vêm STRING (cast em stg). Arquivos:
+          gs://smartbetting-landingzone/futebol/team_season_stats/raw_futebol_team_season_stats_{current|backfill}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/team_season_stats/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: requested_league_id
+            description: "ID da liga requisitada (parâmetro `league` da chamada). Base do competition."
+          - name: requested_season
+            description: "Ano da temporada requisitada"
+          - name: snapshot_date
+            description: "Data (UTC) da coleta dos agregados — chave de partição no fato (DATE)"
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: total_teams
+            description: "Metadata: nº de times coletados no arquivo. Ignorado downstream."
+          - name: team
+            description: "STRUCT<id INT64, name STRING, logo STRING>. id é o team_id."
+          - name: form
+            description: "Sequência de resultados da temporada (ex: 'WDLWW...'). STRING."
+          - name: fixtures
+            description: "STRUCT<played, wins, draws, loses : STRUCT<home INT64, away INT64, total INT64>>."
+          - name: goals
+            description: >
+              STRUCT<for, against : STRUCT<total STRUCT<home,away,total INT64>,
+              average STRUCT<home,away,total STRING>>>. average vem STRING ('1.5') — cast em stg.
+          - name: clean_sheet
+            description: "STRUCT<home INT64, away INT64, total INT64>. Jogos sem sofrer gol."
+          - name: failed_to_score
+            description: "STRUCT<home INT64, away INT64, total INT64>. Jogos sem marcar."
+          - name: biggest
+            description: >
+              STRUCT<streak STRUCT<wins,draws,loses INT64>, wins STRUCT<home,away STRING>,
+              loses STRUCT<home,away STRING>, goals STRUCT<for STRUCT<home,away INT64>,
+              against STRUCT<home,away INT64>>>. wins/loses são placares ('3-0').
+          - name: penalty
+            description: >
+              STRUCT<scored STRUCT<total INT64, percentage STRING>, missed STRUCT<total INT64,
+              percentage STRING>, total INT64>. percentage vem '100%' — cast em stg.

@@ -1,0 +1,30 @@
+
+# Projeto dbt para a vertical de futebol (API-Football v3).
+# Paralelo a dbt_nba/, com profile próprio e dataset 'futebol' em BigQuery.
+name: 'dbt_futebol'
+version: '1.0.0'
+
+profile: 'dbt_futebol'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+
+models:
+  dbt_futebol:
+    staging:
+      +materialized: view
+
+    intermediate:
+      +materialized: view
+
+    marts:
+      +materialized: table

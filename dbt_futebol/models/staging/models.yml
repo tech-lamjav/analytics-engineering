@@ -1,0 +1,171 @@
+version: 2
+
+models:
+  - name: stg_futebol_leagues
+    description: "Flatten do raw_futebol_leagues. 1 linha por (league_id, season_year)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - league_id
+              - season_year
+    columns:
+      - name: league_id
+        description: "ID da liga na API-Football"
+        tests:
+          - not_null
+      - name: season_year
+        description: "Ano da temporada"
+        tests:
+          - not_null
+      - name: league_name
+        description: "Nome oficial da liga (ex: 'Serie A', 'World Cup')"
+      - name: league_type
+        description: "Tipo: 'League' (campeonato regular) ou 'Cup' (mata-mata)"
+      - name: country_name
+        description: "Nome do país (ex: 'Brazil', 'World' para Copa do Mundo)"
+      - name: country_code
+        description: "Código ISO do país (ex: 'BR'). Pode ser nulo para competições internacionais."
+      - name: season_start
+        description: "Data ISO de início da temporada (YYYY-MM-DD)"
+      - name: season_end
+        description: "Data ISO de fim da temporada (YYYY-MM-DD)"
+      - name: season_current
+        description: "True se a API marca essa temporada como atual"
+      - name: coverage
+        description: >
+          STRUCT com flags por feature: fixtures.{events,lineups,statistics_fixtures,statistics_players},
+          standings, players, top_scorers, top_assists, top_cards, injuries, predictions, odds.
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_teams
+    description: "Flatten do raw_futebol_teams. 1 linha por (team_id, requested_league_id, requested_season). Inclui venue para futuras dims."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - requested_league_id
+              - requested_season
+    columns:
+      - name: team_id
+        description: "ID do time na API-Football"
+        tests:
+          - not_null
+      - name: requested_league_id
+        description: "ID da liga onde o time foi listado (parâmetro `league` da chamada)"
+        tests:
+          - not_null
+      - name: requested_season
+        description: "Ano da temporada requisitada"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Nome do time (ex: 'Palmeiras', 'Brazil')"
+      - name: team_code
+        description: "Código curto do time (ex: 'PAL'). Pode ser nulo para seleções."
+      - name: team_country
+        description: "País do clube ou da seleção (ex: 'Brazil')"
+      - name: team_founded_year
+        description: "Ano de fundação do clube. NULL para seleções."
+      - name: national
+        description: "TRUE para seleções (Copa do Mundo), FALSE para clubes (Brasileirão)"
+      - name: team_logo_url
+        description: "URL do logo do time"
+      - name: venue_id
+        description: "ID do estádio principal do time"
+      - name: venue_name
+        description: "Nome do estádio"
+      - name: venue_address
+        description: "Endereço do estádio"
+      - name: venue_city
+        description: "Cidade do estádio"
+      - name: venue_capacity
+        description: "Capacidade do estádio (assentos)"
+      - name: venue_surface
+        description: "Tipo de gramado (ex: 'grass', 'artificial turf')"
+      - name: venue_image_url
+        description: "URL da imagem do estádio"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_players
+    description: "Flatten do raw_futebol_players. 1 linha por (player_id, requested_league_id, requested_season). dim_players faz dedup por player_id."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - requested_league_id
+              - requested_season
+    columns:
+      - name: player_id
+        description: "ID do jogador na API-Football"
+        tests:
+          - not_null
+      - name: requested_league_id
+        description: "ID da liga onde o jogador foi listado (parâmetro `league` da chamada)"
+        tests:
+          - not_null
+      - name: requested_season
+        description: "Ano da temporada requisitada"
+        tests:
+          - not_null
+      - name: player_name
+        description: "Nome de exibição do jogador (ex: 'Raphael Veiga')"
+      - name: first_name
+        description: "Primeiro nome"
+      - name: last_name
+        description: "Sobrenome"
+      - name: age
+        description: "Idade na temporada requisitada (muda anualmente — dim_players mantém a mais recente)"
+      - name: birth_date
+        description: "Data de nascimento ISO (YYYY-MM-DD). Pode ser nula."
+      - name: nationality
+        description: "Nacionalidade do jogador"
+      - name: height
+        description: "Altura como string da API (ex: '175 cm'). Pode ser nula."
+      - name: weight
+        description: "Peso como string da API (ex: '68 kg'). Pode ser nulo."
+      - name: injured
+        description: "Flag de lesão no momento da coleta (snapshot — não confiável como histórico)"
+      - name: photo_url
+        description: "URL da foto do jogador"
+      - name: position
+        description: "Posição derivada de statistics[0].games.position (ex: 'Attacker', 'Midfielder'). Pode ser nula."
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_team_season_stats
+    description: "Flatten do raw_futebol_team_season_stats. 1 linha por (team_id, requested_league_id, requested_season). Médias e percentuais castados de STRING. fact_team_season_stats deriva competition e dedup por (team_id, liga, season)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - requested_league_id
+              - requested_season
+    columns:
+      - name: team_id
+        description: "ID do time na API-Football"
+        tests:
+          - not_null
+      - name: requested_league_id
+        description: "ID da liga requisitada (base do competition)"
+        tests:
+          - not_null
+      - name: requested_season
+        description: "Ano da temporada requisitada"
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Data (UTC) da coleta — chave de partição no fato"
+      - name: form
+        description: "Sequência de resultados da temporada (ex: 'WDLWW...')"
+      - name: goals_for_avg_total
+        description: "Média de gols marcados por jogo (FLOAT; a API manda STRING, cast aqui)"
+      - name: goals_against_avg_total
+        description: "Média de gols sofridos por jogo (FLOAT; cast de STRING)"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
