@@ -169,3 +169,48 @@ models:
         description: "Média de gols sofridos por jogo (FLOAT; cast de STRING)"
       - name: loaded_at
         description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_standings
+    description: "Flatten do raw_futebol_standings. 1 linha por (team_id, group_name, requested_league_id, requested_season, snapshot_date) — group_name na chave porque na Copa o mesmo time aparece no grupo E no 'Ranking of third-placed teams'. Keywords SQL escapadas com crases (`group`, `all`, goals.`for`); renames de clareza (status→rank_status, description→rank_description, update→standings_updated_at). fact_standings_snapshot deriva competition e dedup."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - group_name
+              - requested_league_id
+              - requested_season
+              - snapshot_date
+    columns:
+      - name: team_id
+        description: "ID do time na API-Football"
+        tests:
+          - not_null
+      - name: requested_league_id
+        description: "ID da liga requisitada (base do competition)"
+        tests:
+          - not_null
+      - name: requested_season
+        description: "Ano da temporada requisitada"
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Data (UTC) da coleta do snapshot — chave de partição no fato"
+        tests:
+          - not_null
+      - name: rank
+        description: "Posição na tabela (1 = líder)"
+        tests:
+          - not_null
+      - name: points
+        description: "Pontos somados na temporada"
+      - name: group_name
+        description: "Grupo/divisão ('Serie A'; 'Group A'... na Copa)"
+      - name: rank_status
+        description: "Movimento vs rodada anterior: 'same' | 'up' | 'down'"
+      - name: rank_description
+        description: "Zona da classificação ('Promotion - Copa Libertadores', 'Relegation'...) ou null"
+      - name: standings_updated_at
+        description: "TIMESTAMP da última atualização da tabela na API"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"

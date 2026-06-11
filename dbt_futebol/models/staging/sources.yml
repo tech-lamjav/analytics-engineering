@@ -300,3 +300,60 @@ sources:
             description: >
               STRUCT<scored STRUCT<total INT64, percentage STRING>, missed STRUCT<total INT64,
               percentage STRING>, total INT64>. percentage vem '100%' — cast em stg.
+
+      - name: raw_futebol_standings
+        description: >
+          Snapshot diário da tabela do campeonato (/standings). N linhas por (liga, season,
+          snapshot_date) — 1 por time×grupo; grupos da Copa achatados no extractor (coluna
+          group), incluindo o "Ranking of third-placed teams" (mesmo time aparece 2×: no
+          grupo e no ranking de terceiros — group integra a chave única downstream).
+          Diferente dos demais (latest-only): 1 arquivo por dia+mode, date-stampado — o GCS
+          acumula o histórico de evolução e re-rodar no mesmo dia sobrescreve o mesmo arquivo
+          (idempotente). snapshot_date é a data da coleta (chave de partição em
+          fact_standings_snapshot); a API não tem histórico diário, então o backfill é a tabela
+          FINAL de 2024/2025. Schema explícito (all/group/goals.for são keywords SQL — crases
+          no stg). Arquivos:
+          gs://smartbetting-landingzone/futebol/standings/raw_futebol_standings_{current|backfill}_{YYYY-MM-DD}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/standings/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: requested_league_id
+            description: "ID da liga requisitada (parâmetro `league` da chamada). Base do competition."
+          - name: requested_season
+            description: "Ano da temporada requisitada"
+          - name: snapshot_date
+            description: "Data (UTC) da coleta do snapshot — chave de partição no fato (DATE)"
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: total_rows
+            description: "Metadata: nº de linhas coletadas no arquivo. Ignorado downstream."
+          - name: rank
+            description: "Posição na tabela (1 = líder)"
+          - name: team
+            description: "STRUCT<id INT64, name STRING, logo STRING>. id é o team_id."
+          - name: points
+            description: "Pontos somados na temporada"
+          - name: goalsDiff
+            description: "Saldo de gols (INT64)"
+          - name: group
+            description: "Grupo/divisão na API ('Serie A'; 'Group A'... na Copa). Keyword SQL — crases."
+          - name: form
+            description: "Últimos 5 resultados (ex: 'WWDLW'). Pode vir null no início da temporada."
+          - name: status
+            description: "Movimento vs rodada anterior: 'same' | 'up' | 'down'"
+          - name: description
+            description: "Zona da classificação ('Promotion - Copa Libertadores', 'Relegation'...) ou null"
+          - name: all
+            description: >
+              Campanha geral: STRUCT<played, win, draw, lose INT64,
+              goals STRUCT<for INT64, against INT64>>. Keyword SQL — crases no stg.
+          - name: home
+            description: "Campanha como mandante (mesmo STRUCT do all)"
+          - name: away
+            description: "Campanha como visitante (mesmo STRUCT do all)"
+          - name: update
+            description: "TIMESTAMP da última atualização da tabela na API (marca o fim real da temporada no backfill)"

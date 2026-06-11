@@ -736,3 +736,91 @@ models:
         description: "Timestamp UTC quando o extractor coletou a linha"
       - name: dbt_loaded_at
         description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_standings_snapshot
+    description: >
+      Snapshot diário da tabela do campeonato (/standings). N linhas por (liga, season,
+      snapshot_date) — 1 por time. Contexto de modelagem (briga pelo G4, rebaixamento,
+      jogo já decidido) e histórico de evolução: o raw é date-stampado no GCS (1 arquivo
+      por dia, acumula) e o rebuild full lê todos os dias. Self-contained: competition
+      vem de requested_league_id, sem joins. Particionada por snapshot_date e
+      clusterizada por (league_id, team_id). Dedup por (league_id, season, snapshot_date,
+      group_name, team_id) — re-run no mesmo dia não duplica; group_name na chave porque
+      na Copa o mesmo time aparece no grupo E no "Ranking of third-placed teams".
+      Backfill 2024/2025 = tabela FINAL com snapshot_date do dia da coleta. Cobre
+      Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - league_id
+              - season
+              - snapshot_date
+              - group_name
+              - team_id
+    columns:
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado de requested_league_id)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['brasileirao', 'copa_mundo']
+      - name: league_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo; cluster key)"
+        tests:
+          - not_null
+      - name: season
+        description: "Ano da temporada"
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Data (UTC) da coleta do snapshot — chave de partição"
+        tests:
+          - not_null
+      - name: team_id
+        description: "ID do time na API-Football (FK p/ dim_teams; cluster key)"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
+      - name: team_name
+        description: "Nome do time"
+      - name: rank
+        description: "Posição na tabela (1 = líder)"
+        tests:
+          - not_null
+      - name: points
+        description: "Pontos somados na temporada"
+        tests:
+          - not_null
+      - name: goals_diff
+        description: "Saldo de gols"
+      - name: group_name
+        description: "Grupo/divisão ('Serie A'; 'Group A'... na Copa do Mundo)"
+      - name: form
+        description: "Últimos 5 resultados (ex: 'WWDLW'); null no início da temporada"
+      - name: rank_status
+        description: "Movimento vs rodada anterior: 'same' | 'up' | 'down'"
+      - name: rank_description
+        description: "Zona da classificação ('Promotion - Copa Libertadores', 'Relegation'...) ou null"
+      - name: standings_updated_at
+        description: "Última atualização da tabela na API (no backfill marca o fim real da temporada)"
+      - name: played_total
+        description: "Jogos disputados no total (campanha geral; *_home/*_away idem por mando)"
+      - name: wins_total
+        description: "Vitórias no total"
+      - name: draws_total
+        description: "Empates no total"
+      - name: loses_total
+        description: "Derrotas no total"
+      - name: goals_for_total
+        description: "Gols marcados no total"
+      - name: goals_against_total
+        description: "Gols sofridos no total"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
