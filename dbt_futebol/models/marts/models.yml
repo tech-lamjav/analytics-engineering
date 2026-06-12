@@ -824,3 +824,26 @@ models:
         description: "Timestamp UTC quando o extractor coletou a linha"
       - name: dbt_loaded_at
         description: "Timestamp de quando o modelo foi materializado por dbt"
+
+  - name: fact_h2h
+    description: >
+      View de confronto direto (head-to-head) sobre fact_fixtures — zero chamada
+      extra à API (/fixtures/headtohead é redundante: os jogos já estão na tabela
+      mãe). h2h_pair_key = "menorId-maiorId" (LEAST/GREATEST dos team_ids)
+      identifica o par independente do mando — WHERE h2h_pair_key = 'X-Y' traz
+      todos os confrontos entre X e Y. Só jogos finalizados (FT/AET/PEN — inclui
+      mata-mata da Copa decidido na prorrogação/pênaltis). 1 linha por fixture_id
+      finalizado. Demais colunas espelham fact_fixtures 1:1 (SELECT *) e herdam a
+      documentação de lá; a view é recriada no run diário logo após fact_fixtures,
+      então acompanha evolução de schema. Casos de uso: últimos N confrontos de um
+      par, % de vitória do mandante, tendência over/under em confrontos diretos.
+    columns:
+      - name: h2h_pair_key
+        description: "Chave do par de times: CONCAT(LEAST(home_team_id, away_team_id), '-', GREATEST(...)). Mesmo valor independente de quem foi mandante."
+        tests:
+          - not_null
+      - name: fixture_id
+        description: "ID do jogo na API-Football (1 linha por jogo finalizado; FK p/ fact_fixtures)"
+        tests:
+          - not_null
+          - unique
