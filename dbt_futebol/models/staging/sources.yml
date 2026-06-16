@@ -357,3 +357,40 @@ sources:
             description: "Campanha como visitante (mesmo STRUCT do all)"
           - name: update
             description: "TIMESTAMP da última atualização da tabela na API (marca o fim real da temporada no backfill)"
+
+      - name: raw_futebol_injuries
+        description: >
+          Snapshot diário de lesionados/suspensos (/injuries). N linhas por (liga, season,
+          snapshot_date) — 1 por (player, fixture, type, reason); a API repete linhas exatas
+          (dedup no fato). Diferente dos latest-only: 1 arquivo por
+          dia+mode, date-stampado — o GCS acumula o histórico e re-rodar no mesmo dia sobrescreve
+          o mesmo arquivo (idempotente). snapshot_date é a data da coleta (chave de partição em
+          fact_injuries_snapshot). type ∈ {Missing Fixture, Questionable}; reason é texto livre
+          (inclui suspensões). Schema explícito (type/reason STRING aninhados em player; fixture.date ISO→TIMESTAMP).
+          ⚠️ Só Brasileirão (71) tem coverage.injuries=TRUE; Copa do Mundo (1) fica fora. Arquivos:
+          gs://smartbetting-landingzone/futebol/injuries/raw_futebol_injuries_{current|backfill}_{YYYY-MM-DD}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/injuries/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: requested_league_id
+            description: "ID da liga requisitada (parâmetro `league` da chamada). Base do competition."
+          - name: requested_season
+            description: "Ano da temporada requisitada"
+          - name: snapshot_date
+            description: "Data (UTC) da coleta do snapshot — chave de partição no fato (DATE)"
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: total_rows
+            description: "Metadata: nº de linhas coletadas no arquivo. Ignorado downstream."
+          - name: player
+            description: "STRUCT<id INT64, name STRING, photo STRING, type STRING, reason STRING>. ⚠️ type/reason vêm ANINHADOS aqui (não no topo): type ∈ {Missing Fixture, Questionable}; reason é texto livre (inclui suspensões). id é o player_id."
+          - name: team
+            description: "STRUCT<id INT64, name STRING, logo STRING>. Time do jogador."
+          - name: fixture
+            description: "STRUCT<id INT64, timezone STRING, date TIMESTAMP, timestamp INT64>. Jogo que o jogador vai desfalcar."
+          - name: league
+            description: "STRUCT<id INT64, season INT64, name STRING, country STRING, logo STRING, flag STRING>."

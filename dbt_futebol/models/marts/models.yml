@@ -825,6 +825,92 @@ models:
       - name: dbt_loaded_at
         description: "Timestamp de quando o modelo foi materializado por dbt"
 
+  - name: fact_injuries_snapshot
+    description: >
+      Snapshot diário de lesionados/suspensos (/injuries). N linhas por (liga, season,
+      snapshot_date) — 1 por (player, fixture). Input de modelagem que a maioria dos
+      modelos públicos ignora: desfalque de peça (atacante de 0,7 gol/jogo) muda
+      materialmente a previsão. O raw é date-stampado no GCS (1 arquivo por dia, acumula)
+      e o rebuild full lê todos os dias. Self-contained: competition vem de
+      requested_league_id, sem joins. Particionada por snapshot_date e clusterizada por
+      (team_id, fixture_id). Dedup por (league_id, season, snapshot_date, fixture_id,
+      player_id, injury_type, injury_reason) — a API repete linhas exatas; re-run no mesmo
+      dia não duplica (idempotente). ⚠️ Coverage: só Brasileirão (71) 2024/25/26 — Copa do
+      Mundo (1) tem coverage.injuries=FALSE e fica fora.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - league_id
+              - season
+              - snapshot_date
+              - fixture_id
+              - player_id
+              - injury_type
+              - injury_reason
+    columns:
+      - name: competition
+        description: "'brasileirao' (derivado de requested_league_id; copa_mundo fora — coverage off)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['brasileirao', 'copa_mundo']
+      - name: league_id
+        description: "ID da liga na API-Football (71 = Brasileirão)"
+        tests:
+          - not_null
+      - name: season
+        description: "Ano da temporada"
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Data (UTC) da coleta do snapshot — chave de partição"
+        tests:
+          - not_null
+      - name: team_id
+        description: "ID do time do jogador na API-Football (FK p/ dim_teams; cluster key)"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
+      - name: team_name
+        description: "Nome do time"
+      - name: team_logo
+        description: "URL do escudo do time"
+      - name: player_id
+        description: "ID do jogador lesionado/suspenso (FK p/ dim_players). severity warn: jogador pode faltar no catálogo (mesmo gap da subtask 8)."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: player_id
+              config:
+                severity: warn
+      - name: player_name
+        description: "Nome do jogador"
+      - name: player_photo
+        description: "URL da foto do jogador"
+      - name: fixture_id
+        description: "ID do jogo que o jogador vai desfalcar (FK p/ fact_fixtures; cluster key)"
+        tests:
+          - not_null
+      - name: fixture_date
+        description: "Data/hora (UTC) do jogo desfalcado"
+      - name: injury_type
+        description: "'Missing Fixture' (fora) | 'Questionable' (dúvida)"
+        tests:
+          - not_null
+      - name: injury_reason
+        description: "Motivo (texto livre): 'Broken ankle', 'Suspended', \"Coach's decision\"..."
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
   - name: fact_h2h
     description: >
       View de confronto direto (head-to-head) sobre fact_fixtures — zero chamada
