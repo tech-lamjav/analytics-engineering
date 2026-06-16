@@ -911,6 +911,108 @@ models:
       - name: dbt_loaded_at
         description: "Timestamp de quando o modelo foi materializado por dbt"
 
+  - name: fact_odds_snapshot
+    description: >
+      Coração do value betting: odds pré-jogo de TODAS as casas em 2 janelas por jogo
+      (collection_window t24h = linha de abertura ~24h antes; t1h = perto do fechamento
+      ~1h antes) — base de CLV (Closing Line Value), EV e movimento de linha. FORWARD-ONLY:
+      o raw acumula no GCS (1 arquivo por fixture×janela) e o rebuild full lê tudo.
+      Self-contained: competition vem de league_id, sem joins. Particionada por
+      collection_date (=DATE(collection_timestamp)) e clusterizada por (fixture_id,
+      bookmaker_name). Afunila p/ os 8 mercados-alvo (market_id IN 1,4,5,6,7,8,10,12)
+      mantendo TODAS as casas — Pinnacle (id=4) é a sharp de referência. minutes_to_kickoff
+      é o lead exato da captura (a janela é só rótulo). Dedup latest-wins por (fixture_id,
+      bookmaker_id, market_id, outcome_label, collection_window). Brasileirão (71) + Copa do
+      Mundo (1) 2026 (ambos coverage.odds=TRUE).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - bookmaker_id
+              - market_id
+              - outcome_label
+              - collection_window
+    columns:
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado de league_id)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['brasileirao', 'copa_mundo']
+      - name: league_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        tests:
+          - not_null
+      - name: season
+        description: "Ano da temporada"
+        tests:
+          - not_null
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures; cluster key). severity warn: jogo recém-incluído pode estar à frente do rebuild diário do fato."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
+              config:
+                severity: warn
+      - name: kickoff_utc
+        description: "Data/hora (UTC) do kickoff do jogo"
+        tests:
+          - not_null
+      - name: collection_window
+        description: "Janela da coleta: 't24h' (abertura) | 't1h' (perto do fechamento)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['t24h', 't1h']
+      - name: collection_timestamp
+        description: "TIMESTAMP (UTC) exato da coleta do snapshot"
+        tests:
+          - not_null
+      - name: collection_date
+        description: "DATE(collection_timestamp) — chave de partição"
+        tests:
+          - not_null
+      - name: minutes_to_kickoff
+        description: "Minutos entre a coleta e o kickoff (lead exato; a janela é só rótulo)"
+      - name: bookmaker_id
+        description: "ID da casa na API-Football (4 = Pinnacle/sharp de referência, 8 = Bet365...)"
+        tests:
+          - not_null
+      - name: bookmaker_name
+        description: "Nome da casa (cluster key)"
+        tests:
+          - not_null
+      - name: market_id
+        description: "ID do mercado (1=Match Winner, 4=Asian Handicap, 5=Goals O/U, 6=Goals O/U 1st Half, 7=HT/FT, 8=BTTS, 10=Exact Score, 12=Double Chance)"
+        tests:
+          - not_null
+      - name: market_name
+        description: "Nome do mercado na API-Football"
+      - name: outcome_label
+        description: "Rótulo do resultado/seleção (ex.: 'Home', 'Over 2.5', 'Home -0.5', '1:0'). Embute a linha do mercado."
+        tests:
+          - not_null
+      - name: odd_decimal
+        description: "Odd em formato decimal (> 1.0). Cast de STRING no stg; linhas com odd não-numérica são descartadas."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1.0
+                inclusive: false
+      - name: api_update
+        description: "TIMESTAMP da última atualização das odds na API (campo `update` do /odds)"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
   - name: fact_h2h
     description: >
       View de confronto direto (head-to-head) sobre fact_fixtures — zero chamada

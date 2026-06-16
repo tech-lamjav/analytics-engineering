@@ -394,3 +394,51 @@ sources:
             description: "STRUCT<id INT64, timezone STRING, date TIMESTAMP, timestamp INT64>. Jogo que o jogador vai desfalcar."
           - name: league
             description: "STRUCT<id INT64, season INT64, name STRING, country STRING, logo STRING, flag STRING>."
+
+      - name: raw_futebol_odds
+        description: >
+          Snapshot pré-jogo de odds (/odds) — coração do value betting (CLV/EV/movimento de
+          linha). FORWARD-ONLY, em 2 janelas por jogo (collection_window: t24h = linha de
+          abertura ~24h antes; t1h = linha perto do fechamento ~1h antes). N linhas por
+          (fixture, janela) — 1 por CASA; bets/values aninhados (UNNEST em stg_futebol_odds).
+          1 arquivo por (fixture, janela): raw_futebol_odds_{fixture}_{t24h|t1h}.json
+          (skip-if-exists = 1 snapshot por janela). Guarda TODAS as casas/mercados; o
+          afunilamento p/ os 8 mercados-alvo é no fact_odds_snapshot. odd/value vêm STRING
+          (cast em stg); collection_timestamp/api_update ISO→TIMESTAMP; kickoff_timestamp
+          unix INT64. Brasileirão (71) + Copa do Mundo (1) 2026 (ambos coverage.odds=TRUE). Arquivos:
+          gs://smartbetting-landingzone/futebol/odds/raw_futebol_odds_{fixture}_{t24h|t1h}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/odds/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: fixture_id
+            description: "ID do jogo na API-Football (FK p/ fact_fixtures). N linhas por (fixture, janela)."
+          - name: league_id
+            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo). Base do competition."
+          - name: season
+            description: "Ano da temporada"
+          - name: collection_window
+            description: "Janela da coleta: 't24h' (linha de abertura) | 't1h' (perto do fechamento)."
+          - name: collection_timestamp
+            description: "TIMESTAMP (UTC) do momento da coleta — chave de partição no fato (DATE dela)."
+          - name: kickoff_timestamp
+            description: "Unix UTC do kickoff (INT64). TIMESTAMP_SECONDS no stg p/ calcular minutes_to_kickoff."
+          - name: api_update
+            description: "TIMESTAMP da última atualização das odds na API (campo `update` do /odds)."
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: total_bookmakers
+            description: "Metadata: nº de casas no snapshot do jogo. Ignorado downstream."
+          - name: bookmaker_id
+            description: "ID da casa na API-Football (4 = Pinnacle/sharp de referência, 8 = Bet365...)."
+          - name: bookmaker_name
+            description: "Nome da casa (cluster key no fato)."
+          - name: bets
+            description: >
+              ARRAY<STRUCT<id INT64, name STRING, values ARRAY<STRUCT<value STRING, odd STRING>>>>.
+              id = market_id (1=Match Winner, 4=Asian Handicap, 5=Goals O/U, 6=Goals O/U 1st Half,
+              7=HT/FT, 8=BTTS, 10=Exact Score, 12=Double Chance...). value = rótulo do outcome;
+              odd = decimal STRING. UNNEST 2× em stg_futebol_odds.
