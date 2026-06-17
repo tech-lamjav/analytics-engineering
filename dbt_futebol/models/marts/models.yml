@@ -1013,6 +1013,146 @@ models:
       - name: dbt_loaded_at
         description: "Timestamp de quando o modelo foi materializado por dbt"
 
+  - name: fact_predictions_api
+    description: >
+      BASELINE de comparação: previsão pré-jogo do algoritmo da própria API-Football
+      (/predictions) — 1 linha por fixture. Probabilidades 1X2 (prob_*_pct), vencedor/
+      placar/conselho previstos e comparação de força home vs away (comparison_* = form/
+      att/def/poisson/h2h/goals/total). Uso: avaliar se um modelo próprio bate a API
+      consistentemente (= edge real); NÃO é produto. FORWARD-ONLY: o raw acumula no GCS
+      (1 arquivo/fixture) e o rebuild full lê tudo. Self-contained: competition vem de
+      league_id, sem joins. Particionada por collection_date (=DATE(collection_timestamp))
+      e clusterizada por fixture_id. minutes_to_kickoff = lead exato da captura. Dedup
+      latest-wins por fixture_id. Brasileirão (71) + Copa do Mundo (1) 2026 (ambos
+      coverage.predictions=TRUE).
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+    columns:
+      - name: competition
+        description: "'brasileirao' | 'copa_mundo' (derivado de league_id)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['brasileirao', 'copa_mundo']
+      - name: league_id
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        tests:
+          - not_null
+      - name: season
+        description: "Ano da temporada"
+        tests:
+          - not_null
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures; chave do dedup/cluster). severity warn: jogo recém-incluído pode estar à frente do rebuild diário do fato."
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
+              config:
+                severity: warn
+      - name: kickoff_utc
+        description: "Data/hora (UTC) do kickoff do jogo"
+        tests:
+          - not_null
+      - name: collection_window
+        description: "Janela da coleta: 't2h' (~2h antes do kickoff)"
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['t2h']
+      - name: collection_timestamp
+        description: "TIMESTAMP (UTC) exato da coleta da previsão"
+        tests:
+          - not_null
+      - name: collection_date
+        description: "DATE(collection_timestamp) — chave de partição"
+        tests:
+          - not_null
+      - name: minutes_to_kickoff
+        description: "Minutos entre a coleta e o kickoff (lead exato)"
+      - name: predicted_winner_team_id
+        description: "ID do time previsto como vencedor (ou empate); null se a API não cravar"
+      - name: predicted_winner_name
+        description: "Nome do time previsto como vencedor"
+      - name: predicted_winner_comment
+        description: "Comentário da previsão (ex.: 'Win or draw')"
+      - name: predicted_win_or_draw
+        description: "BOOL: previsão de vitória OU empate do winner"
+      - name: predicted_under_over
+        description: "Linha de gols sugerida (ex.: -3.5 = under 3.5); cast de STRING"
+      - name: predicted_goals_home
+        description: "Linha de gols esperada do mandante (cast de STRING '-1.5')"
+      - name: predicted_goals_away
+        description: "Linha de gols esperada do visitante"
+      - name: advice
+        description: "Conselho textual da API (ex.: 'Combo Double chance : ... and -3.5 goals')"
+      - name: prob_home_pct
+        description: "Probabilidade % do mandante (cast de STRING '45%')"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
+      - name: prob_draw_pct
+        description: "Probabilidade % de empate"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
+      - name: prob_away_pct
+        description: "Probabilidade % do visitante"
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 100
+                inclusive: true
+      - name: comparison_form_home
+        description: "Comparação de forma (%) do mandante vs visitante"
+      - name: comparison_form_away
+        description: "Comparação de forma (%) do visitante"
+      - name: comparison_att_home
+        description: "Comparação de ataque (%) do mandante"
+      - name: comparison_att_away
+        description: "Comparação de ataque (%) do visitante"
+      - name: comparison_def_home
+        description: "Comparação de defesa (%) do mandante"
+      - name: comparison_def_away
+        description: "Comparação de defesa (%) do visitante"
+      - name: comparison_poisson_home
+        description: "Probabilidade Poisson (%) do mandante"
+      - name: comparison_poisson_away
+        description: "Probabilidade Poisson (%) do visitante"
+      - name: comparison_h2h_home
+        description: "Comparação de confronto direto (%) do mandante"
+      - name: comparison_h2h_away
+        description: "Comparação de confronto direto (%) do visitante"
+      - name: comparison_goals_home
+        description: "Comparação de gols (%) do mandante"
+      - name: comparison_goals_away
+        description: "Comparação de gols (%) do visitante"
+      - name: comparison_total_home
+        description: "Comparação total (%) do mandante"
+      - name: comparison_total_away
+        description: "Comparação total (%) do visitante"
+      - name: extracted_at
+        description: "Timestamp UTC quando o extractor coletou a linha"
+      - name: dbt_loaded_at
+        description: "Timestamp de quando o modelo foi materializado por dbt"
+
   - name: fact_h2h
     description: >
       View de confronto direto (head-to-head) sobre fact_fixtures — zero chamada

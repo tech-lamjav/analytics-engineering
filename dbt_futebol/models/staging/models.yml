@@ -248,3 +248,35 @@ models:
         description: "Motivo (texto livre); inclui suspensões"
       - name: loaded_at
         description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_predictions
+    description: "Flatten do raw_futebol_predictions. 1 linha por fixture (1 previsão/jogo, sem UNNEST). predictions/comparison achatados; percentuais ('45%') e linhas de gol ('-1.5') STRING → FLOAT64 (REPLACE('%','') + SAFE_CAST). `def` escapado com crases. fact_predictions_api deriva competition/collection_date e dedup."
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: league_id
+        description: "ID da liga (base do competition)"
+        tests:
+          - not_null
+      - name: season
+        description: "Ano da temporada"
+        tests:
+          - not_null
+      - name: collection_timestamp
+        description: "TIMESTAMP (UTC) da coleta — chave de partição no fato (DATE)"
+        tests:
+          - not_null
+      - name: kickoff_utc
+        description: "Data/hora (UTC) do kickoff do jogo"
+        tests:
+          - not_null
+      - name: prob_home_pct
+        description: "Probabilidade % do mandante (cast de STRING '45%')"
+      - name: prob_draw_pct
+        description: "Probabilidade % de empate"
+      - name: prob_away_pct
+        description: "Probabilidade % do visitante"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"

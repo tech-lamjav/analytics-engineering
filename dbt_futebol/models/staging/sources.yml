@@ -442,3 +442,48 @@ sources:
               id = market_id (1=Match Winner, 4=Asian Handicap, 5=Goals O/U, 6=Goals O/U 1st Half,
               7=HT/FT, 8=BTTS, 10=Exact Score, 12=Double Chance...). value = rótulo do outcome;
               odd = decimal STRING. UNNEST 2× em stg_futebol_odds.
+
+      - name: raw_futebol_predictions
+        description: >
+          Previsão pré-jogo do algoritmo da própria API-Football (/predictions) — BASELINE
+          de comparação p/ avaliar um modelo próprio (não é produto). FORWARD-ONLY, 1 janela
+          (T-2h), 1 LINHA por fixture (1 previsão/jogo): predictions/comparison aninhados
+          (flatten por dot-access em stg_futebol_predictions, sem UNNEST). 1 arquivo por
+          fixture: raw_futebol_predictions_{fixture}.json (skip-if-exists = 1 captura/jogo);
+          o raw acumula no GCS e o rebuild full lê tudo. Percentuais ("45%") e linhas de gol
+          ("-1.5") vêm STRING (cast em stg); collection_timestamp ISO→TIMESTAMP;
+          kickoff_timestamp unix INT64. Brasileirão (71) + Copa do Mundo (1) 2026 (ambos
+          coverage.predictions=TRUE). Arquivos:
+          gs://smartbetting-landingzone/futebol/predictions/raw_futebol_predictions_{fixture}.json.
+        external:
+          # Documentação apenas — external table criada por
+          # data-engineering/scripts/futebol/create_external_tables.py
+          location: "gs://smartbetting-landingzone/futebol/predictions/*.json"
+          options:
+            format: NEWLINE_DELIMITED_JSON
+        columns:
+          - name: fixture_id
+            description: "ID do jogo na API-Football (FK p/ fact_fixtures). 1 linha por fixture."
+          - name: league_id
+            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo). Base do competition."
+          - name: season
+            description: "Ano da temporada"
+          - name: collection_window
+            description: "Janela da coleta: 't2h' (~2h antes do kickoff)."
+          - name: collection_timestamp
+            description: "TIMESTAMP (UTC) do momento da coleta — chave de partição no fato (DATE dela)."
+          - name: kickoff_timestamp
+            description: "Unix UTC do kickoff (INT64). TIMESTAMP_SECONDS no stg."
+          - name: loaded_at
+            description: "Timestamp ISO UTC quando o extractor coletou a linha"
+          - name: predictions
+            description: >
+              STRUCT<winner STRUCT<id INT64, name STRING, comment STRING>, win_or_draw BOOL,
+              under_over STRING, goals STRUCT<home STRING, away STRING>, advice STRING,
+              percent STRUCT<home STRING, draw STRING, away STRING>>. Percentuais "45%",
+              linhas de gol/under_over "-1.5" — cast em stg.
+          - name: comparison
+            description: >
+              STRUCT com 7 métricas de comparação home vs away {form, att, def,
+              poisson_distribution, h2h, goals, total}, cada uma STRUCT<home STRING, away STRING>
+              (percentuais "45%"). Cast em stg. (def é keyword SQL — crases no stg.)
