@@ -1,6 +1,13 @@
-# Analytics Engineering - NBA Data Pipeline
+# Analytics Engineering - NBA & Futebol Data Pipeline
 
-Projeto de analytics engineering para transformação e modelagem de dados da NBA usando dbt (data build tool) e BigQuery, com deploy automatizado no Google Cloud Run.
+Projeto de analytics engineering para transformação e modelagem de dados da NBA e de futebol usando dbt (data build tool) e BigQuery, com deploy automatizado no Google Cloud Run.
+
+## 📚 Documentação dbt (online)
+
+> **[📊 Acessar documentação dbt](https://tech-lamjav.github.io/analytics-engineering/)** — linhagem, modelos, descrições e testes, atualizada automaticamente a cada push em `main`/`master`.
+>
+> - 🏀 **[NBA](https://tech-lamjav.github.io/analytics-engineering/nba/)**
+> - ⚽ **[Futebol](https://tech-lamjav.github.io/analytics-engineering/futebol/)**
 
 ## 📋 Visão Geral
 
@@ -25,14 +32,20 @@ Raw Data (GCS) → Staging (Views) → Intermediate (Views) → Marts (Tables)
 
 ```
 analytics-engineering/
-├── dbt_nba/                    # Projeto dbt
+├── dbt_nba/                    # Projeto dbt — NBA
 │   ├── models/
 │   │   ├── staging/           # Modelos de staging (views)
 │   │   ├── intermediate/      # Modelos intermediários (views)
 │   │   └── marts/             # Modelos finais (tables)
 │   ├── dbt_project.yml        # Configuração do projeto dbt
 │   └── packages.yml           # Dependências do dbt
-├── profiles.yml                # Configuração de conexão BigQuery
+├── dbt_futebol/                # Projeto dbt — Futebol (API-Football)
+│   ├── models/
+│   │   ├── staging/           # Modelos de staging (views)
+│   │   └── marts/             # Modelos finais (tables)
+│   ├── dbt_project.yml        # Configuração do projeto dbt
+│   └── packages.yml           # Dependências do dbt
+├── profiles.yml                # Configuração de conexão BigQuery (profiles dbt_nba e dbt_futebol)
 ├── Dockerfile                  # Imagem Docker para Cloud Run
 ├── build-and-push.sh          # Script de build e deploy
 ├── requirements.txt            # Dependências Python
@@ -231,9 +244,11 @@ Os testes incluem:
 
 ### Documentação online (GitHub Pages)
 
-A documentação do dbt (linhagem, descrições dos modelos, testes) é publicada automaticamente no GitHub Pages a cada push em `main`/`master`. Acesse:
+A documentação do dbt (linhagem, descrições dos modelos, testes) dos **dois projetos** é publicada automaticamente no GitHub Pages a cada push em `main`/`master`. Acesse:
 
-**[Ver documentação do dbt](https://tech-lamjav.github.io/analytics-engineering/)**
+- **[Página inicial](https://tech-lamjav.github.io/analytics-engineering/)** — escolha a vertical
+- 🏀 **[NBA](https://tech-lamjav.github.io/analytics-engineering/nba/)**
+- ⚽ **[Futebol](https://tech-lamjav.github.io/analytics-engineering/futebol/)**
 
 **Importante:** para o link mostrar os docs do dbt (e não este README), em **Settings > Pages** use **Source** = “Deploy from a branch”, **Branch** = `gh-pages`, **Folder** = `/ (root)`. Se estiver em `main`/`master`, o site exibirá o README.
 
@@ -267,10 +282,10 @@ O workflow que publica os docs precisa de uma chave de service account do GCP pa
 
 ### Documentação local
 
-Gere e visualize a documentação localmente:
+Gere e visualize a documentação localmente (mesmo procedimento para `dbt_futebol`):
 
 ```bash
-cd dbt_nba
+cd dbt_nba       # ou: cd dbt_futebol
 dbt docs generate
 dbt docs serve
 ```

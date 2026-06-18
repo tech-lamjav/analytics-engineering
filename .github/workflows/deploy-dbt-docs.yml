@@ -9,6 +9,7 @@ on:
     branches: [master, main]
     paths:
       - 'dbt_nba/**'
+      - 'dbt_futebol/**'
       - 'profiles.yml'
       - 'requirements.txt'
       - '.github/workflows/deploy-dbt-docs.yml'
@@ -60,32 +61,59 @@ jobs:
                 location: us-east1
                 keyfile: ${{ github.workspace }}/keyfile.json
             target: dev
+          dbt_futebol:
+            outputs:
+              dev:
+                type: bigquery
+                method: service-account
+                project: smartbetting-dados
+                dataset: futebol
+                threads: 4
+                location: us-east1
+                keyfile: ${{ github.workspace }}/keyfile.json
+            target: dev
           EOF
 
       - name: Install dbt packages
         run: |
-          cd dbt_nba
           export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-${{ github.workspace }}}"
-          dbt deps
+          (cd dbt_nba && dbt deps)
+          (cd dbt_futebol && dbt deps)
 
       - name: Generate dbt docs (static)
         run: |
-          cd dbt_nba
           export DBT_PROFILES_DIR="${DBT_PROFILES_DIR:-${{ github.workspace }}}"
-          dbt docs generate --static
+          (cd dbt_nba && dbt docs generate --static)
+          (cd dbt_futebol && dbt docs generate --static)
 
-      - name: Verify docs and deploy to GitHub Pages
+      - name: Assemble docs site
         run: |
-          if [ ! -f dbt_nba/target/index.html ]; then
-            echo "::error::dbt docs generate did not produce index.html - check the step above"
-            exit 1
-          fi
-          echo "Generated index.html found, deploy will run next"
+          for d in dbt_nba dbt_futebol; do
+            if [ ! -f "$d/target/index.html" ]; then
+              echo "::error::$d docs generate did not produce index.html - check the step above"; exit 1
+            fi
+          done
+          rm -rf public
+          mkdir -p public/nba public/futebol
+          cp -r dbt_nba/target/.     public/nba/
+          cp -r dbt_futebol/target/. public/futebol/
+          cat > public/index.html << 'HTML'
+          <!doctype html><html lang="pt-br"><head><meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <title>Documentação dbt — Smartbetting</title>
+          <style>body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:680px;margin:8vh auto;padding:0 24px;color:#1a1a1a}h1{font-size:1.6rem}.cards{display:grid;gap:16px;margin-top:32px}a.card{display:block;padding:20px 24px;border:1px solid #e2e2e2;border-radius:12px;text-decoration:none;color:inherit}a.card:hover{border-color:#888;box-shadow:0 2px 12px rgba(0,0,0,.06)}a.card b{font-size:1.15rem}a.card span{color:#666;display:block;margin-top:4px;font-size:.92rem}footer{margin-top:40px;color:#999;font-size:.85rem}</style>
+          </head><body><h1>📊 Documentação dbt — Smartbetting</h1>
+          <p>Documentação interativa (linhagem, modelos, descrições e testes), gerada automaticamente a cada deploy.</p>
+          <div class="cards">
+          <a class="card" href="./nba/"><b>🏀 NBA</b><span>Pipeline de dados e props da NBA</span></a>
+          <a class="card" href="./futebol/"><b>⚽ Futebol</b><span>Pipeline de dados de futebol (API-Football)</span></a>
+          </div><footer>Atualizado automaticamente via GitHub Actions.</footer></body></html>
+          HTML
 
       - name: Deploy to GitHub Pages
         uses: peaceiris/actions-gh-pages@v4
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dbt_nba/target
+          publish_dir: ./public
           publish_branch: gh-pages
           force_orphan: true
