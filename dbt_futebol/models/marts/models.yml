@@ -913,9 +913,11 @@ models:
 
   - name: fact_odds_snapshot
     description: >
-      Coração do value betting: odds pré-jogo de TODAS as casas em 2 janelas por jogo
-      (collection_window t24h = linha de abertura ~24h antes; t1h = perto do fechamento
-      ~1h antes) — base de CLV (Closing Line Value), EV e movimento de linha. FORWARD-ONLY:
+      Coração do value betting: odds pré-jogo de TODAS as casas em 3 janelas por jogo
+      (collection_window t24h = abertura ~24h antes; t1h = intermediária ~1h antes; t15m =
+      fechamento ~15min antes, habilita CLV real) — base de CLV (Closing Line Value), EV e
+      movimento de linha. outcome_side + line_value destrincham o outcome_label (O/U e Asian
+      Handicap pareáveis por linha, sem parse frágil no app). FORWARD-ONLY:
       o raw acumula no GCS (1 arquivo por fixture×janela) e o rebuild full lê tudo.
       Self-contained: competition vem de league_id, sem joins. Particionada por
       collection_date (=DATE(collection_timestamp)) e clusterizada por (fixture_id,
@@ -964,12 +966,12 @@ models:
         tests:
           - not_null
       - name: collection_window
-        description: "Janela da coleta: 't24h' (abertura) | 't1h' (perto do fechamento)"
+        description: "Janela da coleta: 't24h' (abertura ~24h) | 't1h' (intermediária ~1h) | 't15m' (fechamento ~15min — habilita CLV real)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['t24h', 't1h']
+                values: ['t24h', 't1h', 't15m']
       - name: collection_timestamp
         description: "TIMESTAMP (UTC) exato da coleta do snapshot"
         tests:
@@ -998,6 +1000,23 @@ models:
         description: "Rótulo do resultado/seleção (ex.: 'Home', 'Over 2.5', 'Home -0.5', '1:0'). Embute a linha do mercado."
         tests:
           - not_null
+      - name: outcome_side
+        description: >
+          Lado/seleção canônica destrinchada do outcome_label: 'Over'/'Under' (O/U),
+          'Home'/'Away' (Asian Handicap), 'Home'/'Draw'/'Away' (Match Winner), 'Yes'/'No'
+          (BTTS). NULL p/ outcomes compostos (HT/FT 'Home/Away', Double Chance 'Home/Draw')
+          e Exact Score ('1:0') — não há lado atômico. Com line_value torna O/U e Asian
+          Handicap pareáveis sem parse de texto no app.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Over', 'Under', 'Home', 'Away', 'Draw', 'Yes', 'No']
+      - name: line_value
+        description: >
+          Linha numérica destrinchada do outcome_label. O/U (market 5/6): total positivo
+          ('Over 2.5' → 2.5). Asian Handicap (market 4): handicap ASSINADO na perspectiva do
+          lado rotulado ('Home -1.5' → -1.5; 'Away +1.5' → +1.5). NULL p/ mercados sem linha
+          (Match Winner, BTTS, HT/FT, Double Chance, Exact Score). FLOAT64.
       - name: odd_decimal
         description: "Odd em formato decimal (> 1.0). Cast de STRING no stg; linhas com odd não-numérica são descartadas."
         tests:
