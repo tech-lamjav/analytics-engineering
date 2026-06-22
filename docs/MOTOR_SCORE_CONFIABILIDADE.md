@@ -4,7 +4,7 @@ Documento de contexto e plano para a **camada de produto** do futebol: um motor 
 
 Sobe **em cima** do pipeline de ingestão já concluído (`data-engineering/docs/PIPELINE_APIFOOTBALL.md` — 15 tabelas raw/mart em `smartbetting-dados.futebol`). Aqui não há ingestão nova: o motor é **regras e contas** (não modelo estatístico) sobre os marts que já existem.
 
-> **Status**: planejamento. A fórmula, o gate, as faixas e a corroboração/penalidades estão **fechados** (abaixo). As **premissas por mercado** (PTS_PREMISSAS) **agora também estão especificadas**: o playbook `futebol-metodologia-premissas.md` chegou ao repo (em `prop-play-predictor/docs/`, auditado 2026-06-18) e está transcrito na **seção 12** (1X2, O/U, Handicap, BTTS, Dupla chance — com pesos, thresholds, gates e penalidades por mercado); a fundamentação (benchmark) está destilada na **seção 13**. O que falta em S1–S5 passa a ser **implementação em dbt**, não definição. Este doc é **vivo**: cada subtarefa preenche sua linha na tabela da seção 8 quando implementada.
+> **Status**: planejamento. A fórmula, o gate, as faixas e a corroboração/penalidades estão **fechados** (abaixo). As **premissas por mercado** (PTS_PREMISSAS) **agora também estão especificadas**: o playbook `futebol-metodologia-premissas.md` está no repo (em `analytics-engineering/docs/`, auditado 2026-06-18) e está transcrito na **seção 12** (1X2, O/U, Handicap, BTTS, Dupla chance — com pesos, thresholds, gates e penalidades por mercado); a fundamentação (benchmark) está destilada na **seção 13**. O que falta em S1–S5 passa a ser **implementação em dbt**, não definição. Este doc é **vivo**: cada subtarefa preenche sua linha na tabela da seção 8 quando implementada.
 
 ---
 
@@ -12,10 +12,10 @@ Sobe **em cima** do pipeline de ingestão já concluído (`data-engineering/docs
 
 | Doc | Conteúdo | Situação |
 |---|---|---|
-| `prop-play-predictor/docs/futebol-metodologia-premissas.md` | Playbook completo — **premissas + pesos + thresholds + gates/penalidades + fontes de dado por mercado** | ✅ **no repo** (auditado 2026-06-18) — transcrito na §12 |
-| `prop-play-predictor/docs/futebol-metodologia-benchmark.md` | Fundamentação (pesquisa de mercado/academia, variáveis ranqueadas, validação) | ✅ **no repo** — destilado na §13 |
+| `analytics-engineering/docs/futebol-metodologia-premissas.md` | Playbook completo — **premissas + pesos + thresholds + gates/penalidades + fontes de dado por mercado** | ✅ **no repo** (auditado 2026-06-18) — transcrito na §12 |
+| `analytics-engineering/docs/futebol-metodologia-benchmark.md` | Fundamentação (pesquisa de mercado/academia, variáveis ranqueadas, validação) | ✅ **no repo** — destilado na §13 |
 
-> ✅ **Pendência resolvida (2026-06-18)**: os dois docs chegaram, mas **vivem no pacote do front (`prop-play-predictor/docs/`)**, não em `analytics-engineering/`. Como o motor é implementado aqui (dbt), a **§12 carrega um snapshot datado das premissas/pesos** para o dev dbt não precisar pular de repo — mas a **fonte autoritativa continua sendo o `.md` do front** (ao calibrar pesos, atualizar lá e re-sincronizar a §12). Os pesos/thresholds são **ponto de partida** (a calibrar com RPS/calibração/CLV — §13).
+> ✅ **Pendência resolvida**: os dois docs **agora vivem em `analytics-engineering/docs/`** (movidos do front em 2026-06-22), co-locados com o dbt que os implementa. A **§12/§13 transcrevem/destilam** o conteúdo para leitura rápida, mas a **fonte autoritativa são os próprios `.md` aqui** (ao calibrar pesos, atualizar o `.md` e re-sincronizar a §12). Os pesos/thresholds são **ponto de partida** (a calibrar com RPS/calibração/CLV — §13).
 >
 > ⚠️ **Cuidado com os "✅" do playbook**: ele referencia `src/utils/futebol-value.ts` (Pilar A) e `futebol-tendencias.ts` (Pilar B) e marca "devig Pinnacle ✅" — mas **esses arquivos TS não existem** (verificado 2026-06-18) e **não há nenhuma implementação de de-vig** (nem TS no front, nem SQL no dbt; `dbt_futebol` ainda nem tem pasta `intermediate/`). O ✅ do playbook significa "o **dado bruto** pra calcular devig está em `fact_odds_snapshot`", não que o devig esteja pronto. **A Fase 0 (`int_futebol_odds_devig`) continua de pé.**
 
@@ -226,7 +226,7 @@ Preencher a coluna **Status/Notas** in-place quando cada uma for implementada �
 
 ## 10. Decisões a confirmar (pontos em aberto)
 
-1. ✅ **Docs de metodologia chegaram (2026-06-18)** — mas em `prop-play-predictor/docs/` (pacote do front), não em `analytics-engineering/`. Premissas/pesos transcritos na §12, fundamentação na §13. **Decidir**: copiar os 2 `.md` para `analytics-engineering/docs/` (co-locação com o dbt) ou manter a §12 como snapshot e o front como fonte única? (recomendo manter no front como fonte + §12 como espelho datado, pra não ter 3 cópias). **Não bloqueia mais S1–S5.**
+1. ✅ **Docs de metodologia (resolvido 2026-06-22)** — **movidos para `analytics-engineering/docs/`** (co-locados com o dbt; fonte autoritativa aqui). Premissas/pesos transcritos na §12, fundamentação na §13 (espelhos datados — ao calibrar, atualizar o `.md` e re-sincronizar a §12). **Não bloqueia S1–S5.**
 2. **De-vig: construir aqui (Fase 0) ou na task separada "odds/EV%"?** — recomendo construir aqui como `int_futebol_odds_devig` reutilizável (a task de EV% do NBA não tocou futebol). **Confirmado 2026-06-18: não há de-vig pronto em lugar nenhum** — nem SQL no dbt, nem TS no front (os `futebol-value.ts`/`futebol-tendencias.ts` citados no playbook **não existem ainda**). Logo a Fase 0 é mesmo o caminho crítico.
 3. **Granularidade do mart** — 1 mart unificado long (`fact_value_opportunities` com coluna `market`, recomendado) vs. 1 por mercado.
 4. **Janela de avaliação de `melhor_odd`/`n_casas`** — usar a mesma janela do `prob_justa_fechamento` (t15m→t1h→t24h) para consistência interna; confirmar.
@@ -248,7 +248,7 @@ Preencher a coluna **Status/Notas** in-place quando cada uma for implementada �
 | Fonte de odds/valor | `fact_odds_snapshot` (Pinnacle=4 sharp p/ de-vig; janelas t24h/t1h/t15m) |
 | Fórmula / faixas | Fechados (seção 2): Score = clamp(VALOR+PREMISSAS+CORROB−PEN,0,100); faixas 60/40 |
 | Gate / penalidades | Globais (§2) + **específicas por mercado** (§12); **Dupla chance tem gate próprio** (≥1,25, sem `odd_juice`) — não 100% uniforme |
-| Metodologia (premissas/pesos) | `prop-play-predictor/docs/futebol-metodologia-premissas.md` (front) → snapshot na §12; pesos = ponto de partida |
+| Metodologia (premissas/pesos) | `analytics-engineering/docs/futebol-metodologia-premissas.md` → snapshot na §12; pesos = ponto de partida |
 | Mercados (v1) | 1X2 (1), O/U (5), Asian Handicap (4), BTTS (8), Double Chance (12) |
 | Degradação graciosa | dado faltando ⇒ premissa FALSE (nunca erro/NULL no Score) |
 | Liga de validação | Brasileirão (dado rico); Copa entra com degradação graciosa |
@@ -260,7 +260,7 @@ Preencher a coluna **Status/Notas** in-place quando cada uma for implementada �
 
 ## 12. Premissas por mercado (spec do playbook)
 
-> **Snapshot datado (2026-06-18)** de `prop-play-predictor/docs/futebol-metodologia-premissas.md` — **fonte autoritativa é aquele `.md`**. Pesos/thresholds são **ponto de partida** (calibrar — §13). Convenções: `S` = lado apostado, `O` = adversário; cada premissa é 1 booleano; dado faltando ⇒ FALSE (degradação graciosa). As premissas que **disparam** viram bullets de evidência no front (ordenadas por peso).
+> **Snapshot datado (2026-06-18)** de `analytics-engineering/docs/futebol-metodologia-premissas.md` — **fonte autoritativa é esse `.md`**. Pesos/thresholds são **ponto de partida** (calibrar — §13). Convenções: `S` = lado apostado, `O` = adversário; cada premissa é 1 booleano; dado faltando ⇒ FALSE (degradação graciosa). As premissas que **disparam** viram bullets de evidência no front (ordenadas por peso).
 
 **Fontes de dado (todas já materializadas em `futebol.*`):** `fact_team_season_stats` (médias gols casa/fora, clean sheet, failed-to-score, forma) · `fact_fixtures` (resultados/últimos 5, dias de descanso) · `fact_fixture_stats` (xG, finalizações, escanteios — **Brasileirão**) · `fact_injuries_snapshot` + `fact_fixture_lineups_players` (desfalques) · `fact_standings_snapshot` (rank/pontos) · odds (`pin_open`=t24h, `pin_close`=t15m, n_casas, line_value) · `fact_predictions_api`.
 
@@ -362,7 +362,7 @@ Combina 2 das 3 saídas (ex.: "S ou empate"). **Valor quando** o mercado **super
 
 ## 13. Fundamentação (benchmark)
 
-> Destilado de `prop-play-predictor/docs/futebol-metodologia-benchmark.md` — só o que **muda decisão de design/calibração** aqui. O benchmark é, no geral, uma pesquisa para o **modelo próprio (Pilar B)**; abaixo, o que importa para o **motor de regras (Pilar A)**.
+> Destilado de `analytics-engineering/docs/futebol-metodologia-benchmark.md` — só o que **muda decisão de design/calibração** aqui. O benchmark é, no geral, uma pesquisa para o **modelo próprio (Pilar B)**; abaixo, o que importa para o **motor de regras (Pilar A)**.
 
 **Variáveis que movem o 1X2 (ranqueadas por força de evidência) e o que cada uma implica aqui:**
 
