@@ -1,0 +1,64 @@
+version: 2
+
+models:
+  - name: int_futebol_odds_devig
+    description: >
+      Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). De-vig
+      market-aware da Pinnacle na janela de fechamento + edge + PTS_VALOR + n_casas/
+      best/avg + penalidades globais + linha_sharp. 1 linha por (fixture_id, market_id,
+      outcome_side, line_value).
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: market_id
+        tests: [not_null]
+      - name: outcome_side
+        tests: [not_null]
+      - name: pts_valor
+        description: "0-30; NULL quando não há de-vig (Pinnacle ausente/incompleto)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - fixture_id
+            - market_id
+            - outcome_side
+            - line_value
+
+  - name: int_futebol_corroboracao
+    description: >
+      Fase 0 — corroboração externa (0-15) por (fixture_id, market_id, outcome_side,
+      line_value): modelo_api_concorda (+7, só 1X2 nesta versão) + linha_sharp_confirma
+      (+8, reusado do devig).
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: pts_corroboracao
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - fixture_id
+            - market_id
+            - outcome_side
+            - line_value
+
+  - name: int_futebol_premissas_1x2
+    description: >
+      S1 — premissas de contexto do mercado Resultado (1X2). 3 linhas por fixture
+      (Home/Draw/Away). 7 premissas (§12.1) + penalidades pick_empate/desfalque_proprio
+      + evidencias[]/avisos[]. desfalque na versão simples (ver TODO(S7) no SQL).
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: outcome
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Home', 'Draw', 'Away']
+      - name: pts_premissas
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - fixture_id
+            - outcome

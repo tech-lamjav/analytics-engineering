@@ -1,0 +1,37 @@
+version: 2
+
+models:
+  - name: fact_value_opportunities
+    description: >
+      Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por
+      (fixture_id, market, outcome) que passa no gate (edge>0 E n_casas>=3 E de-vig válido).
+      Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES);
+      faixa Alta(>=60)/Média(40-59). Long por `market` — v1 só 1X2 (match_winner).
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: market
+        tests: [not_null]
+      - name: outcome
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Home', 'Draw', 'Away']
+      - name: score
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              min_value: 0
+              max_value: 100
+      - name: faixa
+        tests:
+          - accepted_values:
+              values: ['Alta', 'Média', 'Baixa']
+      - name: edge
+        description: "Gate garante > 0 nas linhas materializadas."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - fixture_id
+            - market
+            - outcome
