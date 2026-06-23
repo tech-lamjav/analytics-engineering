@@ -4,19 +4,25 @@ models:
   - name: fact_value_opportunities
     description: >
       Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por
-      (fixture_id, market, outcome) que passa no gate (edge>0 E n_casas>=3 E de-vig válido).
-      Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES);
-      faixa Alta(>=60)/Média(40-59). Long por `market` — v1 só 1X2 (match_winner).
+      (fixture_id, market, outcome, line_value) que passa no gate (edge>0 E n_casas>=3 E de-vig
+      válido E conjunto da Pinnacle completo pro mercado). Score 0-100 = clamp(PTS_VALOR +
+      PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES); faixa Alta(>=60)/Média(40-59). Long por
+      `market` — v2: 1X2 (match_winner) + Gols O/U (goals_over_under).
     columns:
       - name: fixture_id
         tests: [not_null]
       - name: market
-        tests: [not_null]
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['match_winner', 'goals_over_under']
       - name: outcome
         tests:
           - not_null
           - accepted_values:
-              values: ['Home', 'Draw', 'Away']
+              values: ['Home', 'Draw', 'Away', 'Over', 'Under']
+      - name: line_value
+        description: "NULL no 1X2; a linha L (1.5/2.5/3.5/...) no Gols O/U."
       - name: score
         tests:
           - not_null
@@ -35,3 +41,4 @@ models:
             - fixture_id
             - market
             - outcome
+            - line_value

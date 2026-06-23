@@ -62,3 +62,30 @@ models:
           combination_of_columns:
             - fixture_id
             - outcome
+
+  - name: int_futebol_premissas_ou
+    description: >
+      S2 — premissas de contexto do mercado Gols Over/Under (market_id 5). 2 linhas por
+      (fixture, line_value): Over e Under, por linha L (canônicas 1.5/2.5/3.5 + linhas das
+      odds). 7 premissas Over (§12.2, Σ56) + 6 Under (espelhadas, Σ52), com clamp ao teto 55
+      (só o Over encosta); penalidade linha_extrema (L<=0,5 ou L>=4,5). Movimento de linha =
+      consenso do mercado (média de todas as casas), distinto da corroboração sharp da Pinnacle.
+      evidencias[]/avisos[] = bullets pro front.
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: outcome
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Over', 'Under']
+      - name: line_value
+        tests: [not_null]
+      - name: pts_premissas
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - fixture_id
+            - line_value
+            - outcome
