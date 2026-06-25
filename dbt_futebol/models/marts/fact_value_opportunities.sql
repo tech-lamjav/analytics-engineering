@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     cluster_by=['competition', 'fixture_id'],
-    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate (edge>0 E n_casas>=3 E de-vig válido E conjunto da Pinnacle completo pro mercado). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES). faixa Alta(>=60)/Média(40-59); abaixo de 40 não vira oportunidade. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market` — v2 liga 1X2 (market_id=1) + Gols O/U (market_id=5); S3-S5 dão UNION depois. Junta int_futebol_premissas_1x2/_ou + int_futebol_odds_devig + int_futebol_corroboracao. line_value é NULL no 1X2 e a linha L (1.5/2.5/3.5/...) no O/U.'
+    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate (edge>0 E n_casas>=3 E de-vig válido E conjunto da Pinnacle completo pro mercado). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES). faixa Alta(>=60)/Média(40-59); abaixo de 40 não vira oportunidade. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market` — v4 liga 1X2 (market_id=1) + Gols O/U (market_id=5) + Handicap asiático (market_id=4) + Ambos Marcam/BTTS (market_id=8); S5 (Dupla Chance) dá UNION depois. Junta int_futebol_premissas_1x2/_ou/_ah/_btts + int_futebol_odds_devig + int_futebol_corroboracao. line_value é NULL no 1X2 e no BTTS, a linha L no O/U e o handicap (ótica do mandante, mesmo p/ Home e Away) no AH. valor_fonte = pinnacle (de-vig da Pinnacle, mercados 1/4/5) ou consenso (de-vig da mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front).'
 ) }}
 
 WITH prem_1x2 AS (
@@ -10,6 +10,14 @@ WITH prem_1x2 AS (
 
 prem_ou AS (
     SELECT * FROM {{ ref('int_futebol_premissas_ou') }}
+),
+
+prem_ah AS (
+    SELECT * FROM {{ ref('int_futebol_premissas_ah') }}
+),
+
+prem_btts AS (
+    SELECT * FROM {{ ref('int_futebol_premissas_btts') }}
 ),
 
 -- line_key STRING (NULL-safe) p/ casar a linha entre modelos sem depender de igualdade FLOAT.
@@ -44,6 +52,7 @@ joined_1x2 AS (
         d.n_casas,
         d.prob_justa_fechamento,
         d.pin_n_outcomes,
+        d.valor_fonte,
         d.janela_usada,
         COALESCE(d.penalidades_globais_pts, 0)  AS penalidades_globais_pts,
         d.pen_odd_outlier,
@@ -92,6 +101,7 @@ joined_ou AS (
         d.n_casas,
         d.prob_justa_fechamento,
         d.pin_n_outcomes,
+        d.valor_fonte,
         d.janela_usada,
         COALESCE(d.penalidades_globais_pts, 0)  AS penalidades_globais_pts,
         d.pen_odd_outlier,
@@ -121,10 +131,118 @@ joined_ou AS (
     WHERE d.pin_n_outcomes >= 2
 ),
 
+-- ============================================================================
+-- Ramo Handicap asiático (market_id=4): casa por (fixture, outcome_side, line_value).
+-- line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ Home e Away (par
+-- complementar) — o de-vig já normaliza Home+Away por (fixture, market, line) com 2 outcomes.
+-- Gate de completude = par da Pinnacle (>=2 outcomes), igual ao O/U.
+-- ============================================================================
+joined_ah AS (
+    SELECT
+        p.fixture_id,
+        'asian_handicap'                        AS market,
+        p.outcome,
+        p.line_value,
+        p.competition,
+        p.season,
+
+        d.edge,
+        COALESCE(d.pts_valor, 0)                AS pts_valor,
+        d.best_odd,
+        d.best_book,
+        d.avg_odd,
+        d.n_casas,
+        d.prob_justa_fechamento,
+        d.pin_n_outcomes,
+        d.valor_fonte,
+        d.janela_usada,
+        COALESCE(d.penalidades_globais_pts, 0)  AS penalidades_globais_pts,
+        d.pen_odd_outlier,
+        d.pen_poucas_casas,
+        d.pen_odd_longshot,
+        d.pen_odd_juice,
+
+        p.pts_premissas,
+        p.penalidades_ah_pts                    AS penalidades_especificas_pts,
+        p.evidencias                            AS evidencias_premissas,
+        p.avisos                                AS avisos_especificos,
+
+        COALESCE(c.pts_corroboracao, 0)         AS pts_corroboracao,
+        COALESCE(c.modelo_api_concorda, FALSE)  AS modelo_api_concorda,
+        COALESCE(c.linha_sharp_confirma, FALSE) AS linha_sharp_confirma
+    FROM prem_ah p
+    INNER JOIN devig d
+        ON d.market_id = 4
+       AND d.fixture_id = p.fixture_id
+       AND d.outcome_side = p.outcome
+       AND d.line_key = COALESCE(CAST(p.line_value AS STRING), 'NONE')
+    LEFT JOIN corro c
+        ON c.market_id = 4
+       AND c.fixture_id = p.fixture_id
+       AND c.outcome_side = p.outcome
+       AND c.line_key = COALESCE(CAST(p.line_value AS STRING), 'NONE')
+    WHERE d.pin_n_outcomes >= 2
+),
+
+-- ============================================================================
+-- Ramo Ambos Marcam / BTTS (market_id=8): casa por (fixture, outcome_side); line_value NULL
+-- (como o 1X2). A Pinnacle NÃO precifica BTTS -> o de-vig usa CONSENSO (valor_fonte='consenso',
+-- prob_justa/edge = mediana das casas). Gate de completude = par Yes+No no consenso, via
+-- n_outcomes_valor (>=2). pin_n_outcomes fica NULL (honesto: não houve Pinnacle).
+-- ============================================================================
+joined_btts AS (
+    SELECT
+        p.fixture_id,
+        'btts'                                  AS market,
+        p.outcome,
+        CAST(NULL AS FLOAT64)                   AS line_value,
+        p.competition,
+        p.season,
+
+        d.edge,
+        COALESCE(d.pts_valor, 0)                AS pts_valor,
+        d.best_odd,
+        d.best_book,
+        d.avg_odd,
+        d.n_casas,
+        d.prob_justa_fechamento,
+        d.pin_n_outcomes,
+        d.valor_fonte,
+        d.janela_usada,
+        COALESCE(d.penalidades_globais_pts, 0)  AS penalidades_globais_pts,
+        d.pen_odd_outlier,
+        d.pen_poucas_casas,
+        d.pen_odd_longshot,
+        d.pen_odd_juice,
+
+        p.pts_premissas,
+        p.penalidades_btts_pts                  AS penalidades_especificas_pts,
+        p.evidencias                            AS evidencias_premissas,
+        p.avisos                                AS avisos_especificos,
+
+        COALESCE(c.pts_corroboracao, 0)         AS pts_corroboracao,
+        COALESCE(c.modelo_api_concorda, FALSE)  AS modelo_api_concorda,
+        COALESCE(c.linha_sharp_confirma, FALSE) AS linha_sharp_confirma
+    FROM prem_btts p
+    INNER JOIN devig d
+        ON d.market_id = 8
+       AND d.fixture_id = p.fixture_id
+       AND d.outcome_side = p.outcome
+    LEFT JOIN corro c
+        ON c.market_id = 8
+       AND c.fixture_id = p.fixture_id
+       AND c.outcome_side = p.outcome
+    WHERE d.n_outcomes_valor >= 2
+),
+
 unioned AS (
     SELECT * FROM joined_1x2
     UNION ALL
     SELECT * FROM joined_ou
+    UNION ALL
+    SELECT * FROM joined_ah
+    UNION ALL
+    SELECT * FROM joined_btts
 ),
 
 scored AS (
@@ -183,6 +301,7 @@ SELECT
     avg_odd,
     n_casas,
     prob_justa_fechamento,
+    valor_fonte,
     janela_usada,
 
     -- componentes (transparência/debug)

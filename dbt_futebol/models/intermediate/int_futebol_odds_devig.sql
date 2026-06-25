@@ -1,6 +1,6 @@
 {{ config(
     materialized='view',
-    description='Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). 1 linha por (fixture_id, market_id, outcome_side, line_value). Calcula, na janela de FECHAMENTO mais recente disponível (t15m>t1h>t24h): best_odd/avg_odd/n_casas entre TODAS as casas, o de-vig market-aware da Pinnacle (bookmaker_id=4) sobre o conjunto de outcomes do mercado, o edge e o PTS_VALOR (0-30), as 4 penalidades globais e o sinal linha_sharp (movimento Pinnacle t24h->t15m). NÃO aplica o gate (isso é no mart). ⚠️ De-vig correto p/ mercados exaustivos por (market,line): 1X2(3)/O/U(2)/BTTS(2); Asian Handicap(4) e Double Chance(12) exigem pareamento próprio (S3/S5) — não consumir prob_justa desses até lá.'
+    description='Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). 1 linha por (fixture_id, market_id, outcome_side, line_value). Calcula, na janela de FECHAMENTO mais recente disponível (t15m>t1h>t24h): best_odd/avg_odd/n_casas entre TODAS as casas, o de-vig market-aware da Pinnacle (bookmaker_id=4) sobre o conjunto de outcomes do mercado, o edge e o PTS_VALOR (0-30), as 4 penalidades globais e o sinal linha_sharp (movimento Pinnacle t24h->t15m). NÃO aplica o gate (isso é no mart). De-vig correto p/ mercados exaustivos por (market,line): 1X2(3)/O/U(2)/BTTS(2)/Asian Handicap(4, 2). FALLBACK DE CONSENSO (S4, 2026-06-25): a Pinnacle NÃO precifica BTTS(8)/HT-FT(7)/Dupla Chance(12) — confirmado 0 fixtures. Nesses casos prob_justa_fechamento/overround/edge/PTS_VALOR caem na MEDIANA das casas (med_odd, de-vig de consenso), marcado por valor_fonte=consenso (vs pinnacle); n_outcomes_valor=COALESCE(pin_n_outcomes,cons_n_outcomes) p/ o ramo BTTS gatear. O COALESCE preserva 1X2/O/U/AH (Pinnacle presente -> usa Pinnacle). Consenso carrega a margem das casas -> rotular como estimativa no front. ✅ Confirmado 2026-06-24 (S3): no AH a API-Football traz line_value na ÓTICA DO MANDANTE, IGUAL p/ Home e Away — logo "Home -1.5"/"Away -1.5" são o par complementar e já caem na MESMA partição (fixture, market, line_key), de-vig soma ~1.03 com pin_n_outcomes=2 (sem pareamento extra). ⚠️ Double Chance(12) ainda exige pareamento próprio (S5) — não consumir prob_justa dele até lá.'
 ) }}
 
 WITH odds AS (
@@ -51,6 +51,7 @@ per_outcome AS (
         ANY_VALUE(collection_window)  AS janela_usada,
         MAX(odd_decimal)              AS best_odd,
         AVG(odd_decimal)              AS avg_odd,
+        APPROX_QUANTILES(odd_decimal, 2)[OFFSET(1)] AS med_odd,
         COUNT(DISTINCT bookmaker_id)  AS n_casas,
         ARRAY_AGG(bookmaker_name ORDER BY odd_decimal DESC LIMIT 1)[OFFSET(0)] AS best_book
     FROM eval_odds
@@ -85,6 +86,25 @@ pinnacle_move AS (
     FROM odds
     WHERE bookmaker_id = 4
     GROUP BY fixture_id, market_id, outcome_side, line_key
+),
+
+-- De-vig de CONSENSO: mesma normalização multiplicativa, mas sobre a MEDIANA das casas
+-- (med_odd) por outcome em vez da Pinnacle. Fallback p/ mercados que a Pinnacle estruturalmente
+-- não precifica (BTTS=8, HT/FT=7, Dupla Chance=12). Só é consumido quando a Pinnacle falta
+-- (o COALESCE no SELECT preserva 1X2/O/U/AH byte-a-byte) e carrega a margem/viés das casas ->
+-- "edge vs consenso" é sinal mais fraco que vs Pinnacle (rotular como "estimativa" no front via
+-- valor_fonte). Os gates de completude Pinnacle por mercado (no mart) seguem barrando linhas sem
+-- conjunto Pinnacle completo; só o ramo BTTS usa n_outcomes_valor (consenso).
+consensus_devig AS (
+    SELECT
+        fixture_id, market_id, outcome_side, line_key,
+        (1.0 / med_odd) / SUM(1.0 / med_odd) OVER (
+            PARTITION BY fixture_id, market_id, line_key
+        )                                                         AS cons_prob_justa,
+        SUM(1.0 / med_odd) OVER (PARTITION BY fixture_id, market_id, line_key) AS cons_overround,
+        COUNT(*)           OVER (PARTITION BY fixture_id, market_id, line_key) AS cons_n_outcomes
+    FROM per_outcome
+    WHERE med_odd IS NOT NULL AND med_odd > 0
 )
 
 SELECT
@@ -99,14 +119,23 @@ SELECT
     po.best_book,
     po.avg_odd,
     po.n_casas,
-    pd.prob_justa_fechamento,
-    pd.overround,
+    -- prob_justa/edge: Pinnacle quando há; senão CONSENSO (mediana das casas). O COALESCE
+    -- preserva 1X2/O/U/AH (Pinnacle presente -> pd.* não-NULL); consenso só "vence" no BTTS etc.
+    COALESCE(pd.prob_justa_fechamento, cd.cons_prob_justa) AS prob_justa_fechamento,
+    COALESCE(pd.overround, cd.cons_overround)              AS overround,
     pd.pin_n_outcomes,
+    -- completude do conjunto usado p/ o VALOR (Pinnacle se há; senão consenso). O ramo BTTS
+    -- do mart gateia por aqui (>=2); os ramos com Pinnacle seguem gateando por pin_n_outcomes.
+    COALESCE(pd.pin_n_outcomes, cd.cons_n_outcomes)        AS n_outcomes_valor,
+    CASE
+        WHEN pd.prob_justa_fechamento IS NOT NULL THEN 'pinnacle'
+        WHEN cd.cons_prob_justa       IS NOT NULL THEN 'consenso'
+    END                                                    AS valor_fonte,
 
-    -- edge e PTS_VALOR (0-30). NULL quando não há de-vig (Pinnacle ausente/incompleto).
-    (po.best_odd * pd.prob_justa_fechamento) - 1.0 AS edge,
+    -- edge e PTS_VALOR (0-30). NULL quando não há de-vig (nem Pinnacle nem consenso).
+    (po.best_odd * COALESCE(pd.prob_justa_fechamento, cd.cons_prob_justa)) - 1.0 AS edge,
     CAST(ROUND(
-        LEAST(GREATEST((po.best_odd * pd.prob_justa_fechamento) - 1.0, 0) * 100, 6) / 6 * 30
+        LEAST(GREATEST((po.best_odd * COALESCE(pd.prob_justa_fechamento, cd.cons_prob_justa)) - 1.0, 0) * 100, 6) / 6 * 30
     ) AS INT64) AS pts_valor,
 
     -- Penalidades globais (flags + total de pontos a subtrair).
@@ -137,3 +166,8 @@ LEFT JOIN pinnacle_move pm
     AND po.market_id    = pm.market_id
     AND po.outcome_side = pm.outcome_side
     AND po.line_key     = pm.line_key
+LEFT JOIN consensus_devig cd
+    ON  po.fixture_id   = cd.fixture_id
+    AND po.market_id    = cd.market_id
+    AND po.outcome_side = cd.outcome_side
+    AND po.line_key     = cd.line_key

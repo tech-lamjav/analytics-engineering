@@ -7,7 +7,8 @@ models:
       (fixture_id, market, outcome, line_value) que passa no gate (edge>0 E n_casas>=3 E de-vig
       válido E conjunto da Pinnacle completo pro mercado). Score 0-100 = clamp(PTS_VALOR +
       PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES); faixa Alta(>=60)/Média(40-59). Long por
-      `market` — v2: 1X2 (match_winner) + Gols O/U (goals_over_under).
+      `market` — v4: 1X2 (match_winner) + Gols O/U (goals_over_under) + Handicap asiático
+      (asian_handicap) + Ambos Marcam/BTTS (btts, via de-vig de consenso). valor_fonte distingue.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -15,14 +16,19 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['match_winner', 'goals_over_under']
+              values: ['match_winner', 'goals_over_under', 'asian_handicap', 'btts']
       - name: outcome
         tests:
           - not_null
           - accepted_values:
-              values: ['Home', 'Draw', 'Away', 'Over', 'Under']
+              values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Yes', 'No']
       - name: line_value
-        description: "NULL no 1X2; a linha L (1.5/2.5/3.5/...) no Gols O/U."
+        description: "NULL no 1X2 e no BTTS; a linha L (1.5/2.5/3.5/...) no Gols O/U; o handicap (ótica do mandante, mesmo p/ Home e Away) no Handicap asiático."
+      - name: valor_fonte
+        description: "Fonte do de-vig/edge: 'pinnacle' (mercados 1/4/5) ou 'consenso' (mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front)."
+        tests:
+          - accepted_values:
+              values: ['pinnacle', 'consenso']
       - name: score
         tests:
           - not_null

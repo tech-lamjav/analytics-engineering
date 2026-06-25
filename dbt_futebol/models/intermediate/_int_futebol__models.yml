@@ -6,7 +6,10 @@ models:
       Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). De-vig
       market-aware da Pinnacle na janela de fechamento + edge + PTS_VALOR + n_casas/
       best/avg + penalidades globais + linha_sharp. 1 linha por (fixture_id, market_id,
-      outcome_side, line_value).
+      outcome_side, line_value). FALLBACK DE CONSENSO (S4): quando a Pinnacle não precifica o
+      mercado (BTTS/HT-FT/DC), prob_justa/edge/PTS_VALOR caem na mediana das casas, marcado por
+      valor_fonte=consenso (vs pinnacle); n_outcomes_valor=COALESCE(pin_n_outcomes,cons) p/ o
+      gate do ramo BTTS. COALESCE preserva 1X2/O/U/AH (usam Pinnacle).
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -88,4 +91,55 @@ models:
           combination_of_columns:
             - fixture_id
             - line_value
+            - outcome
+
+  - name: int_futebol_premissas_ah
+    description: >
+      S3 — premissas de contexto do mercado Handicap asiático (market_id 4). 2 linhas por
+      (fixture, line_value): Home e Away. line_value = handicap na ótica do mandante (mesmo p/
+      os dois lados; o par Home/Away é complementar). side_handicap = IF(Home, line, -line):
+      <0 favorito (5 premissas, Σ40), >0 azarão (3 premissas, Σ30), =0 pick (nenhuma dispara).
+      Penalidade handicap_alto (|line|>=2.5, -12). evidencias[]/avisos[] = bullets pro front.
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: outcome
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Home', 'Away']
+      - name: line_value
+        tests: [not_null]
+      - name: pts_premissas
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - fixture_id
+            - line_value
+            - outcome
+
+  - name: int_futebol_premissas_btts
+    description: >
+      S4 — premissas de contexto do mercado Ambos Marcam / BTTS (market_id 8). 2 linhas por
+      fixture (Yes/No), sem line_value (como o 1X2). Sim: 4 premissas (§12.4, Σ34) — dois
+      ataques ativos e defesas vazáveis; Não (espelho): 3 premissas (Σ28) — uma defesa forte
+      ou um ataque que trava ("de um dos times" => OR). Σ por lado < 55 -> sem clamp. clean
+      sheet%/failed-to-score% sobre o total da temporada; gols por venue; historico_btts/seco =
+      últimos 5 jogos de cada (>=3 ~ 60%). Sem penalidade específica (só globais). evidencias[]/
+      avisos[] pro front. No mart, BTTS usa de-vig de CONSENSO (Pinnacle não precifica BTTS).
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: outcome
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['Yes', 'No']
+      - name: pts_premissas
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          combination_of_columns:
+            - fixture_id
             - outcome
