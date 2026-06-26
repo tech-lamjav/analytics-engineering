@@ -10,24 +10,25 @@ WITH standings AS (
     FROM {{ ref('stg_team_standings') }}
 ),
 
+-- NULLS LAST em todos os ranks ASC: time sem dado de FG% cedido (NULL) nao deve aparecer como rank 1 (melhor defesa)
 zone AS (
     SELECT *,
-        RANK() OVER (PARTITION BY season ORDER BY opp_restricted_area_fg_pct ASC) AS opp_restricted_area_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_in_the_paint_non_ra_fg_pct ASC) AS opp_in_the_paint_non_ra_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_mid_range_fg_pct ASC) AS opp_mid_range_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_corner_3_fg_pct ASC) AS opp_corner_3_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_above_the_break_3_fg_pct ASC) AS opp_above_the_break_3_fg_pct_rank
+        RANK() OVER (PARTITION BY season ORDER BY opp_restricted_area_fg_pct ASC NULLS LAST) AS opp_restricted_area_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_in_the_paint_non_ra_fg_pct ASC NULLS LAST) AS opp_in_the_paint_non_ra_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_mid_range_fg_pct ASC NULLS LAST) AS opp_mid_range_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_corner_3_fg_pct ASC NULLS LAST) AS opp_corner_3_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_above_the_break_3_fg_pct ASC NULLS LAST) AS opp_above_the_break_3_fg_pct_rank
     FROM {{ ref('stg_team_season_averages_shooting_by_zone_opponent') }}
 ),
 
 range5 AS (
     SELECT *,
-        RANK() OVER (PARTITION BY season ORDER BY opp_lt_5ft_fg_pct ASC) AS opp_lt_5ft_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_5_9ft_fg_pct ASC) AS opp_5_9ft_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_10_14ft_fg_pct ASC) AS opp_10_14ft_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_15_19ft_fg_pct ASC) AS opp_15_19ft_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_20_24ft_fg_pct ASC) AS opp_20_24ft_fg_pct_rank,
-        RANK() OVER (PARTITION BY season ORDER BY opp_25_29ft_fg_pct ASC) AS opp_25_29ft_fg_pct_rank
+        RANK() OVER (PARTITION BY season ORDER BY opp_lt_5ft_fg_pct ASC NULLS LAST) AS opp_lt_5ft_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_5_9ft_fg_pct ASC NULLS LAST) AS opp_5_9ft_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_10_14ft_fg_pct ASC NULLS LAST) AS opp_10_14ft_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_15_19ft_fg_pct ASC NULLS LAST) AS opp_15_19ft_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_20_24ft_fg_pct ASC NULLS LAST) AS opp_20_24ft_fg_pct_rank,
+        RANK() OVER (PARTITION BY season ORDER BY opp_25_29ft_fg_pct ASC NULLS LAST) AS opp_25_29ft_fg_pct_rank
     FROM {{ ref('stg_team_season_averages_shooting_5ft_range_opponent') }}
 )
 

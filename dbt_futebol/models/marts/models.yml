@@ -109,7 +109,13 @@ models:
       - name: weight
         description: "Peso como string da API (ex: '68 kg'). Pode ser nulo."
       - name: position
-        description: "Posição (ex: 'Attacker', 'Midfielder', 'Defender', 'Goalkeeper'). Pode ser nula."
+        description: "Posição normalizada p/ o vocabulário do catálogo: 'Attacker' | 'Midfielder' | 'Defender' | 'Goalkeeper' (as linhas fixture_only mapeiam os códigos 'F'/'M'/'D'/'G' do /fixtures/players p/ esse mesmo domínio). Pode ser nula."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Attacker', 'Midfielder', 'Defender', 'Goalkeeper']
+              config:
+                severity: warn
       - name: photo_url
         description: "URL da foto do jogador"
       - name: source
@@ -211,8 +217,10 @@ models:
       betting. Particionada por DATE(date_utc) (data do jogo) e clusterizada por
       (fixture_id, team_id). Só jogos finalizados (FT/AET/PEN). expected_goals (xG) e
       goals_prevented vêm da própria API-Football. Cobre Brasileirão (71) 2024/25/26 e
-      Copa do Mundo (1) 2026. Testes singulares garantem exatamente 2 linhas/jogo e
-      que o pivot não veio todo NULL (sentinela das strings de `type`).
+      Copa do Mundo (1) 2026. Testes singulares garantem exatamente 2 linhas/jogo, que o pivot
+      não veio todo NULL (sentinela das strings de `type`, incl. expected_goals/goals_prevented
+      em jogos recentes do Brasileirão) e que nenhum fixture do /statistics sumiu do spine
+      fact_fixtures (reconciliação, severity warn).
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -224,6 +232,10 @@ models:
         description: "ID do jogo na API-Football (FK p/ fact_fixtures; 2 linhas por fixture)"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
       - name: competition
         description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
       - name: competition_id
@@ -278,9 +290,9 @@ models:
       - name: passes_pct
         description: "% de acerto de passes (int; '%' removido na origem)"
       - name: expected_goals
-        description: "xG (expected goals) — fornecido pela própria API-Football no /fixtures/statistics. FLOAT64."
+        description: "xG (expected goals) — fornecido pela própria API-Football no /fixtures/statistics. FLOAT64. Alimenta o value betting (Poisson/premissas); coberto pela sentinela de pivot escopada (Brasileirão recente) p/ falhar alto se o label de `type` mudar e zerar a coluna."
       - name: goals_prevented
-        description: "Gols evitados (stat avançado da API-Football). FLOAT64."
+        description: "Gols evitados (stat avançado da API-Football). FLOAT64. Também coberto pela sentinela de pivot escopada (Brasileirão recente)."
       - name: extracted_at
         description: "Timestamp UTC quando o extractor coletou a linha"
       - name: dbt_loaded_at
@@ -306,6 +318,10 @@ models:
         description: "ID do jogo na API-Football (FK p/ fact_fixtures; N linhas por fixture; cluster key)"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
       - name: competition
         description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
       - name: competition_id
@@ -345,6 +361,11 @@ models:
         description: "Tipo do evento: 'Goal' | 'Card' | 'subst' | 'Var' (cluster key)"
         tests:
           - not_null
+          - accepted_values:
+              arguments:
+                values: ['Goal', 'Card', 'subst', 'Var']
+              config:
+                severity: warn
       - name: event_detail
         description: "Detalhe do tipo (ex: 'Normal Goal', 'Yellow Card', 'Substitution 1', 'Penalty')"
       - name: event_comments
@@ -374,6 +395,10 @@ models:
         description: "ID do jogo na API-Football (FK p/ fact_fixtures; 2 linhas por fixture; cluster key)"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
       - name: competition
         description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
       - name: competition_id
@@ -427,6 +452,10 @@ models:
         description: "ID do jogo na API-Football (FK p/ fact_fixtures; N linhas por fixture; cluster key)"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
       - name: competition
         description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
       - name: competition_id
@@ -455,9 +484,15 @@ models:
       - name: player_slot
         description: "Índice do jogador no array da fase (0-based, WITH OFFSET) — preserva a ordem dentro de titulares/reservas."
       - name: player_id
-        description: "ID do jogador na API-Football (FK p/ dim_players; chave do dedup)"
+        description: "ID do jogador na API-Football (FK p/ dim_players; chave do dedup). severity warn: reserva que nunca entrou em campo pode faltar no catálogo/em fixture_player_stats (mesma lacuna da dim_players)."
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: player_id
+              config:
+                severity: warn
       - name: player_name
         description: "Nome do jogador"
       - name: shirt_number
@@ -494,6 +529,10 @@ models:
         description: "ID do jogo na API-Football (FK p/ fact_fixtures; N linhas por fixture; cluster key)"
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
       - name: competition
         description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
       - name: competition_id
@@ -758,6 +797,18 @@ models:
               - snapshot_date
               - group_name
               - team_id
+      # Recência: o valor do snapshot é ser atual. Se o extractor travar, o consumidor
+      # (premissas) pega o MAX(snapshot_date) sem perceber que ele é velho. warn p/ não
+      # quebrar o build em janela sem rodada; promover a error quando a cadência diária
+      # estiver garantida.
+      - dbt_utils.recency:
+          arguments:
+            datepart: day
+            field: snapshot_date
+            interval: 2
+            ignore_time_component: true
+          config:
+            severity: warn
     columns:
       - name: competition
         description: "'brasileirao' | 'copa_mundo' (derivado de requested_league_id)"
@@ -828,7 +879,7 @@ models:
   - name: fact_injuries_snapshot
     description: >
       Snapshot diário de lesionados/suspensos (/injuries). N linhas por (liga, season,
-      snapshot_date) — 1 por (player, fixture). Input de modelagem que a maioria dos
+      snapshot_date) — 1 por (player, fixture, injury_type, injury_reason). Input de modelagem que a maioria dos
       modelos públicos ignora: desfalque de peça (atacante de 0,7 gol/jogo) muda
       materialmente a previsão. O raw é date-stampado no GCS (1 arquivo por dia, acumula)
       e o rebuild full lê todos os dias. Self-contained: competition vem de
@@ -848,6 +899,18 @@ models:
               - player_id
               - injury_type
               - injury_reason
+      # Recência: o valor do snapshot é ser atual. Se o extractor travar, o consumidor
+      # (int_futebol_premissas_1x2 via MAX(snapshot_date)) usa lesão velha como se fosse
+      # de hoje. warn p/ não quebrar o build em janela sem rodada; promover a error quando
+      # a cadência diária estiver garantida.
+      - dbt_utils.recency:
+          arguments:
+            datepart: day
+            field: snapshot_date
+            interval: 2
+            ignore_time_component: true
+          config:
+            severity: warn
     columns:
       - name: competition
         description: "'brasileirao' (derivado de requested_league_id; copa_mundo fora — coverage off)"
@@ -895,9 +958,15 @@ models:
       - name: player_photo
         description: "URL da foto do jogador"
       - name: fixture_id
-        description: "ID do jogo que o jogador vai desfalcar (FK p/ fact_fixtures; cluster key)"
+        description: "ID do jogo que o jogador vai desfalcar (FK p/ fact_fixtures; cluster key). severity warn: jogo recém-incluído pode estar à frente do rebuild diário do fato."
         tests:
           - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
+              config:
+                severity: warn
       - name: fixture_date
         description: "Data/hora (UTC) do jogo desfalcado"
       - name: injury_type
@@ -1004,19 +1073,21 @@ models:
         description: >
           Lado/seleção canônica destrinchada do outcome_label: 'Over'/'Under' (O/U),
           'Home'/'Away' (Asian Handicap), 'Home'/'Draw'/'Away' (Match Winner), 'Yes'/'No'
-          (BTTS). NULL p/ outcomes compostos (HT/FT 'Home/Away', Double Chance 'Home/Draw')
-          e Exact Score ('1:0') — não há lado atômico. Com line_value torna O/U e Asian
-          Handicap pareáveis sem parse de texto no app.
+          (BTTS), '1X'/'12'/'X2' (Double Chance — S5 mapeia explícito p/ o de-vig derivar do
+          1X2 da Pinnacle). NULL p/ HT/FT ('Home/Away') e Exact Score ('1:0') — sem lado
+          pareável. Com line_value torna O/U e Asian Handicap pareáveis sem parse no app.
         tests:
           - accepted_values:
               arguments:
-                values: ['Over', 'Under', 'Home', 'Away', 'Draw', 'Yes', 'No']
+                values: ['Over', 'Under', 'Home', 'Away', 'Draw', 'Yes', 'No', '1X', '12', 'X2']
       - name: line_value
         description: >
           Linha numérica destrinchada do outcome_label. O/U (market 5/6): total positivo
-          ('Over 2.5' → 2.5). Asian Handicap (market 4): handicap ASSINADO na perspectiva do
-          lado rotulado ('Home -1.5' → -1.5; 'Away +1.5' → +1.5). NULL p/ mercados sem linha
-          (Match Winner, BTTS, HT/FT, Double Chance, Exact Score). FLOAT64.
+          ('Over 2.5' → 2.5). Asian Handicap (market 4): handicap na ÓTICA DO MANDANTE — MESMO
+          sinal/valor p/ Home e Away ('Home -1.5' → -1.5; 'Away -1.5' → -1.5), então o par
+          complementar compartilha a mesma line_value/partição de de-vig (confirmado vs. dados
+          reais da Pinnacle 2026-06-26). NULL p/ mercados sem linha (Match Winner, BTTS, HT/FT,
+          Double Chance, Exact Score). FLOAT64.
       - name: odd_decimal
         description: "Odd em formato decimal (> 1.0). Cast de STRING no stg; linhas com odd não-numérica são descartadas."
         tests:

@@ -4,6 +4,7 @@
 
 WITH source_data AS (
     SELECT * FROM {{ source('nba', 'raw_season_averages_shooting_by_zone') }}
+    WHERE season_type = 'regular'
 ),
 
 cleaned_data AS (

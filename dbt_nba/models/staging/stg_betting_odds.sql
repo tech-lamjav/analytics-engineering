@@ -21,5 +21,10 @@ WHERE spread_home_value IS NOT NULL
    OR total_value IS NOT NULL
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY game_id
-    ORDER BY CASE vendor WHEN 'draftkings' THEN 1 WHEN 'fanduel' THEN 2 ELSE 3 END
+    -- Desempate determinístico: vendor preferido -> snapshot mais recente -> id estável.
+    -- (sem isso, vendors fora de DK/FanDuel empatam em prioridade 3 e a linha é arbitrária.)
+    ORDER BY
+        CASE vendor WHEN 'draftkings' THEN 1 WHEN 'fanduel' THEN 2 ELSE 3 END,
+        CAST(updated_at AS TIMESTAMP) DESC,
+        id
 ) = 1

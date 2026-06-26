@@ -4,7 +4,7 @@
 
 WITH source_data AS (
     SELECT * FROM {{ source('nba', 'raw_game_player_stats') }}
-    WHERE season = 2025
+    WHERE season = {{ var('nba_season', 2025) }}
 ),
 
 unnested AS (
@@ -20,7 +20,7 @@ cleaned_data AS (
         stat.player.id AS player_id,
         stat.team.id AS team_id,
         stat.game.id AS game_id,
-        stat.game.date AS game_date,
+        SAFE_CAST(stat.game.date AS DATE) AS game_date,
         season,
         stat.game.home_team_score,
         stat.game.home_team_id,
@@ -46,21 +46,21 @@ cleaned_data AS (
         CAST(stat.plus_minus AS INTEGER) AS plus_minus,
         CASE
             WHEN (
-                (CAST(CAST(stat.pts AS INTEGER) > 10 AS INT64))
-                + (CAST(CAST(stat.reb AS INTEGER) > 10 AS INT64))
-                + (CAST(CAST(stat.ast AS INTEGER) > 10 AS INT64))
-                + (CAST(CAST(stat.stl AS INTEGER) > 10 AS INT64))
-                + (CAST(CAST(stat.blk AS INTEGER) > 10 AS INT64))
+                (CAST(CAST(stat.pts AS INTEGER) >= 10 AS INT64))
+                + (CAST(CAST(stat.reb AS INTEGER) >= 10 AS INT64))
+                + (CAST(CAST(stat.ast AS INTEGER) >= 10 AS INT64))
+                + (CAST(CAST(stat.stl AS INTEGER) >= 10 AS INT64))
+                + (CAST(CAST(stat.blk AS INTEGER) >= 10 AS INT64))
             ) >= 3 THEN 1
             ELSE 0
         END AS triple_double,
         CASE
             WHEN (
-                (CAST(CAST(stat.pts AS INTEGER) > 10 AS INT64))
-                + (CAST(CAST(stat.reb AS INTEGER) > 10 AS INT64))
-                + (CAST(CAST(stat.ast AS INTEGER) > 10 AS INT64))
-                + (CAST(CAST(stat.stl AS INTEGER) > 10 AS INT64))
-                + (CAST(CAST(stat.blk AS INTEGER) > 10 AS INT64))
+                (CAST(CAST(stat.pts AS INTEGER) >= 10 AS INT64))
+                + (CAST(CAST(stat.reb AS INTEGER) >= 10 AS INT64))
+                + (CAST(CAST(stat.ast AS INTEGER) >= 10 AS INT64))
+                + (CAST(CAST(stat.stl AS INTEGER) >= 10 AS INT64))
+                + (CAST(CAST(stat.blk AS INTEGER) >= 10 AS INT64))
             ) >= 2 THEN 1
             ELSE 0
         END AS double_double,

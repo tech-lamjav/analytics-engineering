@@ -8,15 +8,9 @@ WITH devig AS (
     FROM {{ ref('int_futebol_odds_devig') }}
 ),
 
-fixtures AS (
-    SELECT fixture_id, home_team_id, away_team_id
-    FROM {{ ref('fact_fixtures') }}
-),
-
 preds AS (
     SELECT
         fixture_id,
-        predicted_winner_team_id,
         prob_home_pct,
         prob_draw_pct,
         prob_away_pct
@@ -30,13 +24,19 @@ joined AS (
         d.outcome_side,
         d.line_value,
         d.linha_sharp_confirma,
-        -- modelo_api_concorda só p/ 1X2 nesta versão.
+        -- modelo_api_concorda só p/ 1X2 nesta versão. Base ÚNICA p/ os 3 lados = ARGMAX das
+        -- probabilidades da API -> no máx. 1 lado concorda por fixture. (Antes Home/Away usavam
+        -- predicted_winner_team_id e só o Draw o argmax: um time E o empate podiam concordar.)
         -- TODO(S2+): mapear predicted_under_over (O/U) e demais mercados a outcome_side.
         CASE
             WHEN d.market_id = 1 AND d.outcome_side = 'Home'
-                THEN COALESCE(p.predicted_winner_team_id = f.home_team_id, FALSE)
+                THEN COALESCE(
+                        p.prob_home_pct >= p.prob_draw_pct
+                    AND p.prob_home_pct >= p.prob_away_pct, FALSE)
             WHEN d.market_id = 1 AND d.outcome_side = 'Away'
-                THEN COALESCE(p.predicted_winner_team_id = f.away_team_id, FALSE)
+                THEN COALESCE(
+                        p.prob_away_pct >= p.prob_home_pct
+                    AND p.prob_away_pct >= p.prob_draw_pct, FALSE)
             WHEN d.market_id = 1 AND d.outcome_side = 'Draw'
                 THEN COALESCE(
                         p.prob_draw_pct >= p.prob_home_pct
@@ -44,8 +44,7 @@ joined AS (
             ELSE FALSE
         END AS modelo_api_concorda
     FROM devig d
-    LEFT JOIN fixtures f ON d.fixture_id = f.fixture_id
-    LEFT JOIN preds    p ON d.fixture_id = p.fixture_id
+    LEFT JOIN preds p ON d.fixture_id = p.fixture_id
 )
 
 SELECT

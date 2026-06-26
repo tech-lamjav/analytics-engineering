@@ -1,6 +1,6 @@
 {{ config(
     materialized='view',
-    description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média de TODAS as casas t24h->t15m), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
+    description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de TODAS as casas t24h->t15m; odd crua super-ponderaria o leg de odd alta), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
 ) }}
 
 WITH fixtures AS (
@@ -71,22 +71,24 @@ league_pace_median AS (
 ),
 
 -- Histórico Over/Under: gols totais dos últimos 5 jogos FINALIZADOS de cada time, na MESMA
--- competição e ANTERIORES ao jogo. 1 array de totais por (fixture-alvo, time).
+-- competição, MESMA season e ANTERIORES ao jogo. 1 array de totais por (fixture-alvo, time).
+-- O filtro de season evita sangrar jogos da temporada passada através da pausa de off-season
+-- (consistente com os joins de tss, que já são season-scoped).
 finished AS (
-    SELECT competition_id, kickoff_utc, home_team_id, away_team_id,
+    SELECT competition_id, season, kickoff_utc, home_team_id, away_team_id,
            goals_home + goals_away AS total_goals
     FROM {{ ref('fact_fixtures') }}
     WHERE status_short = 'FT' AND goals_home IS NOT NULL AND goals_away IS NOT NULL
 ),
 team_fixtures_long AS (
-    SELECT home_team_id AS team_id, competition_id, kickoff_utc, total_goals FROM finished
+    SELECT home_team_id AS team_id, competition_id, season, kickoff_utc, total_goals FROM finished
     UNION ALL
-    SELECT away_team_id, competition_id, kickoff_utc, total_goals FROM finished
+    SELECT away_team_id, competition_id, season, kickoff_utc, total_goals FROM finished
 ),
 fixture_teams AS (
-    SELECT fixture_id, competition_id, kickoff_utc, home_team_id AS team_id FROM fixtures
+    SELECT fixture_id, competition_id, season, kickoff_utc, home_team_id AS team_id FROM fixtures
     UNION ALL
-    SELECT fixture_id, competition_id, kickoff_utc, away_team_id FROM fixtures
+    SELECT fixture_id, competition_id, season, kickoff_utc, away_team_id FROM fixtures
 ),
 last5 AS (
     SELECT
@@ -96,19 +98,22 @@ last5 AS (
     JOIN team_fixtures_long h
         ON h.team_id        = ft.team_id
        AND h.competition_id = ft.competition_id
+       AND h.season         = ft.season
        AND h.kickoff_utc    < ft.kickoff_utc
     GROUP BY ft.fixture_id, ft.team_id
 ),
 
--- Movimento de linha = CONSENSO do mercado (média de TODAS as casas) t24h -> t15m, por
--- (fixture, linha, lado). Distinto do sinal sharp (só Pinnacle) usado na corroboração.
+-- Movimento de linha = CONSENSO do mercado t24h -> t15m, por (fixture, linha, lado). Média de
+-- PROBABILIDADES IMPLÍCITAS (1/odd) das casas, NÃO de odds cruas: a média de odds cruas
+-- super-pondera o leg de odd alta (o Over em linhas altas) e enviesa o sinal pra um lado.
+-- Distinto do sinal sharp (só Pinnacle) usado na corroboração.
 line_move AS (
     SELECT
         fixture_id, line_value, outcome_side AS outcome,
-        AVG(IF(collection_window = 't24h', odd_decimal, NULL)) AS avg_t24h,
-        AVG(IF(collection_window = 't15m', odd_decimal, NULL)) AS avg_t15m
+        AVG(IF(collection_window = 't24h', 1.0 / odd_decimal, NULL)) AS prob_t24h,
+        AVG(IF(collection_window = 't15m', 1.0 / odd_decimal, NULL)) AS prob_t15m
     FROM {{ ref('fact_odds_snapshot') }}
-    WHERE market_id = 5 AND outcome_side IN ('Over', 'Under')
+    WHERE market_id = 5 AND outcome_side IN ('Over', 'Under') AND odd_decimal > 0
     GROUP BY fixture_id, line_value, outcome_side
 ),
 
@@ -140,8 +145,9 @@ metrics AS (
         (SELECT COUNT(*) FROM UNNEST(hl.last5_totals) g WHERE g < o.line_value) AS home_under_cnt,
         (SELECT COUNT(*) FROM UNNEST(al.last5_totals) g WHERE g < o.line_value) AS away_under_cnt,
 
-        -- movimento de consenso do lado deste outcome (Over ou Under)
-        COALESCE(lm.avg_t15m < lm.avg_t24h, FALSE)           AS linha_caiu
+        -- movimento de consenso do lado deste outcome (Over ou Under): "linha caiu" = prob
+        -- implícita média SUBIU (t15m > t24h) = odd caiu (dinheiro entrando neste lado)
+        COALESCE(lm.prob_t15m > lm.prob_t24h, FALSE)         AS linha_caiu
     FROM outcomes o
     LEFT JOIN tss h  ON h.team_id  = o.home_team_id AND h.season  = o.season AND h.competition_id  = o.competition_id
     LEFT JOIN tss a  ON a.team_id  = o.away_team_id AND a.season  = o.season AND a.competition_id  = o.competition_id

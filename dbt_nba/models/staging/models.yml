@@ -6,6 +6,9 @@ models:
     columns:
       - name: player_id
         description: "Unique identifier for each NBA player"
+        tests:
+          - not_null
+          - unique
       - name: team_id
         description: "Unique identifier for the player's current team"
       - name: team_name
@@ -20,16 +23,28 @@ models:
         description: "Player's position (e.g., G, F, C, G-F, F-C)"
 
   - name: stg_game_player_stats
-    description: "Staging table for individual player statistics from each NBA game. Contains detailed performance metrics for every player in every game they participated in."
+    description: "Staging table for individual player statistics from each NBA game. Contains detailed performance metrics for every player in every game they participated in. Filtered to players who actually played (minutes > 0); for did-not-play detection use stg_game_player_stats_all."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
       - name: team_id
         description: "Unique identifier for the player's team in this game"
+        tests:
+          - not_null
       - name: game_id
         description: "Unique identifier for the game"
+        tests:
+          - not_null
       - name: game_date
-        description: "Date when the game was played (string format from source)"
+        description: "Date when the game was played (typed to DATE via SAFE_CAST)"
       - name: home_team_score
         description: "Final score of the home team"
       - name: home_team_id
@@ -86,6 +101,9 @@ models:
     columns:
       - name: game_id
         description: "Unique identifier for the game"
+        tests:
+          - not_null
+          - unique
       - name: season
         description: "Season year (e.g., 2025, converted to INT64)"
       - name: game_date
@@ -114,10 +132,13 @@ models:
         description: "Team ID of the winning team (null for future games or ties, calculated from scores)"
 
   - name: stg_season_averages_general_base
-    description: "Staging table for NBA player season averages (base statistics). Contains per-game averages for fundamental basketball statistics."
+    description: "Staging table for NBA player season averages (base statistics). Contains per-game averages for fundamental basketball statistics. Filtered to season_type = 'regular' (one row per player)."
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
+          - unique
       - name: points
         description: "Average points per game (converted to FLOAT64)"
       - name: rebounds
@@ -150,12 +171,22 @@ models:
         description: "Player's age (converted to INTEGER)"
 
   - name: stg_team_season_averages_general_advanced
-    description: "Staging table for NBA team season averages (general/advanced). Team-level offensive rating, defensive rating, net rating, possessions, and pace per 100 possessions from Balldontlie API. Used by dim_teams for official team ratings."
+    description: "Staging table for NBA team season averages (general/advanced). Team-level offensive rating, defensive rating, net rating, possessions, and pace per 100 possessions from Balldontlie API. Used by dim_teams for official team ratings. Filtered to season_type = 'regular' (one row per team/season)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
     columns:
       - name: team_id
         description: "Unique identifier for the team"
+        tests:
+          - not_null
       - name: season
         description: "Season year (e.g., 2024)"
+        tests:
+          - not_null
       - name: season_type
         description: "Season type (regular, playoffs, ist, playin)"
       - name: team_offensive_rating
@@ -170,20 +201,26 @@ models:
         description: "Possessions per 48 minutes (if available from API)"
 
   - name: stg_season_averages_general_advanced
-    description: "Staging table for NBA player season averages (advanced statistics). Contains player-level offensive and defensive ratings. Kept for compatibility; dim_teams now uses team-level ratings from stg_team_season_averages_general_advanced."
+    description: "Staging table for NBA player season averages (advanced statistics). Contains player-level offensive and defensive ratings. Kept for compatibility; dim_teams now uses team-level ratings from stg_team_season_averages_general_advanced. Filtered to season_type = 'regular' (one row per player)."
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
+          - unique
       - name: offensive_rating
         description: "Points produced per 100 possessions (efficiency metric, converted to FLOAT64)"
       - name: defensive_rating
         description: "Points allowed per 100 possessions (efficiency metric, converted to FLOAT64)"
 
   - name: stg_season_averages_shooting_by_zone
-    description: "Staging table for NBA player season averages (shooting by zone). Contains field goal statistics broken down by court zones including corner 3s, above-the-break 3s, restricted area, paint, mid-range, and backcourt."
+    description: "Staging table for NBA player season averages (shooting by zone). Contains field goal statistics broken down by court zones including corner 3s, above-the-break 3s, restricted area, paint, mid-range, and backcourt. Filtered to season_type = 'regular' (one row per player)."
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
+          - unique
       - name: player_name
         description: "Full name of the player (First Last format, trimmed)"
       - name: corner_3_fga
@@ -240,6 +277,9 @@ models:
     columns:
       - name: team_id
         description: "Unique identifier for the team"
+        tests:
+          - not_null
+          - unique
       - name: team_name
         description: "Full name of the team"
       - name: team_abbreviation
@@ -264,10 +304,13 @@ models:
         description: "Time when injury report is released for the team's home games in Brasília timezone (13:30 local time converted). Example: Los Angeles = 17:30 (13:30 PT + 4 hours during DST)"
 
   - name: stg_player_injuries
-    description: "Staging table for NBA player injuries. Contains injury information including expected return dates, status, and descriptions."
+    description: "Staging table for NBA player injuries. Contains injury information including expected return dates, status, and descriptions. Rows with status = 'Probable' are excluded; NULL-status rows are retained."
     columns:
       - name: player_id
         description: "Unique identifier for the injured player"
+        tests:
+          - not_null
+          - unique
       - name: team_id
         description: "Unique identifier for the player's team"
       - name: season
@@ -280,22 +323,37 @@ models:
         description: "Injury status (e.g., Doubtful, Out, Questionable)"
 
   - name: stg_game_player_advanced_stats
-    description: "Staging table for NBA player advanced/tracking stats per game from Balldontlie /nba/v2/stats/advanced. Flattens the stats array into one row per player per game with passing, playmaking, hustle, and rating fields."
+    description: "Staging table for NBA player advanced/tracking stats per game from Balldontlie /nba/v2/stats/advanced. Flattens the stats array into one row per player per game per period (period 0 = full game, 1-4 = quarters) with passing, playmaking, hustle, and rating fields."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
+              - period
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
       - name: team_id
         description: "Unique identifier for the player's team in this game"
+        tests:
+          - not_null
       - name: game_id
         description: "Unique identifier for the game"
+        tests:
+          - not_null
       - name: game_date
-        description: "Date when the game was played (string format from source)"
+        description: "Date when the game was played (typed to DATE via SAFE_CAST)"
       - name: season
         description: "Season year (e.g., 2025, converted to INT64)"
       - name: season_type
         description: "Season type derived from game date (regular, playin, playoffs)"
       - name: period
         description: "Period number (0 = full game, 1-4 = quarters)"
+        tests:
+          - not_null
       - name: passes
         description: "Total passes thrown by the player in this game"
       - name: secondary_assists
@@ -360,6 +418,9 @@ models:
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
+          - unique
       - name: season
         description: "Season year (e.g., 2025, converted to INT64)"
       - name: season_type
@@ -390,14 +451,25 @@ models:
         description: "Adjusted assist-to-pass percentage"
 
   - name: stg_player_props
-    description: "Staging table for NBA player props from DraftKings NDJSON external table. Contains betting lines for various player performance metrics. Prop types are normalized to stat_type with 'player_' prefix for consistency with player stats models. Filtered to over_under props only."
+    description: "Staging table for NBA player props from DraftKings NDJSON external table. Contains betting lines for various player performance metrics. Prop types are normalized to stat_type with 'player_' prefix for consistency with player stats models. Filtered to over_under props only. Deduped to one row per (player_id, game_id, stat_type) via deterministic main-line selection (vendor priority -> line closest to per-vendor median -> lowest line)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
+              - stat_type
     columns:
       - name: prop_id
         description: "Unique identifier for the prop"
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
       - name: game_id
         description: "Unique identifier for the game"
+        tests:
+          - not_null
       - name: season
         description: "Season year (e.g., 2025)"
       - name: vendor
@@ -406,3 +478,270 @@ models:
         description: "Normalized prop type with 'player_' prefix to match stat_type format used in player stats models (e.g., player_points, player_rebounds, player_assists, player_points_rebounds, player_assists_1q, player_points_first3min). Used for joining with player stats."
       - name: line_value
         description: "Betting line value for the prop (converted to FLOAT64)"
+
+  - name: stg_game_player_stats_all
+    description: "Staging variant of stg_game_player_stats WITHOUT the minutes > 0 filter. Retains did-not-play (DNP) rows so int_game_player_stats_not_played can detect absences. Exposes a did_play flag. Use stg_game_player_stats for played-only aggregations."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
+    columns:
+      - name: player_id
+        description: "Unique identifier for the player"
+        tests:
+          - not_null
+      - name: team_id
+        description: "Unique identifier for the player's team in this game"
+        tests:
+          - not_null
+      - name: game_id
+        description: "Unique identifier for the game"
+        tests:
+          - not_null
+      - name: game_date
+        description: "Date when the game was played (typed to DATE via SAFE_CAST)"
+      - name: season
+        description: "Season year (filtered via the nba_season var, default 2025)"
+      - name: minutes
+        description: "Minutes played (nullable INTEGER via SAFE_CAST; NULL or 0 for DNP rows)"
+      - name: did_play
+        description: "Boolean: TRUE when the player actually played (minutes IS NOT NULL AND minutes > 0); FALSE for DNP rows"
+
+  - name: stg_game_player_stats_period
+    description: "Staging for NBA game player stats by period (quarter). Source filtered to periods 1 and 2 (first half). One row per player/game/period."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
+              - period
+    columns:
+      - name: period
+        description: "Game period (1 = Q1, 2 = Q2); source filtered to the first half"
+        tests:
+          - not_null
+      - name: player_id
+        description: "Unique identifier for the player"
+        tests:
+          - not_null
+      - name: team_id
+        description: "Unique identifier for the player's team in this game"
+        tests:
+          - not_null
+      - name: game_id
+        description: "Unique identifier for the game"
+        tests:
+          - not_null
+      - name: game_date
+        description: "Date when the game was played (typed to DATE via SAFE_CAST)"
+      - name: points
+        description: "Points scored by the player in the period (SAFE_CAST to INTEGER)"
+      - name: minutes
+        description: "Minutes played by the player in the period (SAFE_CAST to INTEGER)"
+      - name: rebounds
+        description: "Rebounds by the player in the period (SAFE_CAST to INTEGER)"
+      - name: assists
+        description: "Assists by the player in the period (SAFE_CAST to INTEGER)"
+
+  - name: stg_betting_odds
+    description: "Game-level spread, moneyline, and total O/U from raw_betting_odds. One row per game, preferred vendor (draftkings > fanduel > others), tiebroken by most recent updated_at then id."
+    columns:
+      - name: game_id
+        description: "Unique identifier for the game (converted to INT64)"
+        tests:
+          - not_null
+          - unique
+      - name: season
+        description: "Season year (converted to INT64)"
+      - name: vendor
+        description: "Sportsbook vendor selected for this game"
+      - name: spread
+        description: "Home spread line value (FLOAT64)"
+      - name: spread_away
+        description: "Away spread line value (FLOAT64)"
+      - name: total
+        description: "Game total (over/under) line value (FLOAT64)"
+      - name: spread_home_odds
+        description: "American odds for the home spread (INT64)"
+      - name: spread_away_odds
+        description: "American odds for the away spread (INT64)"
+      - name: total_over_odds
+        description: "American odds for the over (INT64)"
+      - name: total_under_odds
+        description: "American odds for the under (INT64)"
+      - name: moneyline_home_odds
+        description: "American moneyline odds for the home team (INT64)"
+      - name: moneyline_away_odds
+        description: "American moneyline odds for the away team (INT64)"
+      - name: updated_at
+        description: "Timestamp of the odds snapshot (TIMESTAMP)"
+
+  - name: stg_team_season_averages_general_defense
+    description: "Staging table for NBA team season averages (general/defense). Defensive metrics including DefRtg, paint points conceded, 2nd chance points conceded, from Balldontlie API. Filtered to season_type = 'regular'. One row per team/season."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null
+
+  - name: stg_team_season_averages_general_opponent
+    description: "Staging table for NBA team season averages (general/opponent). Stats that each team concedes to opponents with pre-computed rankings from Balldontlie API. Filtered to season_type = 'regular'. One row per team/season."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null
+
+  - name: stg_team_season_averages_playtypes
+    description: "Staging view for NBA team season averages play types (isolation, spotup, prballhandler, prrollman, postup, transition, handoff, cut, offscreen, offrebound), unioned from Balldontlie API. Filtered to season_type = 'regular'. One row per team/season/play_type."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+              - play_type
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null
+      - name: play_type
+        description: "Play type (isolation, spotup, prballhandler, prrollman, postup, transition, handoff, cut, offscreen, offrebound)"
+        tests:
+          - not_null
+
+  - name: stg_team_season_averages_shooting_5ft_range_opponent
+    description: "Staging — opponent FG% conceded by the team's defense per distance range (less_than_5_ft to 40_ft+). Source: balldontlie shooting/5ft_range_opponent. Filtered to season_type = 'regular'. One row per team/season."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null
+
+  - name: stg_team_season_averages_shooting_by_zone_opponent
+    description: "Staging — opponent FG% conceded by the team's defense per shot zone. Source: balldontlie shooting/by_zone_opponent. Filtered to season_type = 'regular'. One row per team/season."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null
+
+  - name: stg_team_season_averages_shotdashboard_catchshoot
+    description: "Staging view for NBA team season averages shot dashboard catch & shoot. Team catch-and-shoot shooting profile from Balldontlie API. Filtered to season_type = 'regular'. One row per team/season."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null
+
+  - name: stg_team_season_averages_shotdashboard_pullups
+    description: "Staging view for NBA team season averages shot dashboard pull-ups. Team pull-up shooting profile from Balldontlie API. Filtered to season_type = 'regular'. One row per team/season."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null
+
+  - name: stg_team_season_averages_tracking_defense
+    description: "Staging view for NBA team season averages tracking defense. Rim protection stats (def_rim_fg_pct, def_rim_fga) from Balldontlie API. Filtered to season_type = 'regular'. One row per team/season."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null
+
+  - name: stg_team_season_averages_tracking_rebounding
+    description: "Staging table for NBA team season averages (tracking/rebounding). Rebound chance percentages, contested rebound rates, and average rebound distances from Balldontlie API. Filtered to season_type = 'regular'. One row per team/season."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique identifier for the team"
+        tests:
+          - not_null
+      - name: season
+        description: "Season year (converted to INT64)"
+        tests:
+          - not_null

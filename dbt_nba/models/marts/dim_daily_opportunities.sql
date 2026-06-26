@@ -71,12 +71,15 @@ with_scores AS (
             WHEN ABS(c.spread) <= 17    THEN 0.70
             ELSE                             0.70  -- 18+ usa 0.70 + cap 50 aplicado no scored
         END AS blowout_deflator,
-        -- gap_score usa apenas gap_vs_line_pct; backups sem line sao filtrados em final
+        -- gap_score usa apenas gap_vs_line_pct; backups sem line sao filtrados em final.
+        -- Edge nao-positivo (avg_sem <= line) recebe 0 para que o contexto (sample/freshness/matchup/ambient/cv)
+        -- nao consiga inflar uma aposta sem valor acima do corte de 40.
         CASE
             WHEN c.gap_vs_line_pct > 20 THEN 90
             WHEN c.gap_vs_line_pct > 10 THEN 70
             WHEN c.gap_vs_line_pct > 5  THEN 50
-            ELSE 20
+            WHEN c.gap_vs_line_pct > 0  THEN 20
+            ELSE 0
         END AS gap_score,
         CASE
             WHEN c.jogos_sem >= 10 THEN 90
@@ -97,17 +100,20 @@ with_scores AS (
                 CASE WHEN c.opponent_opp_ast_rank >= 21 THEN 90 WHEN c.opponent_opp_ast_rank >= 11 THEN 60 WHEN c.opponent_opp_ast_rank IS NOT NULL THEN 30 ELSE 60 END
             WHEN c.stat_type = 'player_points' THEN
                 CASE WHEN c.opponent_opp_pts_rank >= 21 THEN 90 WHEN c.opponent_opp_pts_rank >= 11 THEN 60 WHEN c.opponent_opp_pts_rank IS NOT NULL THEN 30 ELSE 60 END
-            WHEN c.stat_type = 'player_threes' THEN
-                CASE WHEN c.opponent_opp_fg3_pct_rank >= 21 THEN 90 WHEN c.opponent_opp_fg3_pct_rank >= 11 THEN 60 WHEN c.opponent_opp_fg3_pct_rank IS NOT NULL THEN 30 ELSE 60 END
+            -- player_minutes e player_points_rebounds_assists caem aqui de proposito: usam o ranking de defesa
+            -- geral do oponente (def_rating). int_daily_360_analysis so emite points/rebounds/assists/minutes/
+            -- points_rebounds_assists, entao nao ha branch player_threes (era codigo morto e foi removido).
             ELSE
                 CASE WHEN c.opponent_def_rank IS NOT NULL AND c.opponent_def_rank >= 21 THEN 90
                      WHEN c.opponent_def_rank IS NOT NULL AND c.opponent_def_rank >= 11 THEN 60
                      WHEN c.opponent_def_rank IS NOT NULL THEN 30
                      ELSE 60 END
         END AS matchup_score,
+        -- topo em 90 para alinhar a escala 0-90 das demais componentes (gap/sample/freshness/matchup/cv),
+        -- de modo que o peso de 10% do ambiente seja realizado de fato
         CASE
             WHEN c.game_total IS NULL  THEN 60
-            WHEN c.game_total >= 228   THEN 80
+            WHEN c.game_total >= 228   THEN 90
             WHEN c.game_total >= 218   THEN 60
             ELSE                            30
         END AS ambient_score,
@@ -199,10 +205,13 @@ final AS (
         spread,
         blowout_deflator,
         game_total,
+        -- #2: para rankear por EDGE use gap_vs_line (o score 0-100 e indice de CONFIANCA, nao
+        -- monotonico no edge). Sem coluna ev_rank dedicada p/ nao causar schema-drift no sync BQ->Postgres.
         CURRENT_TIMESTAMP() AS loaded_at
     FROM with_final_score
     WHERE score >= 40
       AND line_value IS NOT NULL                              -- Stage 3C: sem line publicada nao e oportunidade apostavel
+      AND gap_vs_line > 0                                     -- Stage 3D: exige edge positivo (avg_sem > line); sem edge nao e aposta de valor no OVER
       AND trigger_freshness IN ('NOVA', 'RECENTE')           -- Stage 2.5: EXTENDIDA (8-14d) vai para dim_teammate_impact_360 mas nao para oportunidades
 )
 

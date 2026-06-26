@@ -5,10 +5,13 @@ models:
     description: >
       Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por
       (fixture_id, market, outcome, line_value) que passa no gate (edge>0 E n_casas>=3 E de-vig
-      válido E conjunto da Pinnacle completo pro mercado). Score 0-100 = clamp(PTS_VALOR +
-      PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES); faixa Alta(>=60)/Média(40-59). Long por
-      `market` — v4: 1X2 (match_winner) + Gols O/U (goals_over_under) + Handicap asiático
-      (asian_handicap) + Ambos Marcam/BTTS (btts, via de-vig de consenso). valor_fonte distingue.
+      válido E conjunto da Pinnacle completo pro mercado E score>=40 E — p/ asian_handicap e
+      goals_over_under — linha meia .5, sem push). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS
+      + PTS_CORROBORACAO − PENALIDADES) — índice de CONFIABILIDADE, não de EV (ranqueie por
+      `edge`); faixa Alta(>=60)/Média(40-59). Long por
+      `market` — v5: 1X2 (match_winner) + Gols O/U (goals_over_under) + Handicap asiático
+      (asian_handicap) + Ambos Marcam/BTTS (btts, via de-vig de consenso) + Dupla Chance
+      (double_chance, saídas 1X/X2, prob derivada do 1X2 da Pinnacle, gate próprio). valor_fonte distingue.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -16,35 +19,49 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['match_winner', 'goals_over_under', 'asian_handicap', 'btts']
+              arguments:
+                values: ['match_winner', 'goals_over_under', 'asian_handicap', 'btts', 'double_chance']
       - name: outcome
         tests:
           - not_null
           - accepted_values:
-              values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Yes', 'No']
+              arguments:
+                values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Yes', 'No', '1X', 'X2']
       - name: line_value
-        description: "NULL no 1X2 e no BTTS; a linha L (1.5/2.5/3.5/...) no Gols O/U; o handicap (ótica do mandante, mesmo p/ Home e Away) no Handicap asiático."
+        description: "NULL no 1X2, BTTS e Dupla Chance; a linha L (1.5/2.5/3.5/...) no Gols O/U; o handicap (ótica do mandante, mesmo p/ Home e Away) no Handicap asiático."
+      - name: is_half_line
+        description: "TRUE se a linha é meia (.5, sem push/meio-push); FALSE p/ linha cheia/quarter; NULL onde não há linha (1X2/BTTS/DC). O gate só materializa asian_handicap/goals_over_under quando is_half_line (#2 — evita edge superdimensionado por push ignorado)."
       - name: valor_fonte
-        description: "Fonte do de-vig/edge: 'pinnacle' (mercados 1/4/5) ou 'consenso' (mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front)."
+        description: "Fonte do de-vig/edge: 'pinnacle' (mercados 1/4/5 da Pinnacle; e Dupla Chance, derivada do 1X2 da Pinnacle) ou 'consenso' (mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front; exige edge>=consensus_min_edge no gate). #1"
         tests:
           - accepted_values:
-              values: ['pinnacle', 'consenso']
+              arguments:
+                values: ['pinnacle', 'consenso']
       - name: score
+        description: >
+          Índice de CONFIABILIDADE 0-100 = clamp(PTS_VALOR(≤30) + PTS_PREMISSAS + PTS_CORROBORACAO
+          − PENALIDADES). NÃO é ranking de EV: pts_valor (o componente de edge) é minoria do total,
+          então score maior ≠ edge maior. O gate exige score>=40 ("abaixo de 40 não vira
+          oportunidade"). Para ordenar por tamanho de vantagem, use `edge`.
         tests:
           - not_null
           - dbt_utils.accepted_range:
-              min_value: 0
-              max_value: 100
+              arguments:
+                min_value: 0
+                max_value: 100
       - name: faixa
+        description: "Faixa de CONFIABILIDADE derivada do score: 'Alta' (>=60) | 'Média' (40-59). 'Baixa' (<40) NÃO é materializada — o gate score>=40 já a exclui ('abaixo de 40 não vira oportunidade'); o accepted_values sem 'Baixa' vira sentinela do gate."
         tests:
           - accepted_values:
-              values: ['Alta', 'Média', 'Baixa']
+              arguments:
+                values: ['Alta', 'Média']
       - name: edge
-        description: "Gate garante > 0 nas linhas materializadas."
+        description: "EV/edge = best_odd * prob_justa − 1. Gate garante > 0 nas linhas materializadas. É a MEDIDA DE VALOR/EV — ranqueie por `edge` p/ tamanho de vantagem; `score`/`faixa` são índice de CONFIABILIDADE (não monotônicos no edge)."
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - fixture_id
-            - market
-            - outcome
-            - line_value
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - market
+              - outcome
+              - line_value

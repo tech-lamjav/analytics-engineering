@@ -127,7 +127,7 @@ dim_teams AS (
     LEFT JOIN next_opponent_info AS noi ON t.team_id = noi.team_id
     -- Next opponent data
     LEFT JOIN team_last_five AS tlf_opp ON noi.next_opponent_id = tlf_opp.team_id
-    LEFT JOIN {{ ref('stg_team_standings') }} AS ts_opp ON noi.next_opponent_id = ts_opp.team_id
+    LEFT JOIN {{ ref('stg_team_standings') }} AS ts_opp ON noi.next_opponent_id = ts_opp.team_id AND t.season = ts_opp.season
     LEFT JOIN team_rating AS tr_opp ON noi.next_opponent_id = tr_opp.team_id AND t.season = tr_opp.season
     LEFT JOIN team_opp_stats AS tos_opp ON noi.next_opponent_id = tos_opp.team_id AND t.season = tos_opp.season
 )

@@ -19,10 +19,10 @@ last_game_text AS (
         player_id,
         CONCAT(
             'Ultimo Jogo: ',
-            CAST(DATE_DIFF(CURRENT_DATE(), last_game_date, DAY) AS STRING),
+            CAST(DATE_DIFF(CURRENT_DATE('America/Sao_Paulo'), last_game_date, DAY) AS STRING),
             ' ',
             CASE
-                WHEN DATE_DIFF(CURRENT_DATE(), last_game_date, DAY) = 1 THEN 'dia atras'
+                WHEN DATE_DIFF(CURRENT_DATE('America/Sao_Paulo'), last_game_date, DAY) = 1 THEN 'dia atras'
                 ELSE 'dias atras'
             END
         ) AS last_game_text,

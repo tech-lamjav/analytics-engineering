@@ -42,7 +42,16 @@ fixture_only AS (
         CAST(NULL AS STRING) AS nationality,
         CAST(NULL AS STRING) AS height,
         CAST(NULL AS STRING) AS weight,
-        f.position,
+        -- Normaliza o código de 1 letra do /fixtures/players ('G'/'D'/'M'/'F') p/ o MESMO
+        -- vocabulário do catálogo /players ('Goalkeeper'/'Defender'/'Midfielder'/'Attacker'),
+        -- senão dim_players.position misturaria dois domínios e quebraria filtros por posição (#5).
+        CASE f.position
+            WHEN 'G' THEN 'Goalkeeper'
+            WHEN 'D' THEN 'Defender'
+            WHEN 'M' THEN 'Midfielder'
+            WHEN 'F' THEN 'Attacker'
+            ELSE f.position
+        END AS position,
         f.player_photo AS photo_url,
         f.loaded_at AS extracted_at,
         'fixture_only' AS source

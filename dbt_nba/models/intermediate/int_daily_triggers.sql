@@ -51,15 +51,19 @@ trigger_last_played AS (
 ),
 
 trigger_games_played AS (
+    -- Numerador escopado por time: jogos jogados PELO time atual do trigger.
+    -- Sem team_id, jogadores trocados somariam jogos de times anteriores e o
+    -- participation_pct podia passar de 1 e furar o gate >= 0.5.
     SELECT
         player_id,
+        team_id,
         COUNT(DISTINCT game_id) AS jogos_trigger
     FROM {{ ref('int_game_player_stats_pilled') }}
     WHERE
         stat_type = 'player_points'
-        AND game_date >= '2025-10-01'
+        AND game_date >= '{{ var('nba_season', 2025) }}-10-01'
         AND game_date < CURRENT_DATE('America/Sao_Paulo')
-    GROUP BY player_id
+    GROUP BY player_id, team_id
 ),
 
 team_games_count AS (
@@ -68,7 +72,7 @@ team_games_count AS (
         COUNT(DISTINCT game_id) AS total_team_games
     FROM {{ ref('int_games_teams_pilled') }}
     WHERE
-        game_date >= '2025-10-01'
+        game_date >= '{{ var('nba_season', 2025) }}-10-01'
         AND game_date < CURRENT_DATE('America/Sao_Paulo')
         AND win_loss IS NOT NULL
     GROUP BY team_id
@@ -85,7 +89,9 @@ joined AS (
         ) AS trigger_participation_pct
     FROM triggers_raw tr
     LEFT JOIN trigger_last_played tlp ON tr.trigger_player_id = tlp.player_id
-    LEFT JOIN trigger_games_played tgp ON tr.trigger_player_id = tgp.player_id
+    LEFT JOIN trigger_games_played tgp
+        ON tr.trigger_player_id = tgp.player_id
+        AND tr.trigger_team_id = tgp.team_id
     LEFT JOIN team_games_count tgc ON tr.trigger_team_id = tgc.team_id
 ),
 

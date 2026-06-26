@@ -160,7 +160,11 @@ models:
       - name: is_b2b_game
         description: "Boolean flag indicating if this was a back-to-back game for the player's team"
       - name: stat_vs_line
-        description: "Result vs betting line: 'over' (stat_value >= line_value), 'under' (stat_value < line_value), or NULL (no line available)"
+        description: "Result vs betting line: 'over' (stat_value > line_value), 'under' (stat_value < line_value), 'push' (stat_value = line_value — só ocorre em linha inteira; aposta devolvida) or NULL (no line available). Exclude 'push' from hit-rate denominators downstream."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['over', 'under', 'push']
       - name: played_against
         description: "Opponent team abbreviation. Prefixed with '@' if playing away (e.g., '@LAL' for away at Lakers, 'BOS' for home vs Celtics)"
       - name: home_away
@@ -249,6 +253,9 @@ models:
 
   - name: ft_games
     description: "Fact table for NBA games. Provides a comprehensive view of games including all fields from stg_games plus back-to-back and next game flags for both teams. This is the primary table for game-level analysis."
+    # Colunas alinhadas ao output real (SELECT g.* de stg_games + flags). Campos comentados em stg_games
+    # (status/period/time/postseason/ist_stage/conferencia/divisao/cidade/full_name/placar por quarto/OT/
+    # timeouts/in_bonus) nao sao produzidos e foram removidos deste yml.
     columns:
       - name: game_id
         description: "Unique identifier for the game"
@@ -259,92 +266,28 @@ models:
         description: "Season year (e.g., 2025)"
       - name: game_date
         description: "Date when the game was/will be played"
-      - name: game_status
-        description: "Current status of the game (e.g., Final, InProgress, Scheduled, or null)"
-      - name: period
-        description: "Current period/quarter (0-4 for regulation, 5+ for overtime)"
-      - name: time
-        description: "Time remaining in current period (e.g., 'Final', '12:00', or null for future games)"
-      - name: is_postseason
-        description: "Boolean flag indicating if this is a postseason game"
       - name: game_datetime_utc
         description: "Game datetime in UTC timezone (ISO 8601 format string)"
       - name: game_datetime_brasilia
         description: "Game datetime converted to Brasília timezone (UTC-3)"
-      - name: ist_stage
-        description: "In-Season Tournament stage (e.g., 'Championship', 'East Semifinal', 'West Quarterfinal', or null if not IST game)"
       - name: home_team_id
         description: "Unique identifier for the home team"
-      - name: home_team_conference
-        description: "Conference of the home team (East or West)"
-      - name: home_team_division
-        description: "Division of the home team (e.g., Atlantic, Pacific, Central)"
-      - name: home_team_city
-        description: "City of the home team"
       - name: home_team_name
-        description: "Name of the home team (without city)"
-      - name: home_team_full_name
-        description: "Full name of the home team (city + name)"
+        description: "Full name of the home team (city + name; mapeado de game.home_team.full_name em stg_games)"
       - name: home_team_abbreviation
         description: "Three-letter abbreviation for the home team"
       - name: home_team_score
         description: "Final score of the home team (null for future games)"
-      - name: home_q1
-        description: "Home team score in Q1 (null for future games)"
-      - name: home_q2
-        description: "Home team score in Q2 (null for future games)"
-      - name: home_q3
-        description: "Home team score in Q3 (null for future games)"
-      - name: home_q4
-        description: "Home team score in Q4 (null for future games)"
-      - name: home_ot1
-        description: "Home team score in first overtime (null if no OT or future game)"
-      - name: home_ot2
-        description: "Home team score in second overtime (null if no OT or future game)"
-      - name: home_ot3
-        description: "Home team score in third overtime (null if no OT or future game)"
-      - name: home_timeouts_remaining
-        description: "Number of timeouts remaining for home team (null for future games)"
-      - name: home_in_bonus
-        description: "Boolean flag indicating if home team is in bonus (null for future games)"
       - name: visitor_team_id
         description: "Unique identifier for the visiting team"
-      - name: visitor_team_conference
-        description: "Conference of the visitor team (East or West)"
-      - name: visitor_team_division
-        description: "Division of the visitor team (e.g., Atlantic, Pacific, Central)"
-      - name: visitor_team_city
-        description: "City of the visitor team"
       - name: visitor_team_name
-        description: "Name of the visitor team (without city)"
-      - name: visitor_team_full_name
-        description: "Full name of the visitor team (city + name)"
+        description: "Full name of the visiting team (city + name; mapeado de game.visitor_team.full_name em stg_games)"
       - name: visitor_team_abbreviation
         description: "Three-letter abbreviation for the visiting team"
       - name: visitor_team_score
         description: "Final score of the visiting team (null for future games)"
-      - name: visitor_q1
-        description: "Visitor team score in Q1 (null for future games)"
-      - name: visitor_q2
-        description: "Visitor team score in Q2 (null for future games)"
-      - name: visitor_q3
-        description: "Visitor team score in Q3 (null for future games)"
-      - name: visitor_q4
-        description: "Visitor team score in Q4 (null for future games)"
-      - name: visitor_ot1
-        description: "Visitor team score in first overtime (null if no OT or future game)"
-      - name: visitor_ot2
-        description: "Visitor team score in second overtime (null if no OT or future game)"
-      - name: visitor_ot3
-        description: "Visitor team score in third overtime (null if no OT or future game)"
-      - name: visitor_timeouts_remaining
-        description: "Number of timeouts remaining for visitor team (null for future games)"
-      - name: visitor_in_bonus
-        description: "Boolean flag indicating if visitor team is in bonus (null for future games)"
       - name: winner_team_id
         description: "Team ID of the winning team (null for future games or ties)"
-      - name: loaded_at
-        description: "Timestamp when the record was loaded"
       - name: home_team_is_b2b_game
         description: "Boolean flag indicating if the home team played a back-to-back game (played the previous day)"
       - name: visitor_team_is_b2b_game
@@ -353,6 +296,8 @@ models:
         description: "Boolean flag indicating if this is the home team's next scheduled game"
       - name: visitor_team_is_next_game
         description: "Boolean flag indicating if this is the visiting team's next scheduled game"
+      - name: loaded_at
+        description: "Timestamp when the record was loaded"
 
   - name: dim_daily_opportunities
     description: "Pre-computed daily injury-driven betting opportunities (COM vs SEM 360, lines, opponent context, 0-100 score). One row per game, trigger, backup teammate, and stat_type passing filters."
@@ -554,6 +499,111 @@ models:
         description: "Count of SEM games in sample (minimum 5)"
       - name: teammate_avg_minutes
         description: "Teammate average minutes per game this season (minimum 15)"
+      - name: loaded_at
+        description: "Row load timestamp"
+
+  - name: dim_team_opponent_stats
+    description: >
+      NBA team opponent (defesa) stats. Uma linha por (team_id, season) com estatisticas cedidas por jogo e
+      rankings pre-computados. Convencao em TODAS as colunas *_rank: 1 = melhor defesa (menos cedido naquela
+      categoria), 30 = pior defesa (mais cedido). Alimenta dim_teams (next_opponent_*_rank) e o scorer de
+      apostas dim_daily_opportunities (rank do oponente por stat). Fontes: general/opponent, general/defense,
+      tracking/rebounding, shotdashboard/catchshoot, shotdashboard/pullups, tracking/defense.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - team_id
+              - season
+    columns:
+      - name: team_id
+        description: "Unique team identifier"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Team full name"
+      - name: team_abbreviation
+        description: "Team abbreviation (e.g. BOS, LAL)"
+      - name: season
+        description: "NBA season year"
+        tests:
+          - not_null
+      - name: opp_pts
+        description: "Pontos cedidos por jogo"
+      - name: opp_pts_rank
+        description: "Rank de pontos cedidos — 1 = melhor defesa (menos pontos cedidos), 30 = pior"
+      - name: opp_reb
+        description: "Rebotes cedidos por jogo"
+      - name: opp_reb_rank
+        description: "Rank de rebotes cedidos — 1 = melhor defesa, 30 = pior"
+      - name: opp_oreb
+        description: "Rebotes ofensivos cedidos por jogo"
+      - name: opp_oreb_rank
+        description: "Rank de rebotes ofensivos cedidos — 1 = melhor defesa, 30 = pior"
+      - name: opp_dreb
+        description: "Rebotes defensivos cedidos por jogo"
+      - name: opp_dreb_rank
+        description: "Rank de rebotes defensivos cedidos — 1 = melhor defesa, 30 = pior"
+      - name: opp_ast
+        description: "Assistencias cedidas por jogo"
+      - name: opp_ast_rank
+        description: "Rank de assistencias cedidas — 1 = melhor defesa, 30 = pior"
+      - name: opp_fg_pct
+        description: "FG% cedido"
+      - name: opp_fg_pct_rank
+        description: "Rank de FG% cedido — 1 = melhor defesa (menor FG% cedido), 30 = pior"
+      - name: opp_fg3_pct
+        description: "3P% cedido"
+      - name: opp_fg3_pct_rank
+        description: "Rank de 3P% cedido — 1 = melhor defesa (menor 3P% cedido), 30 = pior"
+      - name: opp_stl
+        description: "Roubos de bola do oponente por jogo"
+      - name: opp_stl_rank
+        description: "Rank — 1 = melhor, 30 = pior"
+      - name: opp_blk
+        description: "Tocos do oponente por jogo"
+      - name: opp_blk_rank
+        description: "Rank — 1 = melhor, 30 = pior"
+      - name: opp_tov
+        description: "Turnovers forcados do oponente por jogo"
+      - name: opp_tov_rank
+        description: "Rank — 1 = melhor, 30 = pior"
+      - name: opp_fta
+        description: "Lances livres tentados cedidos por jogo"
+      - name: opp_fta_rank
+        description: "Rank de FTA cedidos — 1 = melhor defesa, 30 = pior"
+      - name: opp_ft_pct
+        description: "FT% do oponente"
+      - name: opp_ft_pct_rank
+        description: "Rank de FT% do oponente — 1 = melhor, 30 = pior"
+      - name: def_rating
+        description: "Defensive rating (pontos cedidos por 100 posses)"
+      - name: def_rating_rank
+        description: "Rank de defensive rating — 1 = melhor defesa, 30 = pior"
+      - name: opp_pts_paint
+        description: "Pontos cedidos no garrafao por jogo"
+      - name: opp_pts_paint_rank
+        description: "Rank — 1 = melhor defesa, 30 = pior"
+      - name: opp_pts_2nd_chance
+        description: "Pontos de segunda chance cedidos por jogo"
+      - name: opp_pts_2nd_chance_rank
+        description: "Rank — 1 = melhor defesa, 30 = pior"
+      - name: opp_pts_off_tov
+        description: "Pontos cedidos apos turnover por jogo"
+      - name: opp_pts_off_tov_rank
+        description: "Rank — 1 = melhor defesa, 30 = pior"
+      - name: opp_pts_fb
+        description: "Pontos de contra-ataque cedidos por jogo"
+      - name: opp_pts_fb_rank
+        description: "Rank — 1 = melhor defesa, 30 = pior"
+      - name: dreb_pct
+        description: "Percentual de rebotes defensivos do time"
+      - name: dreb_pct_rank
+        description: "Rank de dreb% — 1 = melhor (mais rebotes defensivos capturados), 30 = pior"
+      - name: def_rim_fg_pct
+        description: "FG% cedido no aro (rim protection)"
+      - name: def_rim_fg_pct_rank
+        description: "Rank de FG% cedido no aro (ASC NULLS LAST) — 1 = melhor protecao de aro (menor FG% cedido), 30 = pior"
       - name: loaded_at
         description: "Row load timestamp"
 

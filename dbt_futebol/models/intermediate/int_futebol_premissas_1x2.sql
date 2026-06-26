@@ -1,5 +1,5 @@
 {{ config(
-    materialized='view',
+    materialized='table',
     description='S1 do Motor de Score — premissas de contexto do mercado RESULTADO (1X2). 3 linhas por fixture (outcome Home/Draw/Away). S = lado apostado, O = adversário. Cada premissa é um booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.1 do épico MOTOR_SCORE_CONFIABILIDADE.md). Penalidades específicas: pick_empate (-10), desfalque_proprio (-15). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/injuries). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
 ) }}
 
@@ -47,17 +47,31 @@ standings_latest AS (
     ) = 1
 ),
 
--- xG médio por time-season (Brasileirão; Copa ~vazio -> NULL -> premissa de xG não dispara).
+-- Spine (fixture-alvo, time) p/ ancorar o xG ao kickoff do jogo (point-in-time).
+fixture_team_spine AS (
+    SELECT fixture_id, season, competition_id, kickoff_utc, home_team_id AS team_id FROM fixtures
+    UNION ALL
+    SELECT fixture_id, season, competition_id, kickoff_utc, away_team_id FROM fixtures
+),
+-- xG médio do time ATÉ o jogo: mesma season/competição e jogos ANTERIORES ao kickoff (date_utc <
+-- DATE(kickoff)) — time-bounded igual ao h2h/last5, sem look-ahead em fixtures já jogadas. P/ jogos
+-- FUTUROS == média da season (todos os jogos com stats são anteriores). Brasileirão preenchido;
+-- Copa ~vazio -> NULL -> premissa de xG não dispara.
 xg AS (
     SELECT
-        st.team_id, st.season, st.competition_id,
+        sp.fixture_id, sp.team_id,
         AVG(st.expected_goals)  AS xg_for_avg,
         AVG(opp.expected_goals) AS xg_against_avg
-    FROM {{ ref('fact_fixture_stats') }} st
+    FROM fixture_team_spine sp
+    JOIN {{ ref('fact_fixture_stats') }} st
+        ON  st.team_id        = sp.team_id
+        AND st.season         = sp.season
+        AND st.competition_id = sp.competition_id
+        AND st.date_utc       < DATE(sp.kickoff_utc)
     JOIN {{ ref('fact_fixture_stats') }} opp
-        ON st.fixture_id = opp.fixture_id
-       AND st.team_id   != opp.team_id
-    GROUP BY st.team_id, st.season, st.competition_id
+        ON  opp.fixture_id = st.fixture_id
+        AND opp.team_id   != st.team_id
+    GROUP BY sp.fixture_id, sp.team_id
 ),
 
 -- ============================================================================
@@ -138,8 +152,8 @@ metrics AS (
     LEFT JOIN tss od  ON od.team_id = o.o_team_id AND od.season = o.season AND od.competition_id = o.competition_id
     LEFT JOIN standings_latest ss ON ss.team_id = o.s_team_id AND ss.season = o.season AND ss.league_id = o.competition_id
     LEFT JOIN standings_latest os ON os.team_id = o.o_team_id AND os.season = o.season AND os.league_id = o.competition_id
-    LEFT JOIN xg sx   ON sx.team_id = o.s_team_id AND sx.season = o.season AND sx.competition_id = o.competition_id
-    LEFT JOIN xg ox   ON ox.team_id = o.o_team_id AND ox.season = o.season AND ox.competition_id = o.competition_id
+    LEFT JOIN xg sx   ON sx.fixture_id = o.fixture_id AND sx.team_id = o.s_team_id
+    LEFT JOIN xg ox   ON ox.fixture_id = o.fixture_id AND ox.team_id = o.o_team_id
     LEFT JOIN inj si  ON si.fixture_id = o.fixture_id AND si.team_id = o.s_team_id
     LEFT JOIN inj oi  ON oi.fixture_id = o.fixture_id AND oi.team_id = o.o_team_id
     LEFT JOIN h2h hh  ON hh.fixture_id = o.fixture_id AND hh.outcome = o.outcome

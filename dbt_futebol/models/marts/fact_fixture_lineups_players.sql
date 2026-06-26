@@ -48,9 +48,13 @@ SELECT
     CURRENT_TIMESTAMP() AS dbt_loaded_at
 FROM players p
 INNER JOIN fixtures f ON p.fixture_id = f.fixture_id
+-- Descarta slots de escalação sem player_id (lixo da API; ~4 linhas) — não são jogadores reais
+-- e quebrariam o not_null do mart (a staging mantém raw e só avisa via severity:warn).
+WHERE p.player_id IS NOT NULL
 -- Latest-wins: "real" (pós-jogo) vence "confirmed" (~T-30min). Um jogador aparece 1x por
--- fase; dedup por (fixture_id, player_id) mantém a fase mais recente.
+-- fase; dedup por (fixture_id, player_id) mantém a fase mais recente. Desempate determinístico
+-- por lineup_phase='real' (em loaded_at empatado, "real" vence — regra explícita, tie-stable).
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY p.fixture_id, p.player_id
-    ORDER BY p.loaded_at DESC
+    ORDER BY p.loaded_at DESC, (p.lineup_phase = 'real') DESC
 ) = 1

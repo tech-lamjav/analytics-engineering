@@ -21,7 +21,7 @@ cleaned_data AS (
     SELECT
         CAST(game.id AS INT64) AS game_id,
         CAST(season AS INT64) AS season,
-        date AS game_date,
+        SAFE_CAST(date AS DATE) AS game_date,
         --game.status AS game_status,
         --CAST(game.period AS INT64) AS period,
         --game.time,

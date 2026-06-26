@@ -64,4 +64,3 @@ LEFT JOIN first_half AS fh
 LEFT JOIN {{ ref('int_games_teams_pilled') }} AS gt
     ON q1.game_id = gt.game_id AND q1.team_id = gt.team_id AND gt.game_date <= CURRENT_DATE()
 WHERE q1.q1_minutes > 0
-ORDER BY q1.player_id, q1.game_id

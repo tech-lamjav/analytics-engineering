@@ -15,7 +15,9 @@ cleaned_data AS (
         description,
         status,
     FROM source_data
-    WHERE status <> 'Probable'
+    -- Mantém status nulo: lesão sem rótulo não deve sumir do pipeline de triggers.
+    -- (status <> 'Probable' sozinho descartaria NULL silenciosamente, pois NULL <> x => NULL.)
+    WHERE status IS NULL OR status <> 'Probable'
 )
 
 SELECT * FROM cleaned_data

@@ -1,10 +1,10 @@
 {{ config(
-    description='Staging for NBA player advanced/tracking stats per game from Balldontlie /nba/v2/stats/advanced. One row per player per game with passing, playmaking, hustle and rating fields.'
+    description='Staging for NBA player advanced/tracking stats per game from Balldontlie /nba/v2/stats/advanced. One row per player per game per period (period 0 = jogo completo, 1-4 = quartos) with passing, playmaking, hustle and rating fields.'
 ) }}
 
 WITH source_data AS (
     SELECT * FROM {{ source('nba', 'raw_game_player_advanced_stats') }}
-    WHERE season = 2025
+    WHERE season = {{ var('nba_season', 2025) }}
 ),
 
 unnested AS (
@@ -18,7 +18,7 @@ cleaned_data AS (
         CAST(stat.player.id AS INT64) AS player_id,
         CAST(stat.team.id AS INT64) AS team_id,
         CAST(stat.game.id AS INT64) AS game_id,
-        stat.game.date AS game_date,
+        SAFE_CAST(stat.game.date AS DATE) AS game_date,
         CAST(stat.game.season AS INT64) AS season,
         stat.season_type,
 

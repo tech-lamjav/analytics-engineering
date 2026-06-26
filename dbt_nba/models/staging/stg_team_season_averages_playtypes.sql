@@ -3,43 +3,43 @@
 ) }}
 
 WITH isolation AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_isolation') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_isolation') }}
     WHERE season_type = 'regular'
 ),
 spotup AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_spotup') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_spotup') }}
     WHERE season_type = 'regular'
 ),
 prballhandler AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_prballhandler') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_prballhandler') }}
     WHERE season_type = 'regular'
 ),
 prrollman AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_prrollman') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_prrollman') }}
     WHERE season_type = 'regular'
 ),
 postup AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_postup') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_postup') }}
     WHERE season_type = 'regular'
 ),
 transition AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_transition') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_transition') }}
     WHERE season_type = 'regular'
 ),
 handoff AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_handoff') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_handoff') }}
     WHERE season_type = 'regular'
 ),
 cut AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_cut') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_cut') }}
     WHERE season_type = 'regular'
 ),
 offscreen AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_offscreen') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_offscreen') }}
     WHERE season_type = 'regular'
 ),
 offrebound AS (
-    SELECT * FROM {{ source('nba', 'raw_team_season_averages_playtype_offrebound') }}
+    SELECT team, season, season_type, type, stats FROM {{ source('nba', 'raw_team_season_averages_playtype_offrebound') }}
     WHERE season_type = 'regular'
 ),
 all_playtypes AS (

@@ -99,6 +99,8 @@ models:
               - player_id
               - requested_league_id
               - requested_season
+          config:
+            severity: warn  # grain raw pré-dedup; dim_players deduppa por player_id (2 grupos dup hoje)
     columns:
       - name: player_id
         description: "ID do jogador na API-Football"
@@ -278,5 +280,390 @@ models:
         description: "Probabilidade % de empate"
       - name: prob_away_pct
         description: "Probabilidade % do visitante"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_fixtures
+    description: "Flatten do raw_futebol_fixtures (espinha /fixtures). 1 linha por fixture (jogo). fact_fixtures deriva competition/date_utc (de timestamp_unix) e dedup por fixture_id. ⚠️ date_iso (ISO com offset) e league_season foram removidos por serem passthrough mortos (0 consumidores) — para data use timestamp_unix; para season use requested_season."
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (PK; 1 linha por fixture)"
+        tests:
+          - not_null
+          - unique
+      - name: requested_league_id
+        description: "ID da liga requisitada (parâmetro `league` da chamada /fixtures)"
+        tests:
+          - not_null
+      - name: requested_season
+        description: "Ano da temporada requisitada"
+        tests:
+          - not_null
+      - name: referee
+        description: "Árbitro do jogo. Pode ser nulo."
+      - name: timezone
+        description: "Timezone reportado pela API (sempre 'UTC' no payload)"
+      - name: timestamp_unix
+        description: "Epoch UTC do kickoff (INT64) — base canônica do date_utc no fato (preferir a uma string ISO com offset)"
+      - name: venue_id
+        description: "ID do estádio"
+      - name: venue_name
+        description: "Nome do estádio"
+      - name: venue_city
+        description: "Cidade do estádio"
+      - name: status_long
+        description: "Status longo (ex: 'Match Finished', 'Not Started')"
+      - name: status_short
+        description: "Status curto (ex: 'FT', 'NS', 'AET', 'PEN')"
+      - name: status_elapsed
+        description: "Minutos decorridos (NULL antes do jogo)"
+      - name: round
+        description: "Rodada/fase (ex: 'Regular Season - 12', 'Group A')"
+      - name: home_team_id
+        description: "ID do mandante"
+      - name: home_team_name
+        description: "Nome do mandante"
+      - name: home_team_winner
+        description: "TRUE se o mandante venceu; NULL antes do fim do jogo"
+      - name: away_team_id
+        description: "ID do visitante"
+      - name: away_team_name
+        description: "Nome do visitante"
+      - name: away_team_winner
+        description: "TRUE se o visitante venceu; NULL antes do fim do jogo"
+      - name: goals_home
+        description: "Gols do mandante no tempo normal; NULL antes do jogo"
+      - name: goals_away
+        description: "Gols do visitante no tempo normal; NULL antes do jogo"
+      - name: score_halftime_home
+        description: "Placar do mandante no intervalo"
+      - name: score_halftime_away
+        description: "Placar do visitante no intervalo"
+      - name: score_fulltime_home
+        description: "Placar do mandante no fim do tempo normal"
+      - name: score_fulltime_away
+        description: "Placar do visitante no fim do tempo normal"
+      - name: score_extratime_home
+        description: "Placar do mandante na prorrogação; NULL se não houve"
+      - name: score_extratime_away
+        description: "Placar do visitante na prorrogação; NULL se não houve"
+      - name: score_penalty_home
+        description: "Pênaltis convertidos pelo mandante; NULL se não houve"
+      - name: score_penalty_away
+        description: "Pênaltis convertidos pelo visitante; NULL se não houve"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_fixture_events
+    description: "Flatten do raw_futebol_fixture_events. 1 linha por evento de jogo; grain (fixture_id, event_order) — event_order é o índice cronológico no array da API (a API não traz id de evento). fact_fixture_events junta fact_fixtures p/ competition/season/date_utc e rótulo home/away."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - event_order
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: event_order
+        description: "Índice do evento no array da API (0-based) — ordem cronológica; parte da chave"
+        tests:
+          - not_null
+      - name: minute
+        description: "Minuto do jogo em que o evento ocorreu (time.elapsed)"
+      - name: minute_extra
+        description: "Minutos de acréscimo (time.extra). NULL fora dos acréscimos"
+      - name: team_id
+        description: "ID do time do evento"
+      - name: team_name
+        description: "Nome do time do evento"
+      - name: player_id
+        description: "ID do jogador principal do evento (autor do gol/cartão / quem entra na subst)"
+      - name: player_name
+        description: "Nome do jogador principal"
+      - name: assist_player_id
+        description: "ID da assistência / quem sai na substituição. Frequentemente NULL"
+      - name: assist_player_name
+        description: "Nome da assistência / quem sai"
+      - name: event_type
+        description: "Tipo do evento: 'Goal' | 'Card' | 'subst' | 'Var'"
+      - name: event_detail
+        description: "Detalhe (ex: 'Normal Goal', 'Yellow Card', 'Substitution 1', 'Penalty')"
+      - name: event_comments
+        description: "Comentário livre da API. Frequentemente NULL"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_fixture_lineups
+    description: "Flatten do raw_futebol_fixture_lineups (nível time). 2 linhas por (fixture, fase) — formation/coach de cada time; grain (fixture_id, lineup_phase, team_id). lineup_phase distingue confirmed (~T-30min) de real (pós-jogo); fact_fixture_lineups faz dedup latest-wins por loaded_at (real vence confirmed)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - lineup_phase
+              - team_id
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: lineup_phase
+        description: "'confirmed' (escalação ~T-30min) | 'real' (pós-jogo). Parte da chave de staging"
+        tests:
+          - not_null
+      - name: team_id
+        description: "ID do time do bloco"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Nome do time do bloco"
+      - name: formation
+        description: "Formação tática (ex: '4-2-3-1')"
+      - name: coach_id
+        description: "ID do técnico"
+      - name: coach_name
+        description: "Nome do técnico"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_fixture_lineups_players
+    description: "Flatten/UNNEST do raw_futebol_fixture_lineups (nível jogador). ~22-30 linhas por (fixture, fase): startXI (is_starter=TRUE) + substitutes (is_starter=FALSE) dos dois times; grain (fixture_id, lineup_phase, player_id) — o teste de unicidade dispara se um jogador aparecer em startXI E substitutes na mesma fase. fact_fixture_lineups_players faz dedup latest-wins por loaded_at."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - lineup_phase
+              - player_id
+          config:
+            severity: warn  # grain raw pré-dedup; fact_fixture_lineups_players deduppa latest-wins (1 grupo dup hoje)
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: lineup_phase
+        description: "'confirmed' | 'real'. Parte da chave de staging"
+        tests:
+          - not_null
+      - name: player_id
+        description: "ID do jogador na escalação"
+        tests:
+          - not_null:
+              config:
+                severity: warn  # 4 NULLs hoje (slot de escalação sem player_id na API); fact filtra/deduppa
+      - name: team_id
+        description: "ID do time do jogador"
+      - name: team_name
+        description: "Nome do time do jogador"
+      - name: is_starter
+        description: "TRUE se titular (startXI); FALSE se banco (substitutes)"
+      - name: player_slot
+        description: "Índice do jogador no array da API (WITH OFFSET) — preserva a ordem dentro de startXI/substitutes"
+      - name: player_name
+        description: "Nome do jogador"
+      - name: shirt_number
+        description: "Número da camisa"
+      - name: position
+        description: "Posição na escalação (ex: 'G', 'D', 'M', 'F')"
+      - name: grid
+        description: "Coordenada tática 'linha:coluna' (ex: '1:1'). Quase sempre NULL no banco"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_fixture_statistics
+    description: "Flatten + pivot do raw_futebol_fixture_statistics. 2 linhas por fixture (mandante/visitante); grain (fixture_id, team_id). Pivota o array statistics[{type,value}] em colunas tipadas (SAFE_CAST; ANY_VALUE() tolera 'type' duplicado no array). Backbone do fact_fixture_stats (Poisson/value); junta fact_fixtures p/ competition/season/date_utc e rótulo home/away."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - team_id
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: team_id
+        description: "ID do time do bloco de estatística"
+        tests:
+          - not_null
+      - name: team_name
+        description: "Nome do time do bloco"
+      - name: shots_on_goal
+        description: "Chutes no gol"
+      - name: shots_off_goal
+        description: "Chutes para fora"
+      - name: total_shots
+        description: "Total de finalizações"
+      - name: blocked_shots
+        description: "Finalizações bloqueadas"
+      - name: shots_insidebox
+        description: "Finalizações dentro da área"
+      - name: shots_outsidebox
+        description: "Finalizações de fora da área"
+      - name: fouls
+        description: "Faltas cometidas"
+      - name: corner_kicks
+        description: "Escanteios"
+      - name: offsides
+        description: "Impedimentos"
+      - name: ball_possession
+        description: "Posse de bola % (o '%' é removido antes do cast)"
+      - name: yellow_cards
+        description: "Cartões amarelos"
+      - name: red_cards
+        description: "Cartões vermelhos"
+      - name: goalkeeper_saves
+        description: "Defesas do goleiro"
+      - name: total_passes
+        description: "Total de passes"
+      - name: passes_accurate
+        description: "Passes certos"
+      - name: passes_pct
+        description: "Precisão de passe % (o '%' é removido antes do cast)"
+      - name: expected_goals
+        description: "xG fornecido pela própria API-Football v3 (FLOAT)"
+      - name: goals_prevented
+        description: "Gols evitados (métrica de goleiro da API v3, FLOAT)"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_fixture_player_stats
+    description: "Flatten do raw_futebol_fixture_player_stats (statistics[0], STRUCT único, sem UNNEST). 1 linha por (fixture_id, player_id). rating/passes_accuracy via SAFE_CAST (a API manda string); penalty_committed corrige a grafia errada da API (penalty.commited, 1 't'). Backbone de player props; fact_fixture_player_stats faz latest-wins por (fixture_id, player_id)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - player_id
+          config:
+            severity: warn  # grain raw pré-dedup; fact_fixture_player_stats deduppa latest-wins (7 grupos dup hoje)
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: player_id
+        description: "ID do jogador"
+        tests:
+          - not_null
+      - name: team_id
+        description: "ID do time do jogador"
+      - name: team_name
+        description: "Nome do time do jogador"
+      - name: player_name
+        description: "Nome do jogador"
+      - name: player_photo
+        description: "URL da foto do jogador"
+      - name: minutes
+        description: "Minutos jogados"
+      - name: shirt_number
+        description: "Número da camisa"
+      - name: position
+        description: "Posição (ex: 'G', 'D', 'M', 'F')"
+      - name: rating
+        description: "Nota da partida (FLOAT; SAFE_CAST de string '6.3')"
+      - name: is_captain
+        description: "TRUE se capitão"
+      - name: is_substitute
+        description: "TRUE se entrou do banco"
+      - name: offsides
+        description: "Impedimentos do jogador"
+      - name: shots_total
+        description: "Total de finalizações"
+      - name: shots_on
+        description: "Finalizações no gol"
+      - name: goals_total
+        description: "Gols marcados"
+      - name: goals_conceded
+        description: "Gols sofridos (goleiro)"
+      - name: assists
+        description: "Assistências"
+      - name: saves
+        description: "Defesas (goleiro)"
+      - name: passes_total
+        description: "Total de passes"
+      - name: passes_key
+        description: "Passes decisivos"
+      - name: passes_accuracy
+        description: "Precisão de passe (INT; SAFE_CAST de string)"
+      - name: tackles_total
+        description: "Desarmes"
+      - name: tackles_blocks
+        description: "Bloqueios"
+      - name: interceptions
+        description: "Interceptações"
+      - name: duels_total
+        description: "Duelos disputados"
+      - name: duels_won
+        description: "Duelos ganhos"
+      - name: dribbles_attempts
+        description: "Dribles tentados"
+      - name: dribbles_success
+        description: "Dribles bem-sucedidos"
+      - name: dribbles_past
+        description: "Vezes que foi driblado"
+      - name: fouls_drawn
+        description: "Faltas sofridas"
+      - name: fouls_committed
+        description: "Faltas cometidas (grafia certa, 2 't')"
+      - name: yellow_cards
+        description: "Cartões amarelos"
+      - name: red_cards
+        description: "Cartões vermelhos"
+      - name: penalty_won
+        description: "Pênaltis sofridos"
+      - name: penalty_committed
+        description: "Pênaltis cometidos (corrige a grafia errada da API: penalty.commited)"
+      - name: penalty_scored
+        description: "Pênaltis convertidos"
+      - name: penalty_missed
+        description: "Pênaltis perdidos"
+      - name: penalty_saved
+        description: "Pênaltis defendidos (goleiro)"
+      - name: loaded_at
+        description: "Timestamp ISO UTC do extractor"
+
+  - name: stg_futebol_odds
+    description: "Flatten + UNNEST 2× (bets→values) do raw_futebol_odds — alimenta fact_odds_snapshot → o motor de de-vig/EV. Grain lógico (fixture_id, bookmaker_id, market_id, outcome_label, collection_window), MAS a API repete linhas por design — SEM teste de unicidade aqui (o dedup acontece em fact_odds_snapshot, mesmo padrão de stg_futebol_injuries). Mantém TODOS os mercados/casas e odds raw/NULL; o afunilamento p/ os 8 mercados-alvo e o filtro odd_decimal>1.0 são no fato."
+    columns:
+      - name: fixture_id
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: bookmaker_id
+        description: "ID da casa (4 = Pinnacle/sharp de referência, 8 = Bet365...)"
+        tests:
+          - not_null
+      - name: market_id
+        description: "ID do mercado (bet.id): 1=Match Winner, 4=Asian Handicap, 5=Goals O/U, 6=O/U 1st Half, 7=HT/FT, 8=BTTS, 10=Exact Score, 12=Double Chance..."
+        tests:
+          - not_null
+      - name: outcome_label
+        description: "Rótulo do outcome (value) — já embute a linha do mercado (ex: 'Over 2.5', 'Home -0.5', '0:0'); (market_id, outcome_label) é único por (fixture, casa, janela)"
+        tests:
+          - not_null
+      - name: odd_decimal
+        description: "Odd decimal (FLOAT64; SAFE_CAST de STRING). Pode ser NULL no staging — o filtro >1.0 é aplicado em fact_odds_snapshot"
+      - name: league_id
+        description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo). Base do competition"
+      - name: season
+        description: "Ano da temporada"
+      - name: collection_window
+        description: "Janela da coleta: 't24h' (abertura ~24h antes) | 't1h' (perto do fechamento)"
+      - name: collection_timestamp
+        description: "TIMESTAMP (UTC) da coleta — chave de partição (DATE) no fato"
+      - name: kickoff_utc
+        description: "TIMESTAMP UTC do kickoff (TIMESTAMP_SECONDS do unix) — base de minutes_to_kickoff"
+      - name: api_update
+        description: "TIMESTAMP da última atualização das odds na API (campo `update`)"
+      - name: bookmaker_name
+        description: "Nome da casa (cluster key no fato)"
+      - name: market_name
+        description: "Nome do mercado (bet.name)"
       - name: loaded_at
         description: "Timestamp ISO UTC do extractor"

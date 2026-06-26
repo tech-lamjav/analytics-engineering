@@ -2,17 +2,27 @@
     description='Stage 3/3C: 360 COM vs SEM teammate stats, line crossing, and signal strength per daily trigger'
 ) }}
 
-WITH trigger_team_season_games AS (
+-- Conjunto de triggers DISTINTO (1 linha por jogador/time). Em back-to-back o
+-- mesmo trigger aparece em 2 jogos do slate; sem este DISTINCT o join abaixo
+-- emitia cada jogo histórico 2x e dobrava jogos_com/jogos_sem.
+WITH triggers AS (
+    SELECT DISTINCT
+        trigger_player_id,
+        trigger_team_id
+    FROM {{ ref('int_daily_triggers') }}
+),
+
+trigger_team_season_games AS (
     SELECT
         tr.trigger_player_id,
         tr.trigger_team_id,
         tg.game_id,
         tg.game_date
-    FROM {{ ref('int_daily_triggers') }} tr
+    FROM triggers tr
     INNER JOIN {{ ref('int_games_teams_pilled') }} tg
         ON tg.team_id = tr.trigger_team_id
     WHERE
-        tg.game_date >= '2025-10-01'
+        tg.game_date >= '{{ var('nba_season', 2025) }}-10-01'
         AND tg.game_date < CURRENT_DATE('America/Sao_Paulo')
         AND tg.win_loss IS NOT NULL
 ),
@@ -27,7 +37,7 @@ trigger_played_games AS (
 ),
 
 sem_dates AS (
-    SELECT
+    SELECT DISTINCT
         tsg.trigger_player_id,
         tsg.game_date
     FROM trigger_team_season_games tsg
@@ -41,7 +51,7 @@ sem_dates AS (
 ),
 
 com_dates AS (
-    SELECT
+    SELECT DISTINCT
         tsg.trigger_player_id,
         tsg.game_date
     FROM trigger_team_season_games tsg
@@ -139,6 +149,7 @@ analysis_360 AS (
         AND sem.stat_type = com.stat_type
     WHERE
         sem.jogos_sem >= 3
+        AND com.jogos_com >= 3  -- piso de amostra COM: evita baseline de 1 jogo inflar o gap
         AND (sem.avg_sem - com.avg_com) > 0.5
 ),
 
@@ -193,11 +204,9 @@ with_signals AS (
                 WHEN gm.gap_vs_line_pct > 10 OR (gm.gap_vs_line_pct > 5 AND gm.jogos_sem >= 10) THEN 'MEDIO'
                 WHEN gm.gap_vs_line_pct > 5 AND gm.jogos_sem >= 3 THEN 'FRACO'
             END
-            ELSE CASE
-                WHEN gm.gap_pct > 15 AND gm.jogos_sem >= 5 THEN 'FORTE'
-                WHEN gm.gap_pct > 10 OR (gm.gap_pct > 5 AND gm.jogos_sem >= 10) THEN 'MEDIO'
-                WHEN gm.gap_pct > 5 AND gm.jogos_sem >= 3 THEN 'FRACO'
-            END
+            -- Sem linha de mercado o gap_pct é só lift COM/SEM (informativo),
+            -- não é edge contra a linha: marca distinto p/ não ser lido como aposta.
+            ELSE 'SEM_LINHA'
         END AS signal
     FROM gap_metrics gm
 )

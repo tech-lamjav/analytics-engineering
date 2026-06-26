@@ -3,31 +3,58 @@ version: 2
 models:
   - name: int_game_player_stats_pilled
     description: "Intermediate model that unpivots (pilles) player game statistics from wide to long format. Transforms individual stat columns (points, rebounds, assists, etc.) into a single stat_type and stat_value structure. Only includes games where the player had playing time (minutes > 0)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
+              - stat_type
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
       - name: team_id
         description: "Unique identifier for the player's team"
       - name: game_id
         description: "Unique identifier for the game"
+        tests:
+          - not_null
       - name: game_number
         description: "Sequential game number for the player (1 = most recent game)"
       - name: game_date
         description: "Date when the game was played"
       - name: stat_type
         description: "Type of statistic (e.g., player_points, player_rebounds, player_assists, player_threes, player_blocks, player_steals, player_turnovers, player_points_rebounds, player_points_assists, player_rebounds_assists, player_points_rebounds_assists, player_blocks_steals, player_double_double, player_triple_double, player_minutes, player_offensive_rebounds, player_defensive_rebounds, player_field_goal_percentage, player_free_throw_percentage)"
+        tests:
+          - not_null
       - name: stat_value
         description: "Value of the statistic for this player in this game"
 
   - name: int_games_teams_pilled
     description: "Intermediate model that unpivots game data from a team perspective. Creates one row per team per game (both home and visitor). Identifies back-to-back games (B2B), next scheduled games, and calculates last 5 games results for each team."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - team_id
     columns:
       - name: game_id
         description: "Unique identifier for the game"
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('stg_games')
+                field: game_id
       - name: game_date
         description: "Date when the game was/will be played (converted to DATE type)"
       - name: team_id
         description: "Unique identifier for the team (perspective team)"
+        tests:
+          - not_null
       - name: team_abbreviation
         description: "Three-letter abbreviation for the team"
       - name: team_name
@@ -51,17 +78,27 @@ models:
       - name: is_b2b_game
         description: "Boolean flag indicating if this is a back-to-back game (team played the previous day)"
       - name: is_next_game
-        description: "Boolean flag indicating if this is the team's next scheduled game"
+        description: "Boolean flag indicating if this is the team's next scheduled game (próximo jogo em/após hoje, selecionado pelo par team_id+game_id: no máximo 1 por time)"
       - name: team_last_five_games
         description: "String showing results of last 5 games for the team (e.g., 'V D V V D')"
 
   - name: int_season_averages_general_base
-    description: "Intermediate model that unpivots season average statistics from wide to long format. Transforms individual stat columns into a single stat_type and stat_value structure for easier analysis and comparison across different statistics."
+    description: "Intermediate model that unpivots season average statistics from wide to long format. Transforms individual stat columns into a single stat_type and stat_value structure for easier analysis and comparison across different statistics. ESCOPO: 14 stat_types (limitado pela origem stg_season_averages_general_base). NÃO inclui player_minutes, player_plus_minus, player_offensive_rebounds, player_defensive_rebounds, player_field_goal_percentage nem player_free_throw_percentage; por isso esses 6 stats (que existem no game pilling) não têm baseline de temporada e saem NULL no z-score/estrelas de dim_stat_player."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - stat_type
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
       - name: stat_type
         description: "Type of statistic (e.g., player_points, player_rebounds, player_assists, player_steals, player_blocks, player_turnovers, player_threes, player_points_rebounds, player_points_assists, player_rebounds_assists, player_points_rebounds_assists, player_blocks_steals, player_double_double, player_triple_double)"
+        tests:
+          - not_null
       - name: stat_value
         description: "Average value of the statistic per game for the season"
 
@@ -70,24 +107,47 @@ models:
     columns:
       - name: player_id
         description: "Unique identifier for the player"
+        tests:
+          - not_null
+          - unique
       - name: last_game_text
         description: "Formatted text describing last game (e.g., 'Ultimo Jogo: 3 dias atras' or 'Ultimo Jogo: 1 dia atras')"
 
   - name: int_game_player_stats_not_played
-    description: "Intermediate model that identifies games where players were on the roster but did not play (minutes = 0). Useful for injury analysis and backup player performance when starters are out."
+    description: "Intermediate model that identifies games where players were on the roster but did not play (DNP). Lê de stg_game_player_stats_all (staging SEM o filtro minutes > 0) e mantém apenas NOT did_play (minutes = 0 ou NULL). Útil para análise de lesões e desempenho do backup quando o titular está fora."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - game_id
     columns:
       - name: player_id
         description: "Unique identifier for the player who did not play"
+        tests:
+          - not_null
       - name: team_id
         description: "Unique identifier for the player's team"
+        tests:
+          - not_null
       - name: game_id
         description: "Unique identifier for the game where the player did not play"
+        tests:
+          - not_null
 
   - name: int_daily_triggers
     description: "Injury triggers for games on CURRENT_DATE with Stage 1 fatigue and Stage 2.5 market validation (freshness, participation, out-for-season)."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - trigger_player_id
     columns:
       - name: game_id
         description: "Game on the daily slate"
+        tests:
+          - not_null
       - name: game_date
         description: "Slate date (equals CURRENT_DATE at run time)"
       - name: game_datetime_brasilia
@@ -100,38 +160,70 @@ models:
         description: "Visitor team abbreviation"
       - name: trigger_player_id
         description: "Player with Out/Doubtful/Questionable status"
+        tests:
+          - not_null
       - name: trigger_name
         description: "Trigger player display name"
       - name: trigger_status
         description: "Raw injury status"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['Out', 'Doubtful', 'Questionable']
       - name: trigger_team_id
         description: "Trigger team id"
+        tests:
+          - not_null
       - name: trigger_team_abbr
         description: "Trigger team abbreviation"
       - name: trigger_days_out
         description: "Days since last game with minutes"
       - name: trigger_freshness
         description: "NOVA / RECENTE / EXTENDIDA"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['NOVA', 'RECENTE', 'EXTENDIDA']
       - name: trigger_participation_pct
-        description: "Season games played share for trigger"
+        description: "Season games played share for trigger (numerador escopado pelo time atual do trigger)"
       - name: is_b2b
         description: "Back-to-back flag for trigger team in this game"
       - name: fatigue_level
         description: "ALTA / MEDIA / BAIXA"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['ALTA', 'MEDIA', 'BAIXA']
       - name: is_home
         description: "Trigger team is home"
 
   - name: int_daily_360_analysis
     description: "Stage 3/3C COM vs SEM teammate aggregates, line cross, and signal per validated trigger."
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - game_id
+              - trigger_player_id
+              - backup_player_id
+              - stat_type
     columns:
       - name: game_id
         description: "Slate game id"
+        tests:
+          - not_null
       - name: trigger_player_id
         description: "Injury trigger"
+        tests:
+          - not_null
       - name: backup_player_id
         description: "Teammate with positive SEM lift"
+        tests:
+          - not_null
       - name: stat_type
         description: "Analyzed stat"
+        tests:
+          - not_null
       - name: avg_com
         description: "Average in COM games"
       - name: avg_sem
@@ -140,10 +232,17 @@ models:
         description: "avg_sem - avg_com"
       - name: gap_pct
         description: "Percent gap vs COM"
+      - name: jogos_com
+        description: "Número de jogos COM (titular jogou); piso de 3 aplicado no gate"
+      - name: jogos_sem
+        description: "Número de jogos SEM (titular fora); piso de 3 aplicado no gate"
       - name: line_value
         description: "Latest prop line"
       - name: gap_vs_line_pct
         description: "Gap vs line percent"
       - name: signal
-        description: "FORTE / MEDIO / FRACO"
-
+        description: "FORTE / MEDIO / FRACO quando há linha; SEM_LINHA quando não há prop line (lift COM/SEM apenas informativo, não é edge de mercado)"
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['FORTE', 'MEDIO', 'FRACO', 'SEM_LINHA']

@@ -21,11 +21,11 @@ cleaned_data AS (
         CAST(stat.player.id AS INT64) AS player_id,
         CAST(stat.team.id   AS INT64) AS team_id,
         CAST(stat.game.id   AS INT64) AS game_id,
-        stat.game.date                AS game_date,
-        CAST(stat.pts       AS INTEGER) AS points,
-        CAST(stat.min       AS INTEGER) AS minutes,
-        CAST(stat.reb       AS INTEGER) AS rebounds,
-        CAST(stat.ast       AS INTEGER) AS assists
+        SAFE_CAST(stat.game.date AS DATE) AS game_date,
+        SAFE_CAST(stat.pts       AS INTEGER) AS points,
+        SAFE_CAST(stat.min       AS INTEGER) AS minutes,
+        SAFE_CAST(stat.reb       AS INTEGER) AS rebounds,
+        SAFE_CAST(stat.ast       AS INTEGER) AS assists
     FROM unnested
 )
 

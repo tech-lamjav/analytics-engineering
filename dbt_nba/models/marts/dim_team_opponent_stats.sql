@@ -32,7 +32,8 @@ pullups AS (
 
 tracking_def AS (
     SELECT *,
-        RANK() OVER (PARTITION BY season ORDER BY def_rim_fg_pct ASC) AS def_rim_fg_pct_rank
+        -- NULLS LAST: time sem dado (FG% cedido NULL) nao deve ranquear como melhor defesa (rank 1)
+        RANK() OVER (PARTITION BY season ORDER BY def_rim_fg_pct ASC NULLS LAST) AS def_rim_fg_pct_rank
     FROM {{ ref('stg_team_season_averages_tracking_defense') }}
 )
 

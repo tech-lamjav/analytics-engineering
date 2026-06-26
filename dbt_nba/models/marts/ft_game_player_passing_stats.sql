@@ -7,7 +7,7 @@
 
 WITH advanced AS (
     SELECT * FROM {{ ref('stg_game_player_advanced_stats') }}
-    WHERE season = 2025
+    WHERE season = {{ var('nba_season', 2025) }}
       AND period = 0  -- jogo completo (não quartos)
 )
 
@@ -45,4 +45,3 @@ LEFT JOIN {{ ref('int_games_teams_pilled') }} AS gt
     ON a.game_id = gt.game_id
     AND a.team_id = gt.team_id
     AND gt.game_date <= CURRENT_DATE()
-ORDER BY player_id, game_id

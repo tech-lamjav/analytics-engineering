@@ -18,7 +18,8 @@ SELECT
     gt.is_b2b_game,
     CASE
         WHEN o.line_value IS null THEN null
-        WHEN gps.stat_value >= o.line_value THEN 'over'
+        WHEN gps.stat_value = o.line_value THEN 'push'   -- empate exato (so ocorre em linha inteira): aposta devolvida, nao e 'over'
+        WHEN gps.stat_value > o.line_value THEN 'over'
         WHEN gps.stat_value < o.line_value THEN 'under'
     END AS stat_vs_line,
     CASE
@@ -45,7 +46,7 @@ LEFT JOIN {{ ref('stg_player_props') }} AS o ON gps.player_id = o.player_id
 LEFT JOIN
     {{ ref('int_game_player_stats_not_played') }} AS not_played
     ON gps.player_id = not_played.player_id AND gps.game_id = not_played.game_id AND gps.team_id = not_played.team_id
-WHERE gps.season = 2025
+WHERE gps.season = {{ var('nba_season', 2025) }}
 {% if is_incremental() %}
   AND gps.game_date >= DATE_SUB(CURRENT_DATE('America/Sao_Paulo'), INTERVAL 3 DAY)
 {% endif %}

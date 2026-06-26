@@ -3,13 +3,19 @@ version: 2
 models:
   - name: int_futebol_odds_devig
     description: >
-      Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). De-vig
-      market-aware da Pinnacle na janela de fechamento + edge + PTS_VALOR + n_casas/
-      best/avg + penalidades globais + linha_sharp. 1 linha por (fixture_id, market_id,
-      outcome_side, line_value). FALLBACK DE CONSENSO (S4): quando a Pinnacle não precifica o
-      mercado (BTTS/HT-FT/DC), prob_justa/edge/PTS_VALOR caem na mediana das casas, marcado por
-      valor_fonte=consenso (vs pinnacle); n_outcomes_valor=COALESCE(pin_n_outcomes,cons) p/ o
-      gate do ramo BTTS. COALESCE preserva 1X2/O/U/AH (usam Pinnacle).
+      Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). De-vig market-aware
+      da Pinnacle (bookmaker_id=4) na janela de fechamento (t15m>t1h>t24h) + edge + PTS_VALOR
+      (0-30) + best/avg/n_casas + penalidades globais + linha_sharp. 1 linha por (fixture_id,
+      market_id, outcome_side, line_value). DUPLA CHANCE (S5, market 12): a Pinnacle não precifica
+      DC e as 3 saídas (1X/12/X2) NÃO são exaustivas (somam ~2) -> a prob_justa é DERIVADA do
+      de-vig 1X2 da Pinnacle (dc_devig: P(1X)=P(Home)+P(Draw) etc.), valor_fonte=pinnacle,
+      n_outcomes_valor=3. pinnacle_eval E consensus_devig EXCLUEM o market 12 (cai sempre no
+      dc_devig). FALLBACK DE CONSENSO: mercados que a Pinnacle não precifica (BTTS=8, HT-FT=7) ->
+      prob_justa/edge/PTS_VALOR na MEDIANA das casas, valor_fonte=consenso (estimativa no front);
+      n_outcomes_valor=COALESCE(pin_n_outcomes, dc_n_1x2, cons_n_outcomes). COALESCE preserva
+      1X2/O/U/AH (usam Pinnacle). AH: line_value na ótica do mandante, igual p/ Home/Away (par
+      complementar). booksum_fechamento = Σ(1/odd) (=1+margem; NÃO é a margem) — renomeado de
+      "overround". OBS: linhas inteiras/quarter de O/U(5)/AH(4) são gatadas no mart (push/split).
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -17,33 +23,96 @@ models:
         tests: [not_null]
       - name: outcome_side
         tests: [not_null]
+      - name: best_odd
+        description: "Maior odd decimal entre TODAS as casas na janela de fechamento (preço apostado)."
+        tests: [not_null]
+      - name: avg_odd
+        description: "Média das odds de TODAS as casas na janela (exibição). NÃO é a base do outlier."
+      - name: avg_odd_ex_best
+        description: >
+          Média das odds DEIXANDO DE FORA a própria best_odd (leave-one-out). Base da penalidade
+          pen_odd_outlier. NULL quando só há 1 casa (sem comparação possível -> penalidade FALSE).
+      - name: n_casas
+        description: "Casas distintas na janela (COUNT DISTINCT bookmaker_id)."
+        tests: [not_null]
+      - name: janela_usada
+        description: "Janela de avaliação efetiva (t15m>t1h>t24h, a mais recente disponível)."
+        tests: [not_null]
+      - name: valor_fonte
+        description: "Fonte do de-vig: 'pinnacle' (1X2/O/U/AH + DC derivada) | 'consenso' (BTTS/HT-FT) | NULL (sem de-vig)."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['pinnacle', 'consenso']
+      - name: prob_justa_fechamento
+        description: >
+          Probabilidade justa (de-vig) do outcome em (0,1]. Pinnacle quando há; senão DC derivada
+          do 1X2; senão consenso (mediana). NULL p/ mercados sem de-vig. Cada saída da DC é < 1
+          (a SOMA das 3 saídas DC ~2, não cada uma).
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+      - name: booksum_fechamento
+        description: >
+          Booksum Σ(1/odd) = normalizador = 1 + margem (NÃO é a margem; margem = booksum − 1).
+          Da fonte usada (Pinnacle ou mediana). NULL na DC (prob derivada do 1X2, sem booksum).
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 1.0
+                inclusive: true
+              # warn: o consenso por mediana PODERIA, em teoria, dar booksum<1 (median-arb raro).
+              config:
+                severity: warn
+      - name: edge
+        description: "best_odd * prob_justa_fechamento − 1 (>= -1 por construção, odd>1 e prob>0). NULL sem de-vig."
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: -1
+                inclusive: true
+      - name: n_outcomes_valor
+        description: "Completude do conjunto usado p/ o VALOR (Pinnacle/DC=3/consenso). Base dos gates de completude no mart. NULL sem de-vig."
+      - name: linha_sharp_confirma
+        description: "Movimento sharp: odd Pinnacle do lado caiu t24h->t15m. FALSE (graceful) se faltar Pinnacle nas duas janelas."
+        tests: [not_null]
       - name: pts_valor
         description: "0-30; NULL quando não há de-vig (Pinnacle ausente/incompleto)."
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - fixture_id
-            - market_id
-            - outcome_side
-            - line_value
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - market_id
+              - outcome_side
+              - line_value
 
   - name: int_futebol_corroboracao
     description: >
       Fase 0 — corroboração externa (0-15) por (fixture_id, market_id, outcome_side,
-      line_value): modelo_api_concorda (+7, só 1X2 nesta versão) + linha_sharp_confirma
+      line_value): modelo_api_concorda (+7, só 1X2 nesta versão; base ÚNICA = ARGMAX das
+      probabilidades da API -> no máx. 1 lado concorda por fixture) + linha_sharp_confirma
       (+8, reusado do devig).
     columns:
       - name: fixture_id
+        tests: [not_null]
+      - name: market_id
+        tests: [not_null]
+      - name: outcome_side
         tests: [not_null]
       - name: pts_corroboracao
         tests: [not_null]
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - fixture_id
-            - market_id
-            - outcome_side
-            - line_value
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - market_id
+              - outcome_side
+              - line_value
 
   - name: int_futebol_premissas_1x2
     description: >
@@ -57,14 +126,16 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['Home', 'Draw', 'Away']
+              arguments:
+                values: ['Home', 'Draw', 'Away']
       - name: pts_premissas
         tests: [not_null]
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - fixture_id
-            - outcome
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - outcome
 
   - name: int_futebol_premissas_ou
     description: >
@@ -72,8 +143,9 @@ models:
       (fixture, line_value): Over e Under, por linha L (canônicas 1.5/2.5/3.5 + linhas das
       odds). 7 premissas Over (§12.2, Σ56) + 6 Under (espelhadas, Σ52), com clamp ao teto 55
       (só o Over encosta); penalidade linha_extrema (L<=0,5 ou L>=4,5). Movimento de linha =
-      consenso do mercado (média de todas as casas), distinto da corroboração sharp da Pinnacle.
-      evidencias[]/avisos[] = bullets pro front.
+      consenso do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de todas as casas, não de
+      odds cruas), distinto da corroboração sharp da Pinnacle. last5 (historico_over/under) na
+      MESMA season/competição anteriores ao jogo. evidencias[]/avisos[] = bullets pro front.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -81,17 +153,19 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['Over', 'Under']
+              arguments:
+                values: ['Over', 'Under']
       - name: line_value
         tests: [not_null]
       - name: pts_premissas
         tests: [not_null]
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - fixture_id
-            - line_value
-            - outcome
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - line_value
+              - outcome
 
   - name: int_futebol_premissas_ah
     description: >
@@ -107,17 +181,19 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['Home', 'Away']
+              arguments:
+                values: ['Home', 'Away']
       - name: line_value
         tests: [not_null]
       - name: pts_premissas
         tests: [not_null]
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - fixture_id
-            - line_value
-            - outcome
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - line_value
+              - outcome
 
   - name: int_futebol_premissas_btts
     description: >
@@ -135,11 +211,41 @@ models:
         tests:
           - not_null
           - accepted_values:
-              values: ['Yes', 'No']
+              arguments:
+                values: ['Yes', 'No']
       - name: pts_premissas
         tests: [not_null]
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns:
-            - fixture_id
-            - outcome
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - outcome
+
+  - name: int_futebol_premissas_dc
+    description: >
+      S5 — premissas de contexto do mercado Dupla Chance (market_id 12). 2 linhas por fixture:
+      1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). 4 premissas (§12.5,
+      Σ34, sem clamp): lado_coberto_forte (reusa forca_mismatch/superioridade_tabela do 1X2),
+      equilibrio_defensivo, adversario_limitado (reusa h2h_favoravel do 1X2), invicto_recente.
+      equilibrio_defensivo/invicto_recente sobre jogos FINALIZADOS da MESMA season/competição
+      anteriores ao jogo (season-bounded p/ não sangrar a temporada passada na pausa de off-season).
+      O 12 (sem empate) não é produzido. Penalidade odd_muito_baixa e gate próprio (>=1,25, sem
+      juice) ficam no mart. evidencias[]/avisos[] pro front.
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: outcome
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['1X', 'X2']
+      - name: pts_premissas
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - outcome

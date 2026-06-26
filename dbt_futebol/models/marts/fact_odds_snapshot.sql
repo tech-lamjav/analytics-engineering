@@ -32,12 +32,22 @@ SELECT
     market_name,
     outcome_label,
     -- Linha + lado destrinchados do outcome_label (parse validado vs. dados reais dos 8
-    -- mercados): O/U (5,6) 'Over 2.5'→(Over, 2.5); Asian Handicap (4) 'Home -1.5'/'Away +1.5'
-    -- →(Home/Away, handicap ASSINADO na perspectiva do lado); Match Winner (1)/BTTS (8)
-    -- →(Home/Draw/Away|Yes/No, line NULL); HT/FT (7) 'Home/Away', Double Chance (12)
-    -- 'Home/Draw', Exact Score (10) '1:0' → ambos NULL (composto/placar, sem linha pareável).
+    -- mercados): O/U (5,6) 'Over 2.5'→(Over, 2.5); Asian Handicap (4) 'Home -1.5'/'Away -1.5'
+    -- →(Home/Away, handicap na ÓTICA DO MANDANTE — MESMO sinal/valor p/ Home e Away, então o par
+    -- complementar cai na MESMA line_value/partição de de-vig; confirmado vs. dados reais da
+    -- Pinnacle 2026-06-26: a API NÃO inverte o sinal no lado visitante); Match Winner (1)/BTTS (8)
+    -- →(Home/Draw/Away|Yes/No, line NULL); Double Chance (12) 'Home/Draw'/'Home/Away'/'Draw/Away'
+    -- →(1X/12/X2, line NULL — S5 mapeia explícito p/ o de-vig derivar do 1X2 da Pinnacle);
+    -- HT/FT (7) 'Home/Away', Exact Score (10) '1:0' → ambos NULL (composto/placar, sem par).
     -- Torna O/U e Asian Handicap pareáveis via (market_id, line_value, outcome_side).
-    REGEXP_EXTRACT(outcome_label, r'^(Over|Under|Home|Away|Draw|Yes|No)(?:\s*[+-]?\d|$)') AS outcome_side,
+    CASE
+        WHEN market_id = 12 THEN CASE outcome_label
+            WHEN 'Home/Draw' THEN '1X'
+            WHEN 'Home/Away' THEN '12'
+            WHEN 'Draw/Away' THEN 'X2'
+        END
+        ELSE REGEXP_EXTRACT(outcome_label, r'^(Over|Under|Home|Away|Draw|Yes|No)(?:\s*[+-]?\d|$)')
+    END AS outcome_side,
     SAFE_CAST(REGEXP_EXTRACT(outcome_label, r'^(?:Over|Under|Home|Away)\s*([+-]?\d+(?:\.\d+)?)') AS FLOAT64) AS line_value,
     odd_decimal,
 

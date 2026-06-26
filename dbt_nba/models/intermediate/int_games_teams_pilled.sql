@@ -1,6 +1,8 @@
 {{ config(
     description='Intermediate model that pilled game teams stats'
 ) }}
+-- NOTA (perf): mantido como VIEW de propósito — os workflows NBA constroem marts por descendentes
+-- (ex.: dim_teams+) sem reconstruir este modelo; como TABLE ele ficaria defasado. Ver int_game_player_stats_pilled.
 
 WITH base_data AS (
     SELECT 
@@ -60,7 +62,7 @@ all_team_games AS (
     FROM base_data
 ),
 
--- Identify consecutive games for each team (only for games before 2025-04-07 for B2B analysis)
+-- Jogos consecutivos por time: diferença de dias vs jogo anterior (base do B2B)
 consecutive_games AS (
     SELECT
         game_id,
@@ -83,25 +85,21 @@ b2b_games AS (
         AND previous_game_date IS NOT null  -- Ensure there's a previous game
 ),
 
--- Identify next game for each team (starting from 2025-04-07)
+-- Próximo jogo de cada time = jogo mais cedo em/após hoje (Brasília).
+-- Seleciona pelo PAR (team_id, game_id) via QUALIFY: garante exatamente 1
+-- is_next_game por time e nunca marca a linha do adversário (o IN só por
+-- game_id vazava a flag para o oponente quando ele tinha outro próximo jogo).
 next_games AS (
-    SELECT DISTINCT
+    SELECT
         game_id,
         team_id,
         true AS is_next_game
     FROM all_team_games
-    WHERE
-        game_date >= CURRENT_DATE()
-        AND game_id IN (
-            -- Get the first game for each team on or after 2025-04-07
-            SELECT
-                FIRST_VALUE(game_id) OVER (
-                    PARTITION BY team_id
-                    ORDER BY game_date ASC, game_id ASC
-                ) AS first_game_id
-            FROM all_team_games
-            WHERE game_date >= CURRENT_DATE()
-        )
+    WHERE game_date >= CURRENT_DATE('America/Sao_Paulo')
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY team_id
+        ORDER BY game_date ASC, game_id ASC
+    ) = 1
 ),
 
 -- Final result with B2B and next game flags
@@ -120,7 +118,7 @@ last_five_games AS (
         FROM all_team_games
         WHERE 
             win_loss IS NOT NULL  -- Only completed games
-            AND game_date < CURRENT_DATE()  -- Only past games
+            AND game_date < CURRENT_DATE('America/Sao_Paulo')  -- Only past games
     )
     WHERE row_num <= 5
     GROUP BY team_id

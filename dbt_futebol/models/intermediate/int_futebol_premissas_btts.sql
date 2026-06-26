@@ -29,22 +29,24 @@ tss AS (
 ),
 
 -- Histórico BTTS: ambos marcaram (ou não) nos últimos 5 jogos FINALIZADOS de cada time, na
--- MESMA competição e ANTERIORES ao jogo. 1 array de booleanos por (fixture-alvo, time).
+-- MESMA competição, MESMA season e ANTERIORES ao jogo. 1 array de booleanos por (fixture-alvo,
+-- time). O filtro de season evita sangrar jogos da temporada passada pela pausa de off-season
+-- (consistente com os joins de tss, que já são season-scoped).
 finished AS (
-    SELECT competition_id, kickoff_utc, home_team_id, away_team_id,
+    SELECT competition_id, season, kickoff_utc, home_team_id, away_team_id,
            (goals_home > 0 AND goals_away > 0) AS btts_occurred
     FROM {{ ref('fact_fixtures') }}
     WHERE status_short = 'FT' AND goals_home IS NOT NULL AND goals_away IS NOT NULL
 ),
 team_fixtures_long AS (
-    SELECT home_team_id AS team_id, competition_id, kickoff_utc, btts_occurred FROM finished
+    SELECT home_team_id AS team_id, competition_id, season, kickoff_utc, btts_occurred FROM finished
     UNION ALL
-    SELECT away_team_id, competition_id, kickoff_utc, btts_occurred FROM finished
+    SELECT away_team_id, competition_id, season, kickoff_utc, btts_occurred FROM finished
 ),
 fixture_teams AS (
-    SELECT fixture_id, competition_id, kickoff_utc, home_team_id AS team_id FROM fixtures
+    SELECT fixture_id, competition_id, season, kickoff_utc, home_team_id AS team_id FROM fixtures
     UNION ALL
-    SELECT fixture_id, competition_id, kickoff_utc, away_team_id FROM fixtures
+    SELECT fixture_id, competition_id, season, kickoff_utc, away_team_id FROM fixtures
 ),
 last5 AS (
     SELECT
@@ -54,6 +56,7 @@ last5 AS (
     JOIN team_fixtures_long h
         ON h.team_id        = ft.team_id
        AND h.competition_id = ft.competition_id
+       AND h.season         = ft.season
        AND h.kickoff_utc    < ft.kickoff_utc
     GROUP BY ft.fixture_id, ft.team_id
 ),

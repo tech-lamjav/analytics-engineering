@@ -1,5 +1,5 @@
 {{ config(
-    description='Flatten do raw_futebol_standings. 1 linha por (team_id, requested_league_id, requested_season, snapshot_date). Keywords SQL da API escapadas com crases (`group`, `all`, goals.`for`); renames de clareza (goalsDiff→goals_diff, group→group_name, status→rank_status, description→rank_description, update→standings_updated_at). Filtro defensivo contra linha metadata-only.'
+    description='Flatten do raw_futebol_standings. 1 linha por (team_id, group_name, requested_league_id, requested_season, snapshot_date) — group_name está na chave porque na Copa (league_id=1) o mesmo time aparece 2× no snapshot: no grupo E no "Ranking of third-placed teams". Keywords SQL da API escapadas com crases (`group`, `all`, goals.`for`); renames de clareza (goalsDiff→goals_diff, group→group_name, status→rank_status, description→rank_description, update→standings_updated_at). Filtro defensivo contra linha metadata-only.'
 ) }}
 
 WITH src AS (

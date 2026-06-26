@@ -15,7 +15,6 @@ SELECT
     src.fixture.id              AS fixture_id,
     src.fixture.referee         AS referee,
     src.fixture.timezone        AS timezone,
-    src.fixture.date            AS date_iso,        -- string ISO8601 com offset
     src.fixture.timestamp       AS timestamp_unix,  -- epoch UTC (base do date_utc)
     src.fixture.venue.id        AS venue_id,
     src.fixture.venue.name      AS venue_name,
@@ -25,7 +24,6 @@ SELECT
     src.fixture.status.elapsed  AS status_elapsed,
 
     -- league
-    src.league.season           AS league_season,
     src.league.round            AS round,
 
     -- teams

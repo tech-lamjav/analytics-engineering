@@ -45,8 +45,9 @@ SELECT
 FROM lineups l
 INNER JOIN fixtures f ON l.fixture_id = f.fixture_id
 -- Latest-wins: "real" (pós-jogo, loaded_at maior) vence "confirmed" (~T-30min).
--- Mantém o idioma de dedup de fact_fixture_stats/events.
+-- Mantém o idioma de dedup de fact_fixture_stats/events. Desempate determinístico por
+-- lineup_phase='real' (em loaded_at empatado, "real" vence — regra explícita, tie-stable).
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY l.fixture_id, l.team_id
-    ORDER BY l.loaded_at DESC
+    ORDER BY l.loaded_at DESC, (l.lineup_phase = 'real') DESC
 ) = 1

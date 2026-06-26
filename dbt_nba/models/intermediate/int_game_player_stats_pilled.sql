@@ -1,6 +1,10 @@
 {{ config(
     description='Intermediate model that pilled game player stats'
 ) }}
+-- NOTA (perf): tentou-se materializar como TABLE p/ evitar recomputar o pivot, mas os workflows
+-- NBA (Player-Props/InjuryReport) constroem marts via seleção de DESCENDENTES (stg_player_props+)
+-- sem reconstruir este modelo — só funciona como VIEW (recomputa ao vivo). Manter como view até
+-- os workflows passarem a usar seleção por ancestrais (+dim_daily_opportunities).
 
 WITH base_data AS (
     SELECT * FROM {{ ref('stg_game_player_stats') }}

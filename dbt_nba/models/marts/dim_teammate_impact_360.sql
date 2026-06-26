@@ -25,7 +25,7 @@ trigger_team_season_games AS (
     INNER JOIN {{ ref('int_games_teams_pilled') }} tg
         ON tg.team_id = tr.trigger_team_id
     WHERE
-        tg.game_date >= '2025-10-01'
+        tg.game_date >= '{{ var('nba_season', 2025) }}-10-01'
         AND tg.game_date < CURRENT_DATE()
         AND tg.win_loss IS NOT NULL
 ),
@@ -88,7 +88,7 @@ teammate_minutes AS (
     FROM teammates tm
     INNER JOIN {{ ref('int_games_teams_pilled') }} tg
         ON tg.team_id = tm.trigger_team_id
-        AND tg.game_date >= '2025-10-01'
+        AND tg.game_date >= '{{ var('nba_season', 2025) }}-10-01'
         AND tg.game_date < CURRENT_DATE()
         AND tg.win_loss IS NOT NULL
     INNER JOIN {{ ref('int_game_player_stats_pilled') }} m

@@ -8,13 +8,13 @@ WITH source_data AS (
 
 cleaned_data AS (
     SELECT
-        team.id AS team_id,
+        CAST(team.id AS INT64) AS team_id,
         team.full_name AS team_name,
         team.abbreviation AS team_abbreviation,
         team.conference,
         team.city AS team_city,
-        season,
-        conference_rank,
+        CAST(season AS INT64) AS season,
+        CAST(conference_rank AS INT64) AS conference_rank,
         CAST(wins AS INT64) AS wins,
         CAST(losses AS INT64) AS losses,
         
@@ -515,7 +515,7 @@ cleaned_data AS (
         END AS injury_report_time_offset_hours,
         
         -- Calculate injury report time in Brasília timezone (13:30 local + offset) as STRING
-        FORMAT_TIME('%H:%M:%S', TIME_ADD(TIME(13, 0, 0), INTERVAL 
+        FORMAT_TIME('%H:%M:%S', TIME_ADD(TIME(13, 30, 0), INTERVAL
             CASE team.city
                 -- Pacific Time (PT): -8 UTC standard, -7 UTC DST | Brasil -3 UTC
                 WHEN 'Los Angeles' THEN CASE WHEN (
