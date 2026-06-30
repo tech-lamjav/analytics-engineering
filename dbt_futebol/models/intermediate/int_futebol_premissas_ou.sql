@@ -1,5 +1,5 @@
 {{ config(
-    materialized='view',
+    materialized='table',
     description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de TODAS as casas t24h->t15m; odd crua super-ponderaria o leg de odd alta), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
 ) }}
 

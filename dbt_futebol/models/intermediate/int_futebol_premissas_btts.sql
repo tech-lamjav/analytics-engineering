@@ -1,5 +1,5 @@
 {{ config(
-    materialized='view',
+    materialized='table',
     description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso).'
 ) }}
 

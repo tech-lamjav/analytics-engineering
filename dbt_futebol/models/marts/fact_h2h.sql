@@ -1,6 +1,6 @@
 {{ config(
-    materialized='view',
-    description='View de confronto direto (head-to-head) sobre fact_fixtures — zero chamada extra à API (/fixtures/headtohead é redundante: os jogos já estão na tabela mãe). h2h_pair_key = "menorId-maiorId" (LEAST/GREATEST dos team_ids) identifica o par independente do mando. Só jogos finalizados (FT/AET/PEN — inclui mata-mata da Copa por prorrogação/pênaltis). Demais colunas espelham fact_fixtures 1:1; recriada no run diário logo após fact_fixtures.'
+    materialized='table',
+    description='Tabela de confronto direto (head-to-head) sobre fact_fixtures — zero chamada extra à API (/fixtures/headtohead é redundante: os jogos já estão na tabela mãe). h2h_pair_key = "menorId-maiorId" (LEAST/GREATEST dos team_ids) identifica o par independente do mando. Só jogos finalizados (FT/AET/PEN — inclui mata-mata da Copa por prorrogação/pênaltis). Demais colunas espelham fact_fixtures 1:1; recriada no run diário logo após fact_fixtures.'
 ) }}
 
 SELECT
