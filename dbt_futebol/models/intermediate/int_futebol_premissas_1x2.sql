@@ -75,21 +75,18 @@ xg AS (
 ),
 
 -- ============================================================================
--- TODO(S7): versão SIMPLES de desfalque — conta lesões 'Missing Fixture' por
--- (fixture, time), SEM pesar importância/titularidade. A S7 deve TROCAR este
--- COUNT por um proxy de TITULAR IMPORTANTE (minutos/rating de /players ou
--- Start XI de /fixtures/lineups) p/ que só desfalque relevante dispare
--- `desfalque_adversario` (+8) e a penalidade `desfalque_proprio` (-15).
--- Revisar junto: analytics-engineering/docs/MOTOR_SCORE_CONFIABILIDADE.md §8 (linha S7).
+-- S7: desfalque PESADO POR IMPORTÂNCIA. Conta só TITULAR IMPORTANTE fora
+-- ('Missing Fixture' AND is_important) por (fixture, time). Fonte:
+-- int_futebol_desfalques (injuries x proxy de importância de fact_fixture_player_stats).
+-- 'Questionable' (dúvida) NÃO dispara — conservador, fiel à §12.1 ("desfalque de
+-- titular"); o tipo segue guardado/exibido em int_futebol_desfalques (front).
 -- ============================================================================
-inj_latest AS (
-    SELECT fixture_id, team_id, injury_type
-    FROM {{ ref('fact_injuries_snapshot') }}
-    QUALIFY snapshot_date = MAX(snapshot_date) OVER (PARTITION BY fixture_id)
-),
-inj AS (
-    SELECT fixture_id, team_id, COUNTIF(injury_type = 'Missing Fixture') AS missing_count
-    FROM inj_latest
+desf AS (
+    SELECT
+        fixture_id,
+        team_id,
+        COUNTIF(injury_type = 'Missing Fixture' AND is_important) AS missing_important_count
+    FROM {{ ref('int_futebol_desfalques') }}
     GROUP BY fixture_id, team_id
 ),
 
@@ -130,9 +127,9 @@ metrics AS (
         sx.xg_for_avg      AS s_xg_for,
         ox.xg_against_avg  AS o_xg_against,
 
-        -- desfalques (versão simples — ver TODO(S7))
-        COALESCE(si.missing_count, 0) AS s_missing,
-        COALESCE(oi.missing_count, 0) AS o_missing,
+        -- desfalques pesados por importância (S7): só titular importante fora conta
+        COALESCE(si.missing_important_count, 0) AS s_missing,
+        COALESCE(oi.missing_important_count, 0) AS o_missing,
 
         -- tabela (superioridade_tabela)
         ss.rank                                   AS s_rank,
@@ -154,8 +151,8 @@ metrics AS (
     LEFT JOIN standings_latest os ON os.team_id = o.o_team_id AND os.season = o.season AND os.league_id = o.competition_id
     LEFT JOIN xg sx   ON sx.fixture_id = o.fixture_id AND sx.team_id = o.s_team_id
     LEFT JOIN xg ox   ON ox.fixture_id = o.fixture_id AND ox.team_id = o.o_team_id
-    LEFT JOIN inj si  ON si.fixture_id = o.fixture_id AND si.team_id = o.s_team_id
-    LEFT JOIN inj oi  ON oi.fixture_id = o.fixture_id AND oi.team_id = o.o_team_id
+    LEFT JOIN desf si  ON si.fixture_id = o.fixture_id AND si.team_id = o.s_team_id
+    LEFT JOIN desf oi  ON oi.fixture_id = o.fixture_id AND oi.team_id = o.o_team_id
     LEFT JOIN h2h hh  ON hh.fixture_id = o.fixture_id AND hh.outcome = o.outcome
 ),
 
@@ -236,7 +233,7 @@ SELECT
               FORMAT('%.0f%% dos pontos como mandante', pct_pts_home),
               FORMAT('%.0f%% de aproveitamento como visitante', aprov_fora)), NULL),
         IF(desfalque_adversario,
-           FORMAT('adversário com %d desfalque(s) e time completo', o_missing), NULL),
+           FORMAT('adversário com %d titular(es) importante(s) fora e time completo', o_missing), NULL),
         IF(superioridade_tabela, 'claramente superior na tabela', NULL),
         IF(forma, FORMAT('%d vitórias nos últimos 5 jogos', n_wins_last5), NULL),
         IF(h2h_favoravel,
@@ -247,7 +244,7 @@ SELECT
     ARRAY(SELECT a FROM UNNEST([
         IF(pick_empate, '⚠ empate é a saída mais difícil de prever (−10)', NULL),
         IF(desfalque_proprio,
-           FORMAT('⚠ time desfalcado: %d jogador(es) fora (−15)', s_missing), NULL)
+           FORMAT('⚠ desfalcado: %d titular(es) importante(s) fora (−15)', s_missing), NULL)
     ]) AS a WHERE a IS NOT NULL) AS avisos,
 
     CURRENT_TIMESTAMP() AS dbt_loaded_at

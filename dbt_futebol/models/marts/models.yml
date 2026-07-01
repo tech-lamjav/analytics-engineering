@@ -1109,12 +1109,14 @@ models:
       (/predictions) — 1 linha por fixture. Probabilidades 1X2 (prob_*_pct), vencedor/
       placar/conselho previstos e comparação de força home vs away (comparison_* = form/
       att/def/poisson/h2h/goals/total). Uso: avaliar se um modelo próprio bate a API
-      consistentemente (= edge real); NÃO é produto. FORWARD-ONLY: o raw acumula no GCS
-      (1 arquivo/fixture) e o rebuild full lê tudo. Self-contained: competition vem de
-      league_id, sem joins. Particionada por collection_date (=DATE(collection_timestamp))
-      e clusterizada por fixture_id. minutes_to_kickoff = lead exato da captura. Dedup
-      latest-wins por fixture_id. Brasileirão (71) + Copa do Mundo (1) 2026 (ambos
-      coverage.predictions=TRUE).
+      consistentemente (= edge real) + corroboração `modelo_api_concorda` do Motor de Score;
+      NÃO é produto. FORWARD-ONLY: o raw acumula no GCS (1 arquivo por fixture×janela×dia,
+      date-stampado — janela 'daily' varre jogos futuros 1x/dia até 14d + 't2h' perto do jogo)
+      e o rebuild full lê tudo. Self-contained: competition vem de league_id, sem joins.
+      Particionada por collection_date (=DATE(collection_timestamp)) e clusterizada por
+      fixture_id. minutes_to_kickoff = lead exato da captura. Dedup latest-wins por fixture_id
+      (ORDER BY loaded_at DESC) → o snapshot mais fresco vence. Brasileirão (71) + Copa do
+      Mundo (1) 2026 (ambos coverage.predictions=TRUE).
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -1151,12 +1153,12 @@ models:
         tests:
           - not_null
       - name: collection_window
-        description: "Janela da coleta: 't2h' (~2h antes do kickoff)"
+        description: "Janela da coleta: 'daily' (varredura diária de jogos futuros, ~2h–14d) | 't2h' (refresh perto do kickoff)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['t2h']
+                values: ['t2h', 'daily']
       - name: collection_timestamp
         description: "TIMESTAMP (UTC) exato da coleta da previsão"
         tests:

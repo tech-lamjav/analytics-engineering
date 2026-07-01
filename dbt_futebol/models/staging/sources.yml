@@ -446,15 +446,18 @@ sources:
       - name: raw_futebol_predictions
         description: >
           Previsão pré-jogo do algoritmo da própria API-Football (/predictions) — BASELINE
-          de comparação p/ avaliar um modelo próprio (não é produto). FORWARD-ONLY, 1 janela
-          (T-2h), 1 LINHA por fixture (1 previsão/jogo): predictions/comparison aninhados
+          de comparação p/ avaliar um modelo próprio (não é produto) + fonte da corroboração
+          `modelo_api_concorda` do Motor de Score. FORWARD-ONLY, 2 janelas date-stampadas
+          ("daily" = varre jogos NS futuros ~2h–14d, 1x/dia; "t2h" = refresh perto do jogo),
+          1 LINHA por fixture (1 previsão/jogo): predictions/comparison aninhados
           (flatten por dot-access em stg_futebol_predictions, sem UNNEST). 1 arquivo por
-          fixture: raw_futebol_predictions_{fixture}.json (skip-if-exists = 1 captura/jogo);
+          (fixture, janela, dia): raw_futebol_predictions_{fixture}_{janela}_{YYYY-MM-DD}.json
+          (skip-if-exists por DIA; o fato dedup latest-wins por loaded_at → snapshot mais fresco);
           o raw acumula no GCS e o rebuild full lê tudo. Percentuais ("45%") e linhas de gol
           ("-1.5") vêm STRING (cast em stg); collection_timestamp ISO→TIMESTAMP;
           kickoff_timestamp unix INT64. Brasileirão (71) + Copa do Mundo (1) 2026 (ambos
           coverage.predictions=TRUE). Arquivos:
-          gs://smartbetting-landingzone/futebol/predictions/raw_futebol_predictions_{fixture}.json.
+          gs://smartbetting-landingzone/futebol/predictions/raw_futebol_predictions_{fixture}_{janela}_{date}.json.
         external:
           # Documentação apenas — external table criada por
           # data-engineering/scripts/futebol/create_external_tables.py
@@ -469,7 +472,7 @@ sources:
           - name: season
             description: "Ano da temporada"
           - name: collection_window
-            description: "Janela da coleta: 't2h' (~2h antes do kickoff)."
+            description: "Janela da coleta: 'daily' (varredura diária de jogos futuros, ~2h–14d) | 't2h' (refresh perto do kickoff)."
           - name: collection_timestamp
             description: "TIMESTAMP (UTC) do momento da coleta — chave de partição no fato (DATE dela)."
           - name: kickoff_timestamp

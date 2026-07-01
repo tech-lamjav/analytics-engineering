@@ -114,11 +114,89 @@ models:
               - outcome_side
               - line_value
 
+  - name: int_futebol_player_importance
+    description: >
+      S7 — proxy de IMPORTÂNCIA de jogador (minutos x titularidade) p/ pesar desfalques no
+      1X2. 1 linha por (player_id, competition_id), pooling todas as seasons (atributo estável,
+      robusto na pausa FIFA de 2026). Fonte: fact_fixture_player_stats (jogos FT). is_important =
+      total_minutes >= 450 (~5 jogos cheios) E start_share >= 0.5. Jogador sem stats (contratação
+      nova / Copa) não aparece -> is_important FALSE no consumidor. Thresholds tunáveis (§13).
+    columns:
+      - name: player_id
+        tests: [not_null]
+      - name: competition_id
+        tests: [not_null]
+      - name: start_share
+        description: "Fração das aparições em que começou jogando (starts/games), 0-1. NULL se games=0."
+        tests:
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 1
+                inclusive: true
+      - name: is_important
+        description: "Titular regular (total_minutes>=450 AND start_share>=0.5). Base do desfalque pesado por importância."
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - player_id
+              - competition_id
+
+  - name: int_futebol_desfalques
+    description: >
+      S7 — desfalques por (fixture, time, jogador) com TIPO (Missing Fixture/Questionable) +
+      flag is_important. Artefato do aceite ("lista por time com tipo fora/dúvida e flag
+      titular sim/não"). Snapshot mais recente por fixture; 1 linha por (fixture, team, player)
+      preferindo Missing Fixture a Questionable (guard de double-count poll x season-log);
+      join ao proxy por (player_id, competition_id = league_id) — por player+competição (lida
+      com transferências). is_important COALESCE FALSE (degradação graciosa). Consumido por
+      int_futebol_premissas_1x2 (só Missing Fixture AND is_important dispara). Só Brasileirão.
+    columns:
+      - name: fixture_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('fact_fixtures')
+                field: fixture_id
+              config:
+                severity: warn
+      - name: team_id
+        tests: [not_null]
+      - name: player_id
+        tests:
+          - not_null
+          - relationships:
+              arguments:
+                to: ref('dim_players')
+                field: player_id
+              config:
+                severity: warn
+      - name: injury_type
+        description: "'Missing Fixture' (fora) | 'Questionable' (dúvida). Só Missing Fixture dispara o desfalque."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Missing Fixture', 'Questionable']
+      - name: is_important
+        tests: [not_null]
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - team_id
+              - player_id
+
   - name: int_futebol_premissas_1x2
     description: >
       S1 — premissas de contexto do mercado Resultado (1X2). 3 linhas por fixture
       (Home/Draw/Away). 7 premissas (§12.1) + penalidades pick_empate/desfalque_proprio
-      + evidencias[]/avisos[]. desfalque na versão simples (ver TODO(S7) no SQL).
+      + evidencias[]/avisos[]. desfalque pesado por importância (S7): só titular importante
+      fora (Missing Fixture AND is_important, via int_futebol_desfalques) dispara.
     columns:
       - name: fixture_id
         tests: [not_null]
