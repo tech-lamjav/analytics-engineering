@@ -10,6 +10,7 @@ SELECT
     CASE requested_league_id
         WHEN 71 THEN 'brasileirao'
         WHEN 1  THEN 'copa_mundo'
+        WHEN 72 THEN 'serie_b'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS competition_id,

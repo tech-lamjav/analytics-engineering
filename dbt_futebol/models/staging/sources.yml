@@ -9,7 +9,7 @@ sources:
       - name: raw_futebol_leagues
         description: >
           1 linha por (league_id, season) requisitada. Cobre Brasileirão (id=71)
-          2024/2025/2026 e Copa do Mundo (id=1) 2026. Arquivos:
+          2024/2025/2026, Copa do Mundo (id=1) 2026 e Série B (id=72) 2024/2025/2026. Arquivos:
           gs://smartbetting-landingzone/futebol/leagues/raw_futebol_leagues_current.json
           (ano corrente, diário) + raw_futebol_leagues_backfill.json (anos anteriores, one-shot).
         external:
@@ -83,7 +83,7 @@ sources:
       - name: raw_futebol_fixtures
         description: >
           Tabela mãe — 1 linha por fixture (jogo) requisitada. Cobre Brasileirão (id=71)
-          2024/2025/2026 e Copa do Mundo (id=1) 2026. fixture_id destrava os endpoints
+          2024/2025/2026, Copa do Mundo (id=1) 2026 e Série B (id=72) 2024/2025/2026. fixture_id destrava os endpoints
           de jogo (stats/events/lineups/player_stats — subtasks 5-8). Arquivos:
           gs://smartbetting-landingzone/futebol/fixtures/raw_futebol_fixtures_current.json
           (ano corrente, diário) + raw_futebol_fixtures_backfill.json (anos anteriores, one-shot).
@@ -367,7 +367,7 @@ sources:
           o mesmo arquivo (idempotente). snapshot_date é a data da coleta (chave de partição em
           fact_injuries_snapshot). type ∈ {Missing Fixture, Questionable}; reason é texto livre
           (inclui suspensões). Schema explícito (type/reason STRING aninhados em player; fixture.date ISO→TIMESTAMP).
-          ⚠️ Só Brasileirão (71) tem coverage.injuries=TRUE; Copa do Mundo (1) fica fora. Arquivos:
+          ⚠️ Só Brasileirão (71) tem coverage.injuries=TRUE; Copa do Mundo (1) e Série B (72) ficam fora. Arquivos:
           gs://smartbetting-landingzone/futebol/injuries/raw_futebol_injuries_{current|backfill}_{YYYY-MM-DD}.json.
         external:
           # Documentação apenas — external table criada por
@@ -405,7 +405,7 @@ sources:
           (skip-if-exists = 1 snapshot por janela). Guarda TODAS as casas/mercados; o
           afunilamento p/ os 8 mercados-alvo é no fact_odds_snapshot. odd/value vêm STRING
           (cast em stg); collection_timestamp/api_update ISO→TIMESTAMP; kickoff_timestamp
-          unix INT64. Brasileirão (71) + Copa do Mundo (1) 2026 (ambos coverage.odds=TRUE). Arquivos:
+          unix INT64. Brasileirão (71) + Copa do Mundo (1) + Série B (72) 2026 (todos coverage.odds=TRUE). Arquivos:
           gs://smartbetting-landingzone/futebol/odds/raw_futebol_odds_{fixture}_{t24h|t1h}.json.
         external:
           # Documentação apenas — external table criada por
@@ -417,7 +417,7 @@ sources:
           - name: fixture_id
             description: "ID do jogo na API-Football (FK p/ fact_fixtures). N linhas por (fixture, janela)."
           - name: league_id
-            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo). Base do competition."
+            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B). Base do competition."
           - name: season
             description: "Ano da temporada"
           - name: collection_window
@@ -455,8 +455,8 @@ sources:
           (skip-if-exists por DIA; o fato dedup latest-wins por loaded_at → snapshot mais fresco);
           o raw acumula no GCS e o rebuild full lê tudo. Percentuais ("45%") e linhas de gol
           ("-1.5") vêm STRING (cast em stg); collection_timestamp ISO→TIMESTAMP;
-          kickoff_timestamp unix INT64. Brasileirão (71) + Copa do Mundo (1) 2026 (ambos
-          coverage.predictions=TRUE). Arquivos:
+          kickoff_timestamp unix INT64. Brasileirão (71) + Copa do Mundo (1) + Série B (72)
+          2026 (todos coverage.predictions=TRUE). Arquivos:
           gs://smartbetting-landingzone/futebol/predictions/raw_futebol_predictions_{fixture}_{janela}_{date}.json.
         external:
           # Documentação apenas — external table criada por
@@ -468,7 +468,7 @@ sources:
           - name: fixture_id
             description: "ID do jogo na API-Football (FK p/ fact_fixtures). 1 linha por fixture."
           - name: league_id
-            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo). Base do competition."
+            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B). Base do competition."
           - name: season
             description: "Ano da temporada"
           - name: collection_window

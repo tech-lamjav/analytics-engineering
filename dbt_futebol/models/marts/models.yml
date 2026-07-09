@@ -15,7 +15,7 @@ models:
               - season_year
     columns:
       - name: league_id
-        description: "ID da liga na API-Football (71 = Brasileirão Série A, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão Série A, 1 = Copa do Mundo, 72 = Brasileirão Série B)"
         tests:
           - not_null
       - name: season_year
@@ -136,7 +136,7 @@ models:
       endpoints de jogo (stats/events/lineups/player_stats, subtasks 5-8). Derivada de
       /fixtures?league=&season= (espinha: fixture, league, teams, goals, score).
       Particionada por DATE(date_utc) em UTC e clusterizada por (competition, season,
-      home_team_id). Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+      home_team_id). Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026 e Série B (72) 2024/25/26.
     columns:
       - name: fixture_id
         description: "ID do jogo na API-Football (chave primária; destrava endpoints de jogo)"
@@ -144,9 +144,9 @@ models:
           - not_null
           - unique
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado de requested_league_id; cluster key)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de requested_league_id; cluster key)"
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
         description: "Ano da temporada requisitada (cluster key)"
       - name: round
@@ -216,8 +216,8 @@ models:
       fixture_id (mandante e visitante) — base direta do modelo Poisson e do value
       betting. Particionada por DATE(date_utc) (data do jogo) e clusterizada por
       (fixture_id, team_id). Só jogos finalizados (FT/AET/PEN). expected_goals (xG) e
-      goals_prevented vêm da própria API-Football. Cobre Brasileirão (71) 2024/25/26 e
-      Copa do Mundo (1) 2026. Testes singulares garantem exatamente 2 linhas/jogo, que o pivot
+      goals_prevented vêm da própria API-Football. Cobre Brasileirão (71) 2024/25/26,
+      Copa do Mundo (1) 2026 e Série B (72) 2024/25/26. Testes singulares garantem exatamente 2 linhas/jogo, que o pivot
       não veio todo NULL (sentinela das strings de `type`, incl. expected_goals/goals_prevented
       em jogos recentes do Brasileirão) e que nenhum fixture do /statistics sumiu do spine
       fact_fixtures (reconciliação, severity warn).
@@ -237,9 +237,9 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
         description: "Ano da temporada (de fact_fixtures)"
       - name: date_utc
@@ -305,7 +305,7 @@ models:
       abertos. Particionada por DATE(date_utc) (data do jogo) e clusterizada por
       (fixture_id, event_type). event_order preserva a ordem cronológica do array da
       API (que não traz id/ordem própria). Só jogos finalizados (FT/AET/PEN). Cobre
-      Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026. O teste de combinação
+      Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026 e Série B (72) 2024/25/26. O teste de combinação
       única (fixture_id, event_order) garante que a ordem dos eventos foi preservada.
     tests:
       - dbt_utils.unique_combination_of_columns:
@@ -323,9 +323,9 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
         description: "Ano da temporada (de fact_fixtures)"
       - name: date_utc
@@ -383,7 +383,7 @@ models:
       team_id). Latest-wins: dedup por (fixture_id, team_id) mantendo o loaded_at mais
       recente — "real" (pós-jogo) vence "confirmed" (~T-30min); lineup_phase mostra qual
       snapshot venceu. Backfill histórico (2024/2025) só tem fase "real" (não dá pra obter
-      a confirmada retroativa). Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+      a confirmada retroativa). Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026 e Série B (72) 2024/25/26.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -400,9 +400,9 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
         description: "Ano da temporada (de fact_fixtures)"
       - name: date_utc
@@ -440,7 +440,7 @@ models:
       is_starter separa startXI de substitutes; position/grid/shirt_number do jogador.
       Particionada por DATE(date_utc) e clusterizada por (fixture_id, team_id). Latest-wins:
       dedup por (fixture_id, player_id) mantendo o loaded_at mais recente — "real" vence
-      "confirmed". Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+      "confirmed". Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026 e Série B (72) 2024/25/26.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -457,9 +457,9 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
         description: "Ano da temporada (de fact_fixtures)"
       - name: date_utc
@@ -515,8 +515,8 @@ models:
       ponderada de time. Particionada por DATE(date_utc) (data do jogo) e clusterizada por
       (fixture_id, team_id, player_id). position/minutes vêm do próprio jogo (games.*); a
       tabela é self-contained (não faz join em dim_players). Latest-wins por (fixture_id,
-      player_id). Só jogos finalizados (FT/AET/PEN). Cobre Brasileirão (71) 2024/25/26 e
-      Copa do Mundo (1) 2026. O teste singular garante que o flatten não veio todo NULL
+      player_id). Só jogos finalizados (FT/AET/PEN). Cobre Brasileirão (71) 2024/25/26,
+      Copa do Mundo (1) 2026 e Série B (72) 2024/25/26. O teste singular garante que o flatten não veio todo NULL
       (sentinela de rename de campo aninhado).
     tests:
       - dbt_utils.unique_combination_of_columns:
@@ -534,9 +534,9 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
         description: "Ano da temporada (de fact_fixtures)"
       - name: date_utc
@@ -642,7 +642,7 @@ models:
       Self-contained: competition/season vêm da própria resposta da API (sem join em
       fact_fixtures). Latest-only: particionada por snapshot_date (data da coleta) e
       clusterizada por (team_id, season); reconstruída full a cada run semanal. Dedup por
-      (team_id, liga, season). Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+      (team_id, liga, season). Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026 e Série B (72) 2024/25/26.
       O teste singular garante que o flatten não veio todo NULL.
     tests:
       - dbt_utils.unique_combination_of_columns:
@@ -663,14 +663,14 @@ models:
       - name: team_name
         description: "Nome do time"
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado de requested_league_id)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de requested_league_id)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo']
+                values: ['brasileirao', 'copa_mundo', 'serie_b']
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
         description: "Ano da temporada (cluster key)"
         tests:
@@ -787,7 +787,7 @@ models:
       group_name, team_id) — re-run no mesmo dia não duplica; group_name na chave porque
       na Copa o mesmo time aparece no grupo E no "Ranking of third-placed teams".
       Backfill 2024/2025 = tabela FINAL com snapshot_date do dia da coleta. Cobre
-      Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.
+      Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026 e Série B (72) 2024/25/26.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -811,14 +811,14 @@ models:
             severity: warn
     columns:
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado de requested_league_id)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de requested_league_id)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo']
+                values: ['brasileirao', 'copa_mundo', 'serie_b']
       - name: league_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo; cluster key)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B; cluster key)"
         tests:
           - not_null
       - name: season
@@ -887,7 +887,7 @@ models:
       (team_id, fixture_id). Dedup por (league_id, season, snapshot_date, fixture_id,
       player_id, injury_type, injury_reason) — a API repete linhas exatas; re-run no mesmo
       dia não duplica (idempotente). ⚠️ Coverage: só Brasileirão (71) 2024/25/26 — Copa do
-      Mundo (1) tem coverage.injuries=FALSE e fica fora.
+      Mundo (1) e Série B (72) têm coverage.injuries=FALSE e ficam fora.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -913,12 +913,12 @@ models:
             severity: warn
     columns:
       - name: competition
-        description: "'brasileirao' (derivado de requested_league_id; copa_mundo fora — coverage off)"
+        description: "'brasileirao' (derivado de requested_league_id; copa_mundo e serie_b fora — coverage off)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo']
+                values: ['brasileirao', 'copa_mundo', 'serie_b']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão)"
         tests:
@@ -994,7 +994,7 @@ models:
       mantendo TODAS as casas — Pinnacle (id=4) é a sharp de referência. minutes_to_kickoff
       é o lead exato da captura (a janela é só rótulo). Dedup latest-wins por (fixture_id,
       bookmaker_id, market_id, outcome_label, collection_window). Brasileirão (71) + Copa do
-      Mundo (1) 2026 (ambos coverage.odds=TRUE).
+      Mundo (1) + Série B (72) 2026 (todos coverage.odds=TRUE).
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -1006,14 +1006,14 @@ models:
               - collection_window
     columns:
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado de league_id)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de league_id)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo']
+                values: ['brasileirao', 'copa_mundo', 'serie_b']
       - name: league_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
         tests:
           - not_null
       - name: season
@@ -1116,7 +1116,7 @@ models:
       Particionada por collection_date (=DATE(collection_timestamp)) e clusterizada por
       fixture_id. minutes_to_kickoff = lead exato da captura. Dedup latest-wins por fixture_id
       (ORDER BY loaded_at DESC) → o snapshot mais fresco vence. Brasileirão (71) + Copa do
-      Mundo (1) 2026 (ambos coverage.predictions=TRUE).
+      Mundo (1) + Série B (72) 2026 (todos coverage.predictions=TRUE).
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -1124,14 +1124,14 @@ models:
               - fixture_id
     columns:
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' (derivado de league_id)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de league_id)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo']
+                values: ['brasileirao', 'copa_mundo', 'serie_b']
       - name: league_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
         tests:
           - not_null
       - name: season
