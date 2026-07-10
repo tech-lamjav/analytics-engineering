@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='Dimensão de ligas/temporadas. 1 linha por (league_id, season_year). Cobre Brasileirão (2024/2025/2026), Copa do Mundo (2026) e Série B (2024/2025/2026).'
+    description='Dimensão de ligas/temporadas. 1 linha por (league_id, season_year). Cobre Brasileirão (2024/2025/2026), Copa do Mundo (2026), Série B (2024/2025/2026) e Copa do Brasil (2024/2025/2026).'
 ) }}
 
 SELECT

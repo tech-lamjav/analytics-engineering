@@ -144,7 +144,7 @@ models:
           - not_null
           - unique
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de requested_league_id; cluster key)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado de requested_league_id; cluster key)"
       - name: competition_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
@@ -237,7 +237,7 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado em fact_fixtures)"
       - name: competition_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
@@ -323,7 +323,7 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado em fact_fixtures)"
       - name: competition_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
@@ -400,7 +400,7 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado em fact_fixtures)"
       - name: competition_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
@@ -457,7 +457,7 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado em fact_fixtures)"
       - name: competition_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
@@ -534,7 +534,7 @@ models:
                 to: ref('fact_fixtures')
                 field: fixture_id
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado em fact_fixtures)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado em fact_fixtures)"
       - name: competition_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
       - name: season
@@ -663,14 +663,14 @@ models:
       - name: team_name
         description: "Nome do time"
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de requested_league_id)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado de requested_league_id)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil']
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil)"
       - name: season
         description: "Ano da temporada (cluster key)"
         tests:
@@ -811,12 +811,12 @@ models:
             severity: warn
     columns:
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de requested_league_id)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de requested_league_id; 'copa_do_brasil' nunca ocorre — mata-mata sem standings, WHEN 73 só por uniformidade)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B; cluster key)"
         tests:
@@ -913,12 +913,12 @@ models:
             severity: warn
     columns:
       - name: competition
-        description: "'brasileirao' (derivado de requested_league_id; copa_mundo e serie_b fora — coverage off)"
+        description: "'brasileirao' (derivado de requested_league_id; copa_mundo, serie_b e copa_do_brasil fora — coverage off)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão)"
         tests:
@@ -1006,12 +1006,12 @@ models:
               - collection_window
     columns:
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de league_id)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado de league_id)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
         tests:
@@ -1124,12 +1124,12 @@ models:
               - fixture_id
     columns:
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' (derivado de league_id)"
+        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' (derivado de league_id)"
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B)"
         tests:

@@ -154,6 +154,8 @@ flags AS (
         -- pontos corridos (Brasileirão e Série B — mesma dinâmica de acesso/Z4 com 20 times,
         -- então rank<=6 / rank>=n-3 vale sem mudança; revisar na recalibração por liga) e S em
         -- zona de disputa (G6 ou Z4). Copa -> FALSE (rank é por grupo, proxy não vale).
+        -- Copa do Brasil -> FALSE também (mata-mata sem standings: s_rank/n_teams vêm NULL do
+        -- LEFT JOIN e o COALESCE já derruba; fica fora do IN por decisão, não por acidente).
         -- TODO: refinar com rodada/congestionamento de calendário.
         m.is_favorito AND m.competition IN ('brasileirao', 'serie_b')
             AND COALESCE(m.s_rank <= 6 OR m.s_rank >= m.n_teams - 3, FALSE)     AS sem_rodizio,

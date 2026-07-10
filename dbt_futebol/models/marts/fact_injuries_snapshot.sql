@@ -2,7 +2,7 @@
     materialized='table',
     partition_by={'field': 'snapshot_date', 'data_type': 'date'},
     cluster_by=['team_id', 'fixture_id'],
-    description='Snapshot diário de lesionados/suspensos (/injuries). N linhas por (liga, season, snapshot_date) — 1 por (player, fixture, injury_type, injury_reason). Input de modelagem que a maioria dos modelos públicos ignora: desfalque de peça muda materialmente a previsão. O raw é date-stampado no GCS (1 arquivo/dia, acumula histórico) e o rebuild full lê todos os dias. Self-contained: competition vem de requested_league_id, sem joins. Particionada por snapshot_date, clusterizada por (team_id, fixture_id). Dedup por (league_id, season, snapshot_date, fixture_id, player_id, injury_type, injury_reason) mantendo o loaded_at mais recente — a API repete linhas exatas; re-run no mesmo dia não duplica (idempotente). ⚠️ Coverage: só Brasileirão (71) 2024/25/26 — Copa do Mundo (1) e Série B (72) têm coverage.injuries=FALSE e ficam fora (o WHEN 72 do CASE existe só por uniformidade; nunca terá linhas).'
+    description='Snapshot diário de lesionados/suspensos (/injuries). N linhas por (liga, season, snapshot_date) — 1 por (player, fixture, injury_type, injury_reason). Input de modelagem que a maioria dos modelos públicos ignora: desfalque de peça muda materialmente a previsão. O raw é date-stampado no GCS (1 arquivo/dia, acumula histórico) e o rebuild full lê todos os dias. Self-contained: competition vem de requested_league_id, sem joins. Particionada por snapshot_date, clusterizada por (team_id, fixture_id). Dedup por (league_id, season, snapshot_date, fixture_id, player_id, injury_type, injury_reason) mantendo o loaded_at mais recente — a API repete linhas exatas; re-run no mesmo dia não duplica (idempotente). ⚠️ Coverage: só Brasileirão (71) 2024/25/26 — Copa do Mundo (1), Série B (72) e Copa do Brasil (73) têm coverage.injuries=FALSE e ficam fora (os WHEN 72/73 do CASE existem só por uniformidade; nunca terão linhas).'
 ) }}
 
 WITH injuries AS (
@@ -14,6 +14,7 @@ SELECT
         WHEN 71 THEN 'brasileirao'
         WHEN 1  THEN 'copa_mundo'
         WHEN 72 THEN 'serie_b'
+        WHEN 73 THEN 'copa_do_brasil'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS league_id,
