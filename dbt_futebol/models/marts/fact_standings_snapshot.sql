@@ -2,7 +2,7 @@
     materialized='table',
     partition_by={'field': 'snapshot_date', 'data_type': 'date'},
     cluster_by=['league_id', 'team_id'],
-    description='Snapshot diário da tabela do campeonato (/standings). N linhas por (liga, season, snapshot_date) — 1 por time×grupo (na Copa o time aparece no grupo e no "Ranking of third-placed teams"). Contexto de modelagem (briga pelo G4, rebaixamento, jogo já decidido) e histórico de evolução: o raw é date-stampado no GCS (1 arquivo/dia, acumula), e o rebuild full lê todos os dias. Self-contained: competition vem de requested_league_id, sem joins. Dedup por (league_id, season, snapshot_date, group_name, team_id) mantendo o loaded_at mais recente — re-run no mesmo dia não duplica (idempotente). Backfill 2024/2025 = tabela FINAL com snapshot_date do dia da coleta (standings_updated_at marca a última atualização real na API). Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026 e Série B (72) 2024/25/26. ⚠️ Copa do Brasil (73) fica FORA (mata-mata puro, coverage.standings=FALSE; excluída das tuplas STANDINGS_* do config — o WHEN 73 do CASE existe só por uniformidade; nunca terá linhas).'
+    description='Snapshot diário da tabela do campeonato (/standings). N linhas por (liga, season, snapshot_date) — 1 por time×grupo (na Copa o time aparece no grupo e no "Ranking of third-placed teams"). Contexto de modelagem (briga pelo G4, rebaixamento, jogo já decidido) e histórico de evolução: o raw é date-stampado no GCS (1 arquivo/dia, acumula), e o rebuild full lê todos os dias. Self-contained: competition vem de requested_league_id, sem joins. Dedup por (league_id, season, snapshot_date, group_name, team_id) mantendo o loaded_at mais recente — re-run no mesmo dia não duplica (idempotente). Backfill 2024/2025 = tabela FINAL com snapshot_date do dia da coleta (standings_updated_at marca a última atualização real na API). Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026, Série B (72) 2024/25/26 e CONMEBOL Libertadores (13) 2024/25/26 — na Libertadores a tabela é POR GRUPO (fase de grupos: Group A–H, 32 times, rank 1-4 dentro do grupo; no mata-mata a API serve a tabela final dos grupos congelada; backfill 24/25 idem = tabela final). ⚠️ Copa do Brasil (73) fica FORA (mata-mata puro, coverage.standings=FALSE; excluída das tuplas STANDINGS_* do config — o WHEN 73 do CASE existe só por uniformidade; nunca terá linhas).'
 ) }}
 
 WITH standings AS (
@@ -15,6 +15,7 @@ SELECT
         WHEN 1  THEN 'copa_mundo'
         WHEN 72 THEN 'serie_b'
         WHEN 73 THEN 'copa_do_brasil'
+        WHEN 13 THEN 'libertadores'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS league_id,
