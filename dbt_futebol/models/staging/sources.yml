@@ -10,8 +10,8 @@ sources:
         description: >
           1 linha por (league_id, season) requisitada. Cobre Brasileirão (id=71)
           2024/2025/2026, Copa do Mundo (id=1) 2026, Série B (id=72) 2024/2025/2026,
-          Copa do Brasil (id=73) 2024/2025/2026 e CONMEBOL Libertadores (id=13)
-          2024/2025/2026. Arquivos:
+          Copa do Brasil (id=73) 2024/2025/2026, CONMEBOL Libertadores (id=13)
+          2024/2025/2026 e CONMEBOL Sudamericana (id=11) 2024/2025/2026. Arquivos:
           gs://smartbetting-landingzone/futebol/leagues/raw_futebol_leagues_current.json
           (ano corrente, diário) + raw_futebol_leagues_backfill.json (anos anteriores, one-shot).
         external:
@@ -86,8 +86,8 @@ sources:
         description: >
           Tabela mãe — 1 linha por fixture (jogo) requisitada. Cobre Brasileirão (id=71)
           2024/2025/2026, Copa do Mundo (id=1) 2026, Série B (id=72) 2024/2025/2026,
-          Copa do Brasil (id=73) 2024/2025/2026 e CONMEBOL Libertadores (id=13)
-          2024/2025/2026. fixture_id destrava os endpoints
+          Copa do Brasil (id=73) 2024/2025/2026, CONMEBOL Libertadores (id=13)
+          2024/2025/2026 e CONMEBOL Sudamericana (id=11) 2024/2025/2026. fixture_id destrava os endpoints
           de jogo (stats/events/lineups/player_stats — subtasks 5-8). Arquivos:
           gs://smartbetting-landingzone/futebol/fixtures/raw_futebol_fixtures_current.json
           (ano corrente, diário) + raw_futebol_fixtures_backfill.json (anos anteriores, one-shot).
@@ -372,8 +372,9 @@ sources:
           fact_injuries_snapshot). type ∈ {Missing Fixture, Questionable}; reason é texto livre
           (inclui suspensões). Schema explícito (type/reason STRING aninhados em player; fixture.date ISO→TIMESTAMP).
           ⚠️ Só Brasileirão (71) tem coverage.injuries=TRUE; Copa do Mundo (1), Série B (72),
-          Copa do Brasil (73) e Libertadores (13) ficam fora (Libertadores 2025 FOI TRUE —
-          rechecar 2026 em agosto). Arquivos:
+          Copa do Brasil (73), Libertadores (13) e Sudamericana (11) ficam fora (Libertadores
+          2025 FOI TRUE — rechecar 2026 em agosto; Sudamericana FALSE em 2024/25/26, sem
+          recheck). Arquivos:
           gs://smartbetting-landingzone/futebol/injuries/raw_futebol_injuries_{current|backfill}_{YYYY-MM-DD}.json.
         external:
           # Documentação apenas — external table criada por
@@ -413,8 +414,9 @@ sources:
           (cast em stg); collection_timestamp/api_update ISO→TIMESTAMP; kickoff_timestamp
           unix INT64. Brasileirão (71) + Copa do Mundo (1) + Série B (72) 2026 (todos
           coverage.odds=TRUE); Copa do Brasil (73) e Libertadores (13) ARMADAS em
-          FUTEBOL_ODDS_LEAGUE_IDS desde 2026-07-13 (coverage.odds sazonal de mata-mata —
-          dormentes até a banda t24h: CdB ~31/07, Libertadores 10/08). Arquivos:
+          FUTEBOL_ODDS_LEAGUE_IDS desde 2026-07-13, Sudamericana (11) desde 2026-07-14
+          (coverage.odds sazonal de mata-mata — dormentes até a banda t24h: Sudamericana
+          ~20/07 (R32 21–31/07), CdB ~31/07, Libertadores 10/08). Arquivos:
           gs://smartbetting-landingzone/futebol/odds/raw_futebol_odds_{fixture}_{t24h|t1h}.json.
         external:
           # Documentação apenas — external table criada por
@@ -426,7 +428,7 @@ sources:
           - name: fixture_id
             description: "ID do jogo na API-Football (FK p/ fact_fixtures). N linhas por (fixture, janela)."
           - name: league_id
-            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores). Base do competition."
+            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana). Base do competition."
           - name: season
             description: "Ano da temporada"
           - name: collection_window
@@ -465,8 +467,9 @@ sources:
           o raw acumula no GCS e o rebuild full lê tudo. Percentuais ("45%") e linhas de gol
           ("-1.5") vêm STRING (cast em stg); collection_timestamp ISO→TIMESTAMP;
           kickoff_timestamp unix INT64. Brasileirão (71) + Copa do Mundo (1) + Série B (72)
-          + Copa do Brasil (73) + Libertadores (13) 2026 (todos coverage.predictions=TRUE;
-          na Libertadores a janela daily só alcança as oitavas ~28/07). Arquivos:
+          + Copa do Brasil (73) + Libertadores (13) + Sudamericana (11) 2026 (todos
+          coverage.predictions=TRUE; na Libertadores a janela daily só alcança as oitavas
+          ~28/07; na Sudamericana a R32 de 21–31/07 já está na janela). Arquivos:
           gs://smartbetting-landingzone/futebol/predictions/raw_futebol_predictions_{fixture}_{janela}_{date}.json.
         external:
           # Documentação apenas — external table criada por
@@ -478,7 +481,7 @@ sources:
           - name: fixture_id
             description: "ID do jogo na API-Football (FK p/ fact_fixtures). 1 linha por fixture."
           - name: league_id
-            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores). Base do competition."
+            description: "ID da liga (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana). Base do competition."
           - name: season
             description: "Ano da temporada"
           - name: collection_window

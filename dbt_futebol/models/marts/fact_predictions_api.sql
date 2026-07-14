@@ -2,7 +2,7 @@
     materialized='table',
     partition_by={'field': 'collection_date', 'data_type': 'date'},
     cluster_by=['fixture_id'],
-    description='BASELINE de comparação: previsão pré-jogo do algoritmo da própria API-Football (/predictions) — 1 linha por fixture. Guarda probabilidades 1X2 (prob_*_pct), vencedor/placar/conselho previstos e a comparação de força home vs away (comparison_* = form/att/def/poisson/h2h/goals/total). Uso: avaliar se um modelo próprio bate a API consistentemente (= edge real); NÃO é produto. FORWARD-ONLY: o raw acumula no GCS (1 arquivo por fixture×janela×dia, date-stampado — janela "daily" varre jogos futuros 1x/dia até 14d + "t2h" perto do jogo) e o rebuild full lê tudo. Self-contained: competition vem de league_id, sem joins. Particionada por collection_date (=DATE(collection_timestamp)) e clusterizada por fixture_id. minutes_to_kickoff = lead exato da captura. Dedup latest-wins por fixture_id (QUALIFY ORDER BY loaded_at DESC — load-bearing: escolhe o snapshot mais fresco entre as várias capturas/jogo). Brasileirão (71) + Copa do Mundo (1) + Série B (72) + Copa do Brasil (73) + CONMEBOL Libertadores (13) 2026 (todos coverage.predictions=TRUE; na Copa do Brasil as previsões de mata-mata são reais — validado 2026-07-10, sem o placeholder 45/45/10 visto na Copa do Mundo; na Libertadores a janela daily de 14d só alcança as oitavas ~28/07 — conferir na 1ª captura se vem real ou placeholder).'
+    description='BASELINE de comparação: previsão pré-jogo do algoritmo da própria API-Football (/predictions) — 1 linha por fixture. Guarda probabilidades 1X2 (prob_*_pct), vencedor/placar/conselho previstos e a comparação de força home vs away (comparison_* = form/att/def/poisson/h2h/goals/total). Uso: avaliar se um modelo próprio bate a API consistentemente (= edge real); NÃO é produto. FORWARD-ONLY: o raw acumula no GCS (1 arquivo por fixture×janela×dia, date-stampado — janela "daily" varre jogos futuros 1x/dia até 14d + "t2h" perto do jogo) e o rebuild full lê tudo. Self-contained: competition vem de league_id, sem joins. Particionada por collection_date (=DATE(collection_timestamp)) e clusterizada por fixture_id. minutes_to_kickoff = lead exato da captura. Dedup latest-wins por fixture_id (QUALIFY ORDER BY loaded_at DESC — load-bearing: escolhe o snapshot mais fresco entre as várias capturas/jogo). Brasileirão (71) + Copa do Mundo (1) + Série B (72) + Copa do Brasil (73) + CONMEBOL Libertadores (13) + CONMEBOL Sudamericana (11) 2026 (todos coverage.predictions=TRUE; na Copa do Brasil as previsões de mata-mata são reais — validado 2026-07-10, sem o placeholder 45/45/10 visto na Copa do Mundo; na Libertadores a janela daily de 14d só alcança as oitavas ~28/07; na Sudamericana a R32 de 21–31/07 JÁ está na janela — conferir na 1ª captura de cada uma se vem real ou placeholder).'
 ) }}
 
 WITH predictions AS (
@@ -16,6 +16,7 @@ SELECT
         WHEN 72 THEN 'serie_b'
         WHEN 73 THEN 'copa_do_brasil'
         WHEN 13 THEN 'libertadores'
+        WHEN 11 THEN 'sudamericana'
         ELSE 'unknown'
     END                                              AS competition,
     league_id,

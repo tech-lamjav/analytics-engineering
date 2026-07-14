@@ -13,6 +13,7 @@ SELECT
         WHEN 72 THEN 'serie_b'
         WHEN 73 THEN 'copa_do_brasil'
         WHEN 13 THEN 'libertadores'
+        WHEN 11 THEN 'sudamericana'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS competition_id,

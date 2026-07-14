@@ -156,10 +156,11 @@ flags AS (
         -- zona de disputa (G6 ou Z4). Copa -> FALSE (rank é por grupo, proxy não vale).
         -- Copa do Brasil -> FALSE também (mata-mata sem standings: s_rank/n_teams vêm NULL do
         -- LEFT JOIN e o COALESCE já derruba; fica fora do IN por decisão, não por acidente).
-        -- Libertadores -> FALSE também, mas por outro motivo: ela TEM standings (fase de grupos)
-        -- e o rank é POR GRUPO (1-4), com n_teams contando a season inteira (~32-54) — se entrasse
-        -- no IN, `s_rank <= 6` seria TRUE p/ TODOS os times (+4 de ruído em todo favorito) e no
-        -- mata-mata a tabela congela nos grupos. Fora do IN por decisão, não por acidente.
+        -- Libertadores/Sudamericana -> FALSE também, mas por outro motivo: elas TÊM standings
+        -- (fase de grupos) e o rank é POR GRUPO (1-4), com n_teams contando a season inteira
+        -- (~32-54) — se entrassem no IN, `s_rank <= 6` seria TRUE p/ TODOS os times (+4 de
+        -- ruído em todo favorito) e no mata-mata a tabela congela nos grupos. Fora do IN por
+        -- decisão, não por acidente.
         -- TODO: refinar com rodada/congestionamento de calendário.
         m.is_favorito AND m.competition IN ('brasileirao', 'serie_b')
             AND COALESCE(m.s_rank <= 6 OR m.s_rank >= m.n_teams - 3, FALSE)     AS sem_rodizio,
