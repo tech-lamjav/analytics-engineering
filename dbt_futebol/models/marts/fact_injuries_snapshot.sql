@@ -2,7 +2,7 @@
     materialized='table',
     partition_by={'field': 'snapshot_date', 'data_type': 'date'},
     cluster_by=['team_id', 'fixture_id'],
-    description='Snapshot diário de lesionados/suspensos (/injuries). N linhas por (liga, season, snapshot_date) — 1 por (player, fixture, injury_type, injury_reason). Input de modelagem que a maioria dos modelos públicos ignora: desfalque de peça muda materialmente a previsão. O raw é date-stampado no GCS (1 arquivo/dia, acumula histórico) e o rebuild full lê todos os dias. Self-contained: competition vem de requested_league_id, sem joins. Particionada por snapshot_date, clusterizada por (team_id, fixture_id). Dedup por (league_id, season, snapshot_date, fixture_id, player_id, injury_type, injury_reason) mantendo o loaded_at mais recente — a API repete linhas exatas; re-run no mesmo dia não duplica (idempotente). ⚠️ Coverage: só Brasileirão (71) 2024/25/26 — Copa do Mundo (1), Série B (72), Copa do Brasil (73), Libertadores (13) e Sudamericana (11) têm coverage.injuries=FALSE e ficam fora (os WHEN 72/73/13/11 do CASE existem só por uniformidade; nunca terão linhas). Nota: Libertadores 2025 TEVE coverage.injuries=TRUE — rechecar 2026 em agosto via dim_leagues antes de decidir ligar; Sudamericana FALSE em 2024/25/26 (validado 2026-07-14), exclusão simples sem recheck.'
+    description='Snapshot diário de lesionados/suspensos (/injuries). N linhas por (liga, season, snapshot_date) — 1 por (player, fixture, injury_type, injury_reason). Input de modelagem que a maioria dos modelos públicos ignora: desfalque de peça muda materialmente a previsão. O raw é date-stampado no GCS (1 arquivo/dia, acumula histórico) e o rebuild full lê todos os dias. Self-contained: competition vem de requested_league_id, sem joins. Particionada por snapshot_date, clusterizada por (team_id, fixture_id). Dedup por (league_id, season, snapshot_date, fixture_id, player_id, injury_type, injury_reason) mantendo o loaded_at mais recente — a API repete linhas exatas; re-run no mesmo dia não duplica (idempotente). ⚠️ Coverage: Brasileirão (71) 2024/25/26 E La Liga (140) 2024/2025/2026 (1ª europeia da expansão com injuries=TRUE — probe 2026-07-15; season-log 2026/27 flipa ao iniciar a temporada) — Copa do Mundo (1), Série B (72), Copa do Brasil (73), Libertadores (13) e Sudamericana (11) têm coverage.injuries=FALSE e ficam fora (os WHEN 72/73/13/11 do CASE existem só por uniformidade e nunca terão linhas; o WHEN 140 SIM terá linhas reais). Nota: Libertadores 2025 TEVE coverage.injuries=TRUE — rechecar 2026 em agosto via dim_leagues antes de decidir ligar; Sudamericana FALSE em 2024/25/26 (validado 2026-07-14), exclusão simples sem recheck.'
 ) }}
 
 WITH injuries AS (
@@ -17,6 +17,7 @@ SELECT
         WHEN 73 THEN 'copa_do_brasil'
         WHEN 13 THEN 'libertadores'
         WHEN 11 THEN 'sudamericana'
+        WHEN 140 THEN 'la_liga'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS league_id,
