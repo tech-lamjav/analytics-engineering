@@ -104,3 +104,13 @@ All game times are stored in UTC and converted to Brasília (UTC-3) for display.
 ### CI/CD
 
 GitHub Actions (`.github/workflows/deploy-dbt-docs.yml`) deploys static dbt docs to GitHub Pages on push to master when files under `dbt_nba/` change. Requires `BIGQUERY_SA_KEY` secret with a service account JSON.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub (`tech-lamjav/analytics-engineering`), managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+
+### Domain docs
+
+Multi-context layout: root `CONTEXT-MAP.md` plus per-project `CONTEXT.md`/`docs/adr/` under `dbt_nba/` and `dbt_futebol/` (they're independent domains). See `docs/agents/domain.md`.
