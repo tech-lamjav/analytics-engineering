@@ -161,6 +161,8 @@ flags AS (
         -- (~32-54) — se entrassem no IN, `s_rank <= 6` seria TRUE p/ TODOS os times (+4 de
         -- ruído em todo favorito) e no mata-mata a tabela congela nos grupos. Fora do IN por
         -- decisão, não por acidente.
+        -- Champions League -> FALSE pelo mesmo motivo: fase de liga (36 times, 8 jogos) vira
+        -- mata-mata em fevereiro e a tabela congela; G6/Z3 não modela a dinâmica top-8/9-24.
         -- TODO: refinar com rodada/congestionamento de calendário.
         m.is_favorito AND m.competition IN ('brasileirao', 'serie_b', 'la_liga', 'premier_league')
             AND COALESCE(m.s_rank <= 6 OR m.s_rank >= m.n_teams - 3, FALSE)     AS sem_rodizio,
