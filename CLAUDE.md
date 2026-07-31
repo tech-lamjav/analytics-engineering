@@ -114,3 +114,13 @@ Issues live in GitHub (`tech-lamjav/analytics-engineering`), managed via the `gh
 ### Domain docs
 
 Multi-context layout: root `CONTEXT-MAP.md` plus per-project `CONTEXT.md`/`docs/adr/` under `dbt_nba/` and `dbt_futebol/` (they're independent domains). See `docs/agents/domain.md`.
+
+### Skill adaptations (dbt repo)
+
+No TS/npm toolchain here — translate skill assumptions as follows:
+
+- "Typecheck" → `dbt parse` (fast static check) or `dbt compile --select <model>`.
+- "Run the tests" → `dbt test` (schema + singular tests). For TDD red-green, write a dbt unit test (YAML `unit_tests:` block) or a `tests/assert_*.sql` that fails first.
+- dbt tests assert via SQL against the warehouse by design — that is the test interface here, not a "bypasses the interface" anti-pattern.
+- "Prototype" → `dbt show --inline "..."`, a scratch BigQuery query, or a throwaway Python script. UI prototyping is N/A.
+- Coding standards for review live in `CODING_STANDARDS.md` at the repo root.
