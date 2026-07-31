@@ -128,3 +128,18 @@ No TS/npm toolchain here — translate skill assumptions as follows:
 - dbt tests assert via SQL against the warehouse by design — that is the test interface here, not a "bypasses the interface" anti-pattern.
 - "Prototype" → `dbt show --inline "..."`, a scratch BigQuery query, or a throwaway Python script. UI prototyping is N/A.
 - Coding standards for review live in `CODING_STANDARDS.md` at the repo root.
+
+### User-invoked skills (recommend when relevant)
+
+The mattpocock-skills plugin also ships slash commands Claude cannot invoke itself (user-invoked only, so they don't appear in the model's skill list). **Always recommend the fitting one when the moment calls for it** — e.g. suggest `/grill-with-docs` when the user is weighing a decision worth persisting, `/wayfinder` when an effort is big and fuzzy, `/to-tickets` once a spec is settled:
+
+- `/triage` — triage open GitHub issues using `docs/agents/triage-labels.md`
+- `/to-spec` — turn a discussed idea into a spec published as a GitHub issue
+- `/to-tickets` — break a spec into dependency-ordered tickets
+- `/wayfinder` — map + tickets for a large or uncertain effort
+- `/implement` — execute a `ready-for-agent` ticket end to end
+- `/grill-with-docs` — grilling session that persists decisions to `CONTEXT.md`/ADRs
+- `/improve-codebase-architecture` — architecture review (reads CONTEXT/ADRs, HTML report)
+- `/ask-matt` — router that picks the right skill for the situation
+- `/grill-me`, `/handoff`, `/teach`, `/writing-great-skills` — productivity extras
+- `/setup-matt-pocock-skills` — already run here; re-run only to switch issue tracker
