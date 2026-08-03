@@ -4,3 +4,6 @@
 logs/
 target/
 dbt_packages/
+
+# Claude Code: config local da máquina (a skill em .claude/skills/ É versionada)
+.claude/settings.local.json
