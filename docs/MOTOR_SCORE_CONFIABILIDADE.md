@@ -309,6 +309,33 @@ Preencher a coluna **Status/Notas** in-place quando cada uma for implementada �
 
 **Penalidade específica:** `linha_extrema` (−10, quando L ≤ 0,5 ou L ≥ 4,5 — odd vira juice/longshot).
 
+#### 12.2.1 — Baseline de calibração por liga (medido 2026-08-03)
+
+Cinco das treze regras acima usam **thresholds absolutos** (`35%`, `40%`, `35%`, e os offsets
+`+0,5` / `±0,3`) calibrados no **Brasileirão**. Num ambiente de gols deslocado, todas as premissas
+de um mesmo lado disparam juntas e inflam o `PTS_PREMISSAS` de um outcome que **o mercado já
+precifica** — dupla contagem, não edge. As premissas que já são relativas à liga (`ritmo_alto`, via
+`league_pace_median`) não sofrem disso.
+
+Ambiente real, 760 jogos FT por liga-temporada (`/fixtures`, seasons 2024 e 2025):
+
+| liga | gols/jogo | Δ vs baseline | Over 2.5 | Δ | clean sheet | viés esperado |
+|---|---|---|---|---|---|---|
+| Premier League (39) | 2,84 | **+0,36** | 55,8% | **+9,1pp** | 43,3% | superpontua **Over** |
+| La Liga (140) | 2,66 | +0,17 | 49,3% | +2,6pp | 44,6% | leve, pró-Over |
+| Serie A ITA (135) | 2,49 | +0,01 | 47,0% | +0,3pp | 51,6% | — (na baseline) |
+| **Brasileirão (71)** | **2,48** | — | **46,7%** | — | 49,7% | *baseline* |
+| Série B (72) | 2,20 | **−0,28** | 38,6% | **−8,2pp** | 53,3% | superpontua **Under** |
+
+Observação contraintuitiva registrada no rollout da Serie A ITA: a fama de "liga de poucos gols"
+é folclore do catenaccio — a Serie A moderna é a liga **mais próxima da baseline** de todo o
+portfólio. O desvio real está em Premier League e Série B, ambas em produção.
+
+**Item aberto (Fase 5):** tornar os cinco thresholds relativos à mediana da própria liga-temporada,
+replicando o padrão do `league_pace_median` que já existe em `int_futebol_premissas_ou`. Isso
+autocalibra qualquer liga futura e dispensa tabela de constantes por liga. Validar com backtest
+RPS/CLV antes de aplicar — muda o comportamento de ligas já em produção.
+
 ### 12.3 — Handicap asiático, meia-linha (`market_id` 4)
 `H` = handicap na ótica do mandante. **Valor quando** a supremacia real difere do que a linha pede (favorito dando handicap; azarão recebendo).
 
