@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S5 do Motor de Score — premissas de contexto do mercado DUPLA CHANCE (market_id 12). 2 linhas por fixture: 1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). DC é aposta de proteção: vale quando o mercado superprecifica a zebra do lado DESCOBERTO (O). 4 premissas (Σ34, sem clamp — bem abaixo de 55), espelha §12.5. lado_coberto_forte REUSA forca_mismatch/superioridade_tabela do int_futebol_premissas_1x2 (do lado S); adversario_limitado reusa o h2h_favoravel do 1X2. equilibrio_defensivo e invicto_recente derivam de fact_team_season_stats (gols sofridos no total) e dos jogos FINALIZADOS da MESMA season/competição anteriores ao jogo (goleados = cedeu 3+, e derrotas nos últimos 5) — o filtro de season evita sangrar a temporada passada pela pausa de off-season. O 12 (sem empate) NÃO é produzido (não casa com o padrão S/O da §12.5). Penalidade específica (odd_muito_baixa <1,20) e o gate próprio (melhor_odd >=1,25, sem odd_juice) são aplicados no mart fact_value_opportunities. Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front.'
+    description='S5 do Motor de Score — premissas de contexto do mercado DUPLA CHANCE (market_id 12). ⚠️ Task 0 (look-ahead): equilibrio_defensivo/adversario_limitado leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; lado_coberto_forte herda a correção via int_futebol_premissas_1x2 (era a premissa MAIS contaminada, com as duas fontes sujas). invicto_recente já era limpa. 2 linhas por fixture: 1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). DC é aposta de proteção: vale quando o mercado superprecifica a zebra do lado DESCOBERTO (O). 4 premissas (Σ34, sem clamp — bem abaixo de 55), espelha §12.5. lado_coberto_forte REUSA forca_mismatch/superioridade_tabela do int_futebol_premissas_1x2 (do lado S); adversario_limitado reusa o h2h_favoravel do 1X2. equilibrio_defensivo e invicto_recente derivam de fact_team_season_stats (gols sofridos no total) e dos jogos FINALIZADOS da MESMA season/competição anteriores ao jogo (goleados = cedeu 3+, e derrotas nos últimos 5) — o filtro de season evita sangrar a temporada passada pela pausa de off-season. O 12 (sem empate) NÃO é produzido (não casa com o padrão S/O da §12.5). Penalidade específica (odd_muito_baixa <1,20) e o gate próprio (melhor_odd >=1,25, sem odd_juice) são aplicados no mart fact_value_opportunities. Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front.'
 ) }}
 
 WITH fixtures AS (
@@ -30,12 +30,14 @@ reuse_1x2 AS (
     FROM {{ ref('int_futebol_premissas_1x2') }}
 ),
 
-tss AS (
+-- Correção da Task 0 (look-ahead): agregados POINT-IN-TIME por (fixture, time), só com jogos
+-- anteriores ao kickoff, no lugar de fact_team_season_stats (1 snapshot por season).
+pit AS (
     SELECT
-        team_id, season, competition_id,
+        fixture_id, team_id,
         goals_against_avg_total,
         wins_total, draws_total, played_total
-    FROM {{ ref('fact_team_season_stats') }}
+    FROM {{ ref('int_futebol_team_form_pit') }}
 ),
 
 -- Jogos finalizados (mesma competição, MESMA season, anteriores) -> goleados (cedeu 3+) e
@@ -98,8 +100,8 @@ metrics AS (
         COALESCE(x.superioridade_tabela, FALSE) AS x_superioridade_tabela,
         COALESCE(x.h2h_favoravel, FALSE)        AS x_h2h_favoravel
     FROM outcomes o
-    LEFT JOIN tss s        ON s.team_id  = o.s_team_id AND s.season  = o.season AND s.competition_id  = o.competition_id
-    LEFT JOIN tss od       ON od.team_id = o.o_team_id AND od.season = o.season AND od.competition_id = o.competition_id
+    LEFT JOIN pit s        ON s.fixture_id  = o.fixture_id AND s.team_id  = o.s_team_id
+    LEFT JOIN pit od       ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id
     LEFT JOIN team_hist st ON st.fixture_id = o.fixture_id AND st.team_id = o.s_team_id
     LEFT JOIN team_hist ot ON ot.fixture_id = o.fixture_id AND ot.team_id = o.o_team_id
     LEFT JOIN reuse_1x2 x  ON x.fixture_id  = o.fixture_id AND x.x1_outcome = o.s_1x2_outcome

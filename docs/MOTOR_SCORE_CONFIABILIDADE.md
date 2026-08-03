@@ -428,3 +428,65 @@ Combina 2 das 3 saídas (ex.: "S ou empate"). **Valor quando** o mercado **super
 **Pilar A vs Pilar B:** este motor é o **Pilar A (valor/regras)** — usa de-vig da Pinnacle + premissas + `/predictions` da API como "modelo de referência". O benchmark recomenda como evolução um **Pilar B (modelo próprio)**: núcleo **Dixon-Coles** (Poisson + correção de placar baixo + decaimento temporal), λ a partir de **xG** ataque/defesa + mando + ajuste de escalação, com **ratings (pi-ratings/Elo)** como prior. **Hoje não existe** (os `src/utils/futebol-value.ts`/`futebol-tendencias.ts` citados no playbook são referências aspiracionais — não estão no repo). Quando existir, vira corroboração adicional (ou substitui `modelo_api_concorda`).
 
 **Gaps apontados (úteis de saber):** rating próprio ⬜ (tijolo barato e forte — fortaleceria `superioridade_tabela`/`supremacia`, hoje crus via rank/pontos); **peso de jogador** (minutos×qualidade) ⬜ = exatamente o proxy de importância de **S7**; xG fora do Brasileirão ⬜ (Copa fraca — degradação graciosa); mando por liga recalibrado pós-2020 🟡.
+
+---
+
+## 14. Correção do look-ahead (Task 0) — 2026-08-03
+
+A auditoria da **Task 0** (ClickUp `wdx6zev64w`) encontrou que **27 das 39 premissas liam dado posterior
+ao jogo**. As correções abaixo estão implementadas e testadas; **ainda não deployadas** (exige rebuild da
+imagem `dbt-futebol`, ver `.claude/skills/deploy-dbt-changes`).
+
+### O que mudou
+
+| Item | Fonte contaminada | Correção |
+|---|---|---|
+| A + B2 | `fact_team_season_stats` (1 snapshot/season = temporada FECHADA em 24/25) e `standings_latest` (`MAX(snapshot_date)` = tabela final) | Novo `int_futebol_team_form_pit`, grão (fixture_id, team_id), reconstruído de `fact_fixtures` só com jogos anteriores ao kickoff. Traz também rank/points/ppg/n_wins_last5/n_teams |
+| C | xG e pace do O/U em média da season inteira | `fixture_team_spine` + `date_utc < DATE(kickoff)` — o mesmo padrão que o `_1x2` já usava |
+| D | `int_futebol_desfalques` com `MAX(snapshot_date)` | `extracted_at < kickoff_utc`. **99,6% das ~174 mil linhas de `/injuries` foram coletadas depois do apito** |
+| E | `int_futebol_player_importance` com pool de todas as seasons | `is_important` virou point-in-time (window cumulativa) dentro de `int_futebol_desfalques`; `is_important_pooled` fica exposto |
+
+**Guards de regressão:** `assert_pit_first_game_has_no_history` (na estreia, `played_total`=0 e rank NULL)
+e `assert_desfalques_pregame_only` (todo desfalque vem de coleta pré-apito).
+
+### Validação
+
+- `int_futebol_team_form_pit` bate com a tabela real da API (Brasileirão 2026): **56/63 pontos e 55/63 ranks
+  exatos**, erro médio de 0,27 posição. As diferenças são o snapshot diário estar defasado do kickoff — o PIT
+  é mais preciso.
+- **Produção não muda**: em jogos futuros o PIT é ~idêntico ao antigo (diferença média de **0,003 gol/jogo**).
+  Faz sentido: para um jogo que ainda não aconteceu, "tudo antes do kickoff" = "temporada até agora".
+- **Prova cruzada**: as 11 premissas que a auditoria classificou como limpas mudaram **exatamente 0%**; todas
+  as 27 contaminadas mudaram.
+
+### Re-run dos Testes 1 e 3 (o que sobrou)
+
+Teste 1 (acerto vs. a média da mesma linha), maiores quedas: `tende_golear` +32,8 → +8,1 · `defesa_forte`
++19,4 → +3,3 · `mando` +19,3 → +5,8 · `clean_sheets_altos` +20,0 → +5,6 · `superioridade_tabela` +23,5 →
++12,1. Toda premissa limpa: delta 0,0.
+
+Teste 3 (ROI da porta "2+ premissas", 168 jogos com odds, 16/06 a 02/08/2026):
+
+| Porta | ROI antes | ROI depois |
+|---|---|---|
+| 2+ premissas | **+9,2%** (reproduz o "+9,7%") | **−7,6%** |
+| 3+ premissas | +17,1% | −6,0% |
+| edge>0 + 2 premissas | +18,6% | −15,4% |
+
+Antes, o ROI subia monotonicamente com o nº de premissas — assinatura de vazamento. Depois, fica plano em
+−6% a −9%: **a porta de contexto não ordena nada**.
+
+**Achado adicional que muda a leitura:** com piso de 5 jogos disputados, **a base contaminada já dava
+negativo** (−3,9%). Os +9,7% vinham inteiramente das linhas de amostra curta — Copa do Mundo (39% do
+universo, média de **2,4 jogos**), Sudamericana (0,8) e Copa do Brasil (1,9), onde o snapshot de temporada
+cobre um punhado de jogos e o próprio jogo pesa ~1/3 da "média". Brasileirão e Série B (17–18 jogos) nunca
+sustentaram o resultado.
+
+⚠️ **Amostra**: 168 jogos / ~1,5 mês (a odd só existe desde julho/2026) e apostas correlacionadas dentro do
+mesmo jogo. A direção é inequívoca; os números negativos **não** devem ser lidos como estimativa precisa.
+
+### Aberto para decisão
+
+`played_total` foi exposto **sem** piso de amostra embutido: com 1–3 jogos, `superioridade_tabela` acende
+mais (37,6%) do que com 11+ (32,2%) — um time que venceu a estreia tem PPG 3,0 contra 0,0. Definir o piso é
+decisão de calibragem, não de correção de vazamento, e ficou para a recalibragem.

@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de TODAS as casas t24h->t15m; odd crua super-ponderaria o leg de odd alta), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
+    description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). ⚠️ Task 0 (look-ahead): ataque_combinado/defesas_firmes/defesas_vazaveis/clean_sheets_altos/ataques_fracos/ambos_vazam leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; xg_combinado_alto/xg_baixo_combinado/ritmo_alto passaram a usar o spine ancorado no kickoff (item C) em vez da média da season inteira — era o caso que fazia o MESMO xG medir −2,4 no 1X2 (point-in-time) e +0,5 aqui. historico_over/under e linha_subindo/descendo já eram limpos. 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de TODAS as casas t24h->t15m; odd crua super-ponderaria o leg de odd alta), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
 ) }}
 
 WITH fixtures AS (
@@ -38,36 +38,71 @@ outcomes AS (
     CROSS JOIN UNNEST(['Over', 'Under']) AS side
 ),
 
-tss AS (
+-- Correção da Task 0 (look-ahead): agregados POINT-IN-TIME por (fixture, time), só com jogos
+-- anteriores ao kickoff, no lugar de fact_team_season_stats (1 snapshot por season = temporada
+-- fechada em 24/25, com o próprio jogo e os seguintes dentro das médias).
+pit AS (
     SELECT
-        team_id, season, competition_id,
+        fixture_id, team_id,
         goals_for_avg_home, goals_for_avg_away,
         goals_against_avg_home, goals_against_avg_away,
         clean_sheet_total, failed_to_score_total, played_total
-    FROM {{ ref('fact_team_season_stats') }}
+    FROM {{ ref('int_futebol_team_form_pit') }}
 ),
 
--- xG médio de ATAQUE por time-season (sem self-join: O/U só precisa do xG_for de cada um;
--- Brasileirão preenchido, Copa ~vazio -> NULL -> premissa de xG não dispara).
+-- Spine (fixture-alvo, time) p/ ancorar xG e ritmo ao kickoff — MESMO padrão que o _1x2 já
+-- usava p/ o xG. Correção da Task 0 (item C): antes eram médias da season INTEIRA, o que fazia
+-- o mesmo xG medir negativo no 1X2 (point-in-time) e positivo no Gols (contaminado).
+fixture_team_spine AS (
+    SELECT fixture_id, season, competition_id, kickoff_utc, home_team_id AS team_id FROM fixtures
+    UNION ALL
+    SELECT fixture_id, season, competition_id, kickoff_utc, away_team_id FROM fixtures
+),
+
+-- xG médio de ATAQUE do time ATÉ o jogo (Brasileirão preenchido, Copa ~vazio -> NULL ->
+-- premissa de xG não dispara).
 xg AS (
-    SELECT team_id, season, competition_id, AVG(expected_goals) AS xg_for_avg
-    FROM {{ ref('fact_fixture_stats') }}
-    GROUP BY team_id, season, competition_id
+    SELECT sp.fixture_id, sp.team_id, AVG(st.expected_goals) AS xg_for_avg
+    FROM fixture_team_spine sp
+    JOIN {{ ref('fact_fixture_stats') }} st
+        ON  st.team_id        = sp.team_id
+        AND st.season         = sp.season
+        AND st.competition_id = sp.competition_id
+        AND st.date_utc       < DATE(sp.kickoff_utc)
+    GROUP BY sp.fixture_id, sp.team_id
 ),
 
--- Ritmo: finalizações+escanteios por time-jogo -> média por time-season; mediana da liga
--- sobre as MÉDIAS por time (grão coerente com a comparação das duas médias). Brasileirão only.
+-- Ritmo: finalizações+escanteios por time-jogo -> média do time ATÉ o jogo.
 pace_team AS (
-    SELECT team_id, season, competition_id,
-           AVG(total_shots + corner_kicks) AS pace_avg
-    FROM {{ ref('fact_fixture_stats') }}
-    GROUP BY team_id, season, competition_id
+    SELECT sp.fixture_id, sp.team_id, sp.competition_id, sp.season,
+           AVG(st.total_shots + st.corner_kicks) AS pace_avg
+    FROM fixture_team_spine sp
+    JOIN {{ ref('fact_fixture_stats') }} st
+        ON  st.team_id        = sp.team_id
+        AND st.season         = sp.season
+        AND st.competition_id = sp.competition_id
+        AND st.date_utc       < DATE(sp.kickoff_utc)
+    GROUP BY sp.fixture_id, sp.team_id, sp.competition_id, sp.season
 ),
+-- Mediana da liga sobre as médias por time NO INSTANTE DO JOGO: 1 mediana por (liga, season,
+-- fixture), e não mais uma única mediana da season fechada.
 league_pace_median AS (
-    SELECT competition_id, season,
+    SELECT fixture_id,
            APPROX_QUANTILES(pace_avg, 2)[OFFSET(1)] AS pace_median
-    FROM pace_team
-    GROUP BY competition_id, season
+    FROM (
+        SELECT sp.fixture_id, lt.team_id,
+               AVG(st.total_shots + st.corner_kicks) AS pace_avg
+        FROM (SELECT DISTINCT fixture_id, competition_id, season, kickoff_utc FROM fixture_team_spine) sp
+        JOIN (SELECT DISTINCT competition_id, season, team_id FROM fixture_team_spine) lt
+            ON lt.competition_id = sp.competition_id AND lt.season = sp.season
+        JOIN {{ ref('fact_fixture_stats') }} st
+            ON  st.team_id        = lt.team_id
+            AND st.season         = sp.season
+            AND st.competition_id = sp.competition_id
+            AND st.date_utc       < DATE(sp.kickoff_utc)
+        GROUP BY sp.fixture_id, lt.team_id
+    )
+    GROUP BY fixture_id
 ),
 
 -- Histórico Over/Under: gols totais dos últimos 5 jogos FINALIZADOS de cada time, na MESMA
@@ -149,13 +184,13 @@ metrics AS (
         -- implícita média SUBIU (t15m > t24h) = odd caiu (dinheiro entrando neste lado)
         COALESCE(lm.prob_t15m > lm.prob_t24h, FALSE)         AS linha_caiu
     FROM outcomes o
-    LEFT JOIN tss h  ON h.team_id  = o.home_team_id AND h.season  = o.season AND h.competition_id  = o.competition_id
-    LEFT JOIN tss a  ON a.team_id  = o.away_team_id AND a.season  = o.season AND a.competition_id  = o.competition_id
-    LEFT JOIN xg hx  ON hx.team_id = o.home_team_id AND hx.season = o.season AND hx.competition_id = o.competition_id
-    LEFT JOIN xg ax  ON ax.team_id = o.away_team_id AND ax.season = o.season AND ax.competition_id = o.competition_id
-    LEFT JOIN pace_team hp ON hp.team_id = o.home_team_id AND hp.season = o.season AND hp.competition_id = o.competition_id
-    LEFT JOIN pace_team ap ON ap.team_id = o.away_team_id AND ap.season = o.season AND ap.competition_id = o.competition_id
-    LEFT JOIN league_pace_median lpm ON lpm.competition_id = o.competition_id AND lpm.season = o.season
+    LEFT JOIN pit h  ON h.fixture_id  = o.fixture_id AND h.team_id  = o.home_team_id
+    LEFT JOIN pit a  ON a.fixture_id  = o.fixture_id AND a.team_id  = o.away_team_id
+    LEFT JOIN xg hx  ON hx.fixture_id = o.fixture_id AND hx.team_id = o.home_team_id
+    LEFT JOIN xg ax  ON ax.fixture_id = o.fixture_id AND ax.team_id = o.away_team_id
+    LEFT JOIN pace_team hp ON hp.fixture_id = o.fixture_id AND hp.team_id = o.home_team_id
+    LEFT JOIN pace_team ap ON ap.fixture_id = o.fixture_id AND ap.team_id = o.away_team_id
+    LEFT JOIN league_pace_median lpm ON lpm.fixture_id = o.fixture_id
     LEFT JOIN last5 hl ON hl.fixture_id = o.fixture_id AND hl.team_id = o.home_team_id
     LEFT JOIN last5 al ON al.fixture_id = o.fixture_id AND al.team_id = o.away_team_id
     LEFT JOIN line_move lm ON lm.fixture_id = o.fixture_id AND lm.line_value = o.line_value AND lm.outcome = o.outcome
