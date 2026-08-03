@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso).'
+    description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). ⚠️ Task 0 (look-ahead): ambos_marcam/defesa_forte/ataque_trava/ataque_dos_dois/defesas_vazaveis leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats. historico_btts/historico_seco já eram limpos (last5 com kickoff <). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso).'
 ) }}
 
 WITH fixtures AS (
@@ -20,12 +20,15 @@ outcomes AS (
     CROSS JOIN UNNEST(['Yes', 'No']) AS side
 ),
 
-tss AS (
+-- Correção da Task 0 (look-ahead): agregados POINT-IN-TIME por (fixture, time), só com jogos
+-- anteriores ao kickoff. Substitui fact_team_season_stats, que tem 1 snapshot por season (em
+-- 24/25 = temporada fechada, com o próprio jogo dentro das médias).
+pit AS (
     SELECT
-        team_id, season, competition_id,
+        fixture_id, team_id,
         goals_for_avg_home, goals_for_avg_away,
         clean_sheet_total, failed_to_score_total, played_total
-    FROM {{ ref('fact_team_season_stats') }}
+    FROM {{ ref('int_futebol_team_form_pit') }}
 ),
 
 -- Histórico BTTS: ambos marcaram (ou não) nos últimos 5 jogos FINALIZADOS de cada time, na
@@ -82,8 +85,8 @@ metrics AS (
         (SELECT COUNT(*) FROM UNNEST(hl.last5_btts) b WHERE NOT b) AS home_no_btts_cnt,
         (SELECT COUNT(*) FROM UNNEST(al.last5_btts) b WHERE NOT b) AS away_no_btts_cnt
     FROM outcomes o
-    LEFT JOIN tss h    ON h.team_id  = o.home_team_id AND h.season = o.season AND h.competition_id = o.competition_id
-    LEFT JOIN tss a    ON a.team_id  = o.away_team_id AND a.season = o.season AND a.competition_id = o.competition_id
+    LEFT JOIN pit h    ON h.fixture_id = o.fixture_id AND h.team_id = o.home_team_id
+    LEFT JOIN pit a    ON a.fixture_id = o.fixture_id AND a.team_id = o.away_team_id
     LEFT JOIN last5 hl ON hl.fixture_id = o.fixture_id AND hl.team_id = o.home_team_id
     LEFT JOIN last5 al ON al.fixture_id = o.fixture_id AND al.team_id = o.away_team_id
 ),

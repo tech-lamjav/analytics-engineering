@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S3 do Motor de Score — premissas de contexto do mercado HANDICAP ASIATICO (market_id 4). 2 linhas por (fixture, line_value): outcome_side Home e Away. Convenção dos dados (API-Football, confirmada 2026-06-24): line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ os dois lados — "Home -1.5" e "Away -1.5" são o PAR complementar (de-vig soma ~1.03, pin_n_outcomes=2). Logo o handicap NA ÓTICA DO LADO = IF(side=Home, line_value, -line_value): side_handicap<0 => FAVORITO (dá handicap), >0 => AZARÃO (recebe), =0 => pick (nenhuma premissa dispara). Favorito: 5 premissas (Σ40, §12.3); Azarão: 3 (Σ30). Penalidade específica: handicap_alto (-12, |line_value|>=2.5). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. Gate/edge/Score saem no mart fact_value_opportunities (gate de completude Pinnacle = par >=2, igual O/U).
+    description='S3 do Motor de Score — premissas de contexto do mercado HANDICAP ASIATICO (market_id 4). ⚠️ Task 0 (look-ahead): supremacia/tende_golear/adversario_fragil_fora/mando_forte/sem_rodizio/defesa_fora_solida leem int_futebol_team_form_pit (point-in-time por fixture) — o lado FAVORITO era 100% contaminado. raramente_perde_por_2 e favorito_irregular já eram limpos (margin_stats com kickoff_utc <) e não mudaram. 2 linhas por (fixture, line_value): outcome_side Home e Away. Convenção dos dados (API-Football, confirmada 2026-06-24): line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ os dois lados — "Home -1.5" e "Away -1.5" são o PAR complementar (de-vig soma ~1.03, pin_n_outcomes=2). Logo o handicap NA ÓTICA DO LADO = IF(side=Home, line_value, -line_value): side_handicap<0 => FAVORITO (dá handicap), >0 => AZARÃO (recebe), =0 => pick (nenhuma premissa dispara). Favorito: 5 premissas (Σ40, §12.3); Azarão: 3 (Σ30). Penalidade específica: handicap_alto (-12, |line_value|>=2.5). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. Gate/edge/Score saem no mart fact_value_opportunities (gate de completude Pinnacle = par >=2, igual O/U).
     ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura.'
 ) }}
 
@@ -44,31 +44,17 @@ outcomes AS (
     CROSS JOIN UNNEST(['Home', 'Away']) AS side
 ),
 
-tss AS (
+-- Correção da Task 0 (look-ahead): forma E tabela POINT-IN-TIME por (fixture, time), só com
+-- jogos anteriores ao kickoff. Substitui fact_team_season_stats (temporada fechada em 24/25) e
+-- o standings_latest (tabela final). n_teams vem junto, por (liga, season).
+pit AS (
     SELECT
-        team_id, season, competition_id,
+        fixture_id, team_id,
         goals_for_avg_home, goals_for_avg_away,
         goals_against_avg_home, goals_against_avg_away,
-        wins_home, draws_home, played_home
-    FROM {{ ref('fact_team_season_stats') }}
-),
-
--- 1 linha por (liga, season, time): snapshot mais recente; evita a linha duplicada
--- "third-placed" da Copa preferindo o grupo principal (mesmo padrão do 1X2).
-standings_latest AS (
-    SELECT league_id, season, team_id, rank, points, played_total
-    FROM {{ ref('fact_standings_snapshot') }}
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY league_id, season, team_id
-        ORDER BY snapshot_date DESC,
-                 CASE WHEN group_name LIKE '%third-placed%' THEN 1 ELSE 0 END
-    ) = 1
-),
--- Nº de times por (liga, season) p/ o proxy de motivação (sem_rodizio).
-league_size AS (
-    SELECT league_id, season, COUNT(*) AS n_teams
-    FROM standings_latest
-    GROUP BY league_id, season
+        wins_home, draws_home, played_home,
+        rank, ppg, n_teams
+    FROM {{ ref('int_futebol_team_form_pit') }}
 ),
 
 -- Margem (gols pró − contra) por time em cada jogo FINALIZADO; vira a base de
@@ -120,22 +106,19 @@ metrics AS (
         -- aproveitamento de S como mandante (mando_forte)
         (s.wins_home * 3 + s.draws_home) / NULLIF(s.played_home * 3, 0) * 100 AS pct_pts_home,
 
-        -- tabela (supremacia)
-        ss.rank                                AS s_rank,
-        os.rank                                AS o_rank,
-        ss.points / NULLIF(ss.played_total, 0) AS s_ppg,
-        os.points / NULLIF(os.played_total, 0) AS o_ppg,
-        ls.n_teams                             AS n_teams,
+        -- tabela do campeonato NO INSTANTE DO JOGO (supremacia)
+        s.rank    AS s_rank,
+        od.rank   AS o_rank,
+        s.ppg     AS s_ppg,
+        od.ppg    AS o_ppg,
+        s.n_teams AS n_teams,
 
         -- margens (raramente_perde_por_2 = S; favorito_irregular = O)
         sm.n_games AS s_n_games, sm.n_lost2 AS s_lost2,
         om.n_games AS o_n_games, om.n_won2  AS o_won2
     FROM outcomes o
-    LEFT JOIN tss s   ON s.team_id  = o.s_team_id AND s.season  = o.season AND s.competition_id  = o.competition_id
-    LEFT JOIN tss od  ON od.team_id = o.o_team_id AND od.season = o.season AND od.competition_id = o.competition_id
-    LEFT JOIN standings_latest ss ON ss.team_id = o.s_team_id AND ss.season = o.season AND ss.league_id = o.competition_id
-    LEFT JOIN standings_latest os ON os.team_id = o.o_team_id AND os.season = o.season AND os.league_id = o.competition_id
-    LEFT JOIN league_size ls      ON ls.league_id = o.competition_id AND ls.season = o.season
+    LEFT JOIN pit s   ON s.fixture_id  = o.fixture_id AND s.team_id  = o.s_team_id
+    LEFT JOIN pit od  ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id
     LEFT JOIN margin_stats sm ON sm.fixture_id = o.fixture_id AND sm.team_id = o.s_team_id
     LEFT JOIN margin_stats om ON om.fixture_id = o.fixture_id AND om.team_id = o.o_team_id
 ),
@@ -151,9 +134,9 @@ flags AS (
         m.is_favorito AND COALESCE(m.o_ga_venue >= 1.6, FALSE)                  AS adversario_fragil_fora,
         m.is_favorito AND m.s_is_home AND COALESCE(m.pct_pts_home >= 60, FALSE) AS mando_forte,
         -- sem_rodizio = proxy COARSE de motivação (jogo importante, sem rodízio): só ligas de
-        -- pontos corridos (Brasileirão, Série B, La Liga e Premier League — 20 times, mesma dinâmica G6/Z3 de
-        -- Europa/rebaixamento, então rank<=6 / rank>=n-3 vale sem mudança; revisar na recalibração por liga) e S em
-        -- zona de disputa (G6 ou Z4). Copa -> FALSE (rank é por grupo, proxy não vale).
+        -- pontos corridos (Brasileirão, Série B, La Liga, Premier League e Serie A ITA — 20 times, mesma dinâmica
+        -- G6/Z3 de Europa/rebaixamento, então rank<=6 / rank>=n-3 vale sem mudança; revisar na recalibração por
+        -- liga) e S em zona de disputa (G6 ou Z4). Copa -> FALSE (rank é por grupo, proxy não vale).
         -- Copa do Brasil -> FALSE também (mata-mata sem standings: s_rank/n_teams vêm NULL do
         -- LEFT JOIN e o COALESCE já derruba; fica fora do IN por decisão, não por acidente).
         -- Libertadores/Sudamericana -> FALSE também, mas por outro motivo: elas TÊM standings
@@ -164,7 +147,7 @@ flags AS (
         -- Champions League -> FALSE pelo mesmo motivo: fase de liga (36 times, 8 jogos) vira
         -- mata-mata em fevereiro e a tabela congela; G6/Z3 não modela a dinâmica top-8/9-24.
         -- TODO: refinar com rodada/congestionamento de calendário.
-        m.is_favorito AND m.competition IN ('brasileirao', 'serie_b', 'la_liga', 'premier_league')
+        m.is_favorito AND m.competition IN ('brasileirao', 'serie_b', 'la_liga', 'premier_league', 'serie_a_ita')
             AND COALESCE(m.s_rank <= 6 OR m.s_rank >= m.n_teams - 3, FALSE)     AS sem_rodizio,
         -- Azarão (Σ30)
         m.is_azarao AND COALESCE(m.s_n_games >= 5 AND m.s_lost2 / m.s_n_games < 0.30, FALSE) AS raramente_perde_por_2,

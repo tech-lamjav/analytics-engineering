@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S1 do Motor de Score — premissas de contexto do mercado RESULTADO (1X2). 3 linhas por fixture (outcome Home/Draw/Away). S = lado apostado, O = adversário. Cada premissa é um booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.1 do épico MOTOR_SCORE_CONFIABILIDADE.md). Penalidades específicas: pick_empate (-10), desfalque_proprio (-15). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/injuries). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
+    description='S1 do Motor de Score — premissas de contexto do mercado RESULTADO (1X2). 3 linhas por fixture (outcome Home/Draw/Away). S = lado apostado, O = adversário. ⚠️ Task 0 (look-ahead): forca_mismatch/mando/superioridade_tabela/forma leem int_futebol_team_form_pit (point-in-time por fixture), NÃO mais fact_team_season_stats + standings_latest — que em 24/25 entregavam a temporada fechada e a tabela final a jogos da rodada 1. Cada premissa é um booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.1 do épico MOTOR_SCORE_CONFIABILIDADE.md). Penalidades específicas: pick_empate (-10), desfalque_proprio (-15). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/injuries). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
 ) }}
 
 WITH fixtures AS (
@@ -25,26 +25,19 @@ outcomes AS (
     FROM fixtures
 ),
 
-tss AS (
+-- Correção da Task 0 (look-ahead): forma E tabela POINT-IN-TIME por (fixture, time), só com
+-- jogos anteriores ao kickoff. Uma única fonte no lugar das duas contaminadas —
+-- fact_team_season_stats (1 snapshot por season: em 24/25 é a temporada FECHADA aplicada à
+-- rodada 1) e standings_latest (MAX(snapshot_date) sem âncora no jogo = tabela final).
+pit AS (
     SELECT
-        team_id, season, competition_id,
+        fixture_id, team_id,
         goals_for_avg_home, goals_for_avg_away,
         goals_against_avg_home, goals_against_avg_away,
         wins_home, draws_home, played_home,
-        wins_away, draws_away, played_away
-    FROM {{ ref('fact_team_season_stats') }}
-),
-
--- 1 linha por (liga, season, time): snapshot mais recente; na Copa evita a linha duplicada
--- "Ranking of third-placed teams" preferindo o grupo principal.
-standings_latest AS (
-    SELECT league_id, season, team_id, rank, points, played_total, form
-    FROM {{ ref('fact_standings_snapshot') }}
-    QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY league_id, season, team_id
-        ORDER BY snapshot_date DESC,
-                 CASE WHEN group_name LIKE '%third-placed%' THEN 1 ELSE 0 END
-    ) = 1
+        wins_away, draws_away, played_away,
+        rank, ppg, n_wins_last5
+    FROM {{ ref('int_futebol_team_form_pit') }}
 ),
 
 -- Spine (fixture-alvo, time) p/ ancorar o xG ao kickoff do jogo (point-in-time).
@@ -131,24 +124,21 @@ metrics AS (
         COALESCE(si.missing_important_count, 0) AS s_missing,
         COALESCE(oi.missing_important_count, 0) AS o_missing,
 
-        -- tabela (superioridade_tabela)
-        ss.rank                                   AS s_rank,
-        os.rank                                   AS o_rank,
-        ss.points / NULLIF(ss.played_total, 0)    AS s_ppg,
-        os.points / NULLIF(os.played_total, 0)    AS o_ppg,
+        -- tabela do campeonato NO INSTANTE DO JOGO (superioridade_tabela)
+        s.rank    AS s_rank,
+        od.rank   AS o_rank,
+        s.ppg     AS s_ppg,
+        od.ppg    AS o_ppg,
 
-        -- forma: vitórias nos últimos 5 (conta 'W' nos últimos 5 chars do form de S)
-        ( LENGTH(RIGHT(COALESCE(ss.form, ''), 5))
-        - LENGTH(REPLACE(RIGHT(COALESCE(ss.form, ''), 5), 'W', '')) ) AS n_wins_last5,
+        -- forma: vitórias nos 5 jogos ANTERIORES ao kickoff (antes: 'W' no form do último snapshot)
+        COALESCE(s.n_wins_last5, 0) AS n_wins_last5,
 
         -- h2h
         COALESCE(hh.h2h_total, 0) AS h2h_total,
         COALESCE(hh.s_wins, 0)    AS s_wins
     FROM outcomes o
-    LEFT JOIN tss s   ON s.team_id  = o.s_team_id AND s.season  = o.season AND s.competition_id  = o.competition_id
-    LEFT JOIN tss od  ON od.team_id = o.o_team_id AND od.season = o.season AND od.competition_id = o.competition_id
-    LEFT JOIN standings_latest ss ON ss.team_id = o.s_team_id AND ss.season = o.season AND ss.league_id = o.competition_id
-    LEFT JOIN standings_latest os ON os.team_id = o.o_team_id AND os.season = o.season AND os.league_id = o.competition_id
+    LEFT JOIN pit s   ON s.fixture_id  = o.fixture_id AND s.team_id  = o.s_team_id
+    LEFT JOIN pit od  ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id
     LEFT JOIN xg sx   ON sx.fixture_id = o.fixture_id AND sx.team_id = o.s_team_id
     LEFT JOIN xg ox   ON ox.fixture_id = o.fixture_id AND ox.team_id = o.o_team_id
     LEFT JOIN desf si  ON si.fixture_id = o.fixture_id AND si.team_id = o.s_team_id
