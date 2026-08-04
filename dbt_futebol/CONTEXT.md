@@ -67,7 +67,8 @@ fair probabilities.
 The fair probability a value claim must beat. It has three possible benchmarks, in
 descending order of trust: **sharp** (de-vigged Pinnacle, for 1X2/OU/AH), **derivada**
 (computed from Pinnacle's 1X2 de-vig, the only source for Dupla Chance) and
-**consenso**. Only the first two are anchored on a sharp price.
+**consenso**. Only the first two are anchored on a sharp price; note the data stamps
+derivada as `pinnacle` too, so the three-way split exists only where analysis makes it.
 
 **Sharp**:
 Pinnacle, the reference bookmaker. "Linha sharp" is its price; its movement toward our
@@ -136,8 +137,7 @@ Pilar A is this rules engine. Pilar B is the future proper statistical model
 
 ### Measurement and calibration
 
-The vocabulary of the methodology review. Mixing these up is expensive: each Teste
-answers a different question, and only one of them can justify a weight.
+Each Teste answers a different question, and only one of them can justify a weight.
 
 **Point-in-time (PIT)**:
 An aggregate over a team's fixtures rebuilt from only the matches that kicked off
@@ -155,8 +155,8 @@ Answers "does it predict the line?". Needs no odds, so it runs on the full histo
 
 **Teste 2**:
 A premissa's hit rate where it fired, minus the fair probability the price implied on
-those same lines. Answers "does it beat the price?" — the only Teste that can justify
-a weight. Needs odds, so it runs only on the odds era.
+those same lines. Answers "does it beat the price?" — the only Teste that may justify a
+weight, and it runs only on the odds era.
 
 **Teste 3**:
 The ROI of a gate (e.g. "2+ premissas acesas") at flat stakes on the best odd.
@@ -173,12 +173,11 @@ Confiabilidade — whose weights are hand-set.
 _Avoid_: score (reserved for the Score de Confiabilidade)
 
 **Peso de catálogo / peso medido**:
-The point weight a premissa carries in production is a peso de catálogo — chosen by
-hand, never derived. A peso medido comes from that premissa's Teste 2 gain on the base
-limpa. No peso de catálogo may be rewritten from a peso medido without an
-out-of-sample control (see ADR 0001).
+A peso de catálogo is the point weight a premissa carries in production, chosen by hand
+and never derived; a peso medido comes from that premissa's Teste 2 gain. Rewriting the
+first from the second requires an out-of-sample control (ADR 0001).
 
 **Amostra curta**:
 A fixture whose teams have played too few matches for a season aggregate to mean
-anything — structural in knockout competitions. Established cause of fabricated
-signal, not a nuisance to be filtered quietly.
+anything — structural in knockout competitions, and an established cause of fabricated
+signal.
