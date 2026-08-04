@@ -418,6 +418,103 @@ apareceu.
 
 ---
 
+## Ticket #8 — Teste 4: o ROI sobe com a nota?
+
+`analyses/task01_teste4.sql` e `task01_teste4_permutacao.sql`
+
+Pesos do Teste 2 **com piso de 5 jogos** (sem o piso a nota herdaria
+`clean_sheets_altos`, +17,1 sem piso e −1,7 com). Artefato de conjunto incompleto
+excluído. Normalização 0–100 por mercado, faixas agrupadas depois.
+
+### A inclinação sobrevive out-of-sample praticamente intacta
+
+O controle real é o par B/C: **mesmos pesos**, universos de avaliação diferentes.
+
+| Avaliação | Pesos ajustados em | ROI medido em | Inclinação (pp por ponto de nota) |
+|---|---|---|---|
+| A. `t2_full` | toda a janela | toda a janela | **+0,238** |
+| B. `t2_h1` | 1ª metade | **1ª metade** (in-sample) | **+0,228** |
+| C. `t2_h1` | 1ª metade | **2ª metade** (out-of-sample) | **+0,223** |
+| D. `t1_controle` | Teste 1, 6.042 jogos | toda a janela | +0,149 |
+
+**B → C perde 0,005.** A inflação in-sample, que o ADR 0001 existia para vigiar, é
+desprezível para a inclinação. O sinal não é ajuste.
+
+E o controle do ADR (D) fica claramente atrás, confirmando de novo que peso tem de sair
+do Teste 2 e não do Teste 1.
+
+### Mas a ordenação não é monótona — o topo não é o melhor
+
+Faixas de C (out-of-sample, nota de premissas), com erro-padrão agrupado por fixture:
+
+| Faixa | n apostas | n jogos | ROI | ± EP |
+|---|---|---|---|---|
+| 00–20 | 2.419 | 84 | **−16,7** | 6,5 |
+| 20–40 | 436 | 81 | −3,6 | 4,6 |
+| 40–60 | 279 | 57 | **+10,3** | 16,4 |
+| 60–80 | 506 | 73 | **+8,1** | 6,2 |
+| 80–100 | 512 | 66 | −3,9 | 4,1 |
+
+O que a nota faz bem é **separar o fundo**: −16,7% na faixa baixa, a 2,6 erros-padrão de
+zero. O que ela não faz é ordenar o topo — a faixa 80–100 é pior que a 60–80, e nenhuma
+faixa positiva cruza dois erros-padrão.
+
+### A nota de premissas ordena MELHOR que o Score pós-A1
+
+| Composição | Inclinação (A) | Inclinação (C, out-of-sample) |
+|---|---|---|
+| nota de premissas | +0,238 | **+0,223** |
+| Score pós-A1 (+ corroboração − penalidades) | +0,158 | **+0,114** |
+
+Somar corroboração e penalidades **piora** a ordenação, e piora mais fora da amostra. Na
+faixa 80–100 do Score pós-A1 o ROI out-of-sample é −17,0.
+
+A corroboração é praticamente inerte (só implementada p/ 1X2, e o `/predictions` era
+~vazio no histórico), então quem degrada são as **penalidades** — que são calculadas
+sobre características da odd (outlier, poucas casas, longshot, juice) e empurram para
+baixo linhas por razões descorrelacionadas do resultado. É um achado acionável e não
+estava em nenhuma frente aberta.
+
+### A régua: qual inclinação o acaso produz?
+
+200 réplicas embaralhando os pesos **entre premissas do mesmo mercado** — a distribuição
+de pesos fica idêntica, muda só quem recebe qual.
+
+| Métrica | Observado | Nulo mediana | Nulo p05 | Nulo p95 | Nulo máx | p |
+|---|---|---|---|---|---|---|
+| Inclinação | **+0,238** | +0,078 | −0,178 | +0,276 | +0,335 | **0,070** |
+| Gap alta(≥60) − baixa(<20) | **+17,3 pp** | +5,6 | −8,7 | +16,4 | +29,1 | **0,035** |
+
+**O nulo NÃO está centrado em zero, e isso não é defeito.** Embaralhar pesos dentro do
+mercado preserva quantas premissas acenderam — e o Teste 3 já mostrou que contagem tem
+sinal fraco. Então a mediana nula de +0,078 é o que **a contagem sozinha** compra; o
+excedente até +0,238 é o que a **ponderação correta** acrescenta.
+
+O critério de aceite do ticket dizia "se a curva embaralhada subir, o defeito é nosso".
+Ele foi escrito antes de eu entender que a permutação preserva a contagem por
+construção. O critério certo é se o observado excede o nulo — e excede, mas por pouco:
+**p = 0,035 no gap e 0,070 na inclinação.**
+
+### Veredito de produto
+
+**Existe sinal de ordenação, e ele é real — mas fraco, e não chega a rentabilidade.**
+
+1. Sobrevive out-of-sample quase intacto (+0,228 → +0,223). Não é ajuste in-sample.
+2. Excede a curva nula, mas com folga pequena (p = 0,035 no gap).
+3. Ordena o **fundo**, não o topo: −16,7% na faixa baixa é o achado sólido; nenhuma
+   faixa positiva se distingue de zero com confiança.
+4. O objeto que iria pro ar (Score pós-A1) ordena **pior** que a nota de premissas pura.
+
+A leitura honesta não é "temos produto" nem "não sobrou nada". É: **a nota serve hoje
+para excluir, não para escolher.** Um corte que descarte a faixa baixa é defensável pelo
+dado; um corte que selecione a faixa alta não é.
+
+⚠️ A permutação foi rodada contra os pesos in-sample (+0,238). Como a inclinação
+out-of-sample é quase idêntica, a conclusão carrega — mas o p-valor não foi recalculado
+para o corte temporal.
+
+---
+
 ## Instabilidade: terceira medição, dentro da mesma sessão
 
 O `dbt_loaded_at` das origens era 12:09 na primeira execução do dia e **15:01** três horas

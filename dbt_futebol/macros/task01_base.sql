@@ -12,8 +12,11 @@
         minha_cte AS ( ... )
         SELECT ... FROM apostas
 
-    ⚠️ O macro emite SEIS CTEs no escopo do chamador, não duas. Uma CTE do chamador com
+    ⚠️ O macro emite SETE CTEs no escopo do chamador, não duas. Uma CTE do chamador com
     qualquer um destes nomes sombreia a do macro em silêncio:
+
+      prem_linha        grão de aposta — atributos de linha vindos dos modelos de
+                        premissas (hoje a penalidade específica do mercado).
 
       jogos_encerrados  grão (fixture_id) — jogos liquidados dentro do `cutoff`.
       odds              grão (fixture, mercado, lado, linha) — TODOS os mercados
@@ -48,6 +51,7 @@
     {{ return({
         1: {
             'model': 'int_futebol_premissas_1x2',
+            'pen': 'penalidades_1x2_pts',
             'nome': '1X2',
             'has_line': false,
             'cols': ['forca_mismatch', 'superioridade_xg', 'mando', 'desfalque_adversario',
@@ -55,6 +59,7 @@
         },
         5: {
             'model': 'int_futebol_premissas_ou',
+            'pen': 'penalidades_ou_pts',
             'nome': 'Gols',
             'has_line': true,
             'cols': ['ataque_combinado', 'defesas_vazaveis', 'xg_combinado_alto', 'ritmo_alto',
@@ -64,6 +69,7 @@
         },
         4: {
             'model': 'int_futebol_premissas_ah',
+            'pen': 'penalidades_ah_pts',
             'nome': 'Handicap',
             'has_line': true,
             'cols': ['supremacia', 'tende_golear', 'adversario_fragil_fora', 'mando_forte',
@@ -72,6 +78,7 @@
         },
         8: {
             'model': 'int_futebol_premissas_btts',
+            'pen': 'penalidades_btts_pts',
             'nome': 'BTTS',
             'has_line': false,
             'cols': ['ambos_marcam', 'ataque_dos_dois', 'defesas_vazaveis', 'historico_btts',
@@ -79,6 +86,7 @@
         },
         12: {
             'model': 'int_futebol_premissas_dc',
+            'pen': 'penalidades_dc_pts',
             'nome': 'Dupla Chance',
             'has_line': false,
             'cols': ['lado_coberto_forte', 'equilibrio_defensivo', 'adversario_limitado',
@@ -185,6 +193,7 @@ odds AS (
         n_outcomes_valor,
         prob_justa_fechamento,
         valor_fonte,
+        penalidades_globais_pts,
         CASE
             WHEN market_id = 12           THEN 'derivada'
             WHEN valor_fonte = 'pinnacle' THEN 'sharp'
@@ -254,6 +263,25 @@ prem_n AS (
     GROUP BY 1, 2, 3, 4
 ),
 
+{#- Atributos de LINHA (não de premissa) que vivem nos modelos de premissas: hoje só a
+    penalidade específica do mercado. Separado de `prem_long` porque o grão é outro —
+    uma linha por aposta, não uma por premissa. Insumo da composição "Score pós-A1" do
+    Teste 4. -#}
+prem_linha AS (
+    {%- for mid, m in task01_markets().items() %}
+    {%- if not loop.first %}
+    UNION ALL
+    {%- endif %}
+    SELECT
+        {{ mid }} AS market_id,
+        fixture_id,
+        outcome AS outcome_side,
+        {% if m.has_line %}line_value{% else %}CAST(NULL AS FLOAT64){% endif %} AS line_value,
+        {{ m.pen }} AS penalidades_especificas_pts
+    FROM {{ ref(m.model) }}
+    {%- endfor %}
+),
+
 {#- Piso de amostra do jogo: o MENOR played_total entre os dois times, porque as
     premissas comparam os dois. Sem linha no PIT = sem histórico = 0 (mesma leitura da
     degradação graciosa do modelo). -#}
@@ -288,6 +316,14 @@ apostas AS (
         COALESCE(pit.min_jogos, 0) AS min_jogos,
         pn.n_prem,
         pn.n_prem_null,
+        -- Insumos da composição "Score pós-A1" do Teste 4. A A1 remove o componente de
+        -- VALOR da nota; corroboração e penalidades continuam. Nota: a corroboração
+        -- hoje só está implementada p/ 1X2 e o /predictions era ~vazio no histórico,
+        -- então ela é majoritariamente 0 — o que na prática torna o Score pós-A1
+        -- ≈ nota de premissas menos penalidades.
+        COALESCE(c.pts_corroboracao, 0)              AS pts_corroboracao,
+        COALESCE(o.penalidades_globais_pts, 0)       AS penalidades_globais_pts,
+        COALESCE(px.penalidades_especificas_pts, 0)  AS penalidades_especificas_pts,
         {{ task01_liquidacao('o.', 'j.') }} AS ganhou
     FROM odds AS o
     JOIN jogos_encerrados AS j
@@ -299,6 +335,16 @@ apostas AS (
       AND COALESCE(pn.line_value, -999)     = COALESCE(o.line_value, -999)
     LEFT JOIN pit
       ON pit.fixture_id = o.fixture_id
+    LEFT JOIN prem_linha AS px
+      ON  px.market_id                  = o.market_id
+      AND px.fixture_id                 = o.fixture_id
+      AND px.outcome_side               = o.outcome_side
+      AND COALESCE(px.line_value, -999) = COALESCE(o.line_value, -999)
+    LEFT JOIN {{ ref('int_futebol_corroboracao') }} AS c
+      ON  c.market_id                  = o.market_id
+      AND c.fixture_id                 = o.fixture_id
+      AND c.outcome_side               = o.outcome_side
+      AND COALESCE(c.line_value, -999) = COALESCE(o.line_value, -999)
     WHERE o.best_odd IS NOT NULL
       AND o.edge     IS NOT NULL
       -- Escopo do Motor, DECLARADO e derivado do catálogo de premissas acima — não
