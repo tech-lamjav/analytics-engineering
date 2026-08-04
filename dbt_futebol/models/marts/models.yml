@@ -179,12 +179,27 @@ models:
         description: "Cidade do estádio"
       - name: home_team_id
         description: "ID do time mandante (cluster key; FK p/ dim_teams)"
+        # ESTRITO de propósito. Esta é a invariante que de fato vale: todo time que
+        # DISPUTA uma partida tem metadado em dim_teams. Verificado em 2026-08-04 —
+        # 534 times distintos em fact_fixtures, ZERO fora da dim_teams.
+        # Substitui, como guarda de integridade referencial de time, o teste de
+        # fact_standings_snapshot.team_id, que afirmava algo falso sobre a fonte.
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
       - name: home_team_name
         description: "Nome do time mandante"
       - name: home_team_winner
         description: "TRUE/FALSE/NULL — vencedor mandante. NULL p/ jogos não finalizados ou empate."
       - name: away_team_id
         description: "ID do time visitante (FK p/ dim_teams)"
+        tests:
+          - relationships:
+              arguments:
+                to: ref('dim_teams')
+                field: team_id
       - name: away_team_name
         description: "Nome do time visitante"
       - name: away_team_winner
@@ -843,13 +858,33 @@ models:
         tests:
           - not_null
       - name: team_id
-        description: "ID do time na API-Football (FK p/ dim_teams; cluster key)"
+        description: >
+          ID do time na API-Football (cluster key). ⚠️ NÃO é FK garantida p/ dim_teams:
+          o /standings pode devolver entidade que o /teams (fonte da dim_teams) não
+          traz, e as duas discordam sem que nada esteja errado do nosso lado.
         tests:
           - not_null
+          # warn, e não error: a invariante "todo time de standings está em dim_teams" é
+          # FALSA na fonte, não no nosso pipeline. Dois casos vivos, ambos confirmados
+          # como inconsistência da API-Football e não gap de coleta (issue #12):
+          #   · Brasileirão 2026: a tabela traz `22722 "Chapecoense B"` (rank 20, 20
+          #     jogos), enquanto /teams e /fixtures usam `132 "Chapecoense-sc"`. O
+          #     /teams p/ (71,2026) devolve os 20 times e 22722 não está entre eles,
+          #     então re-extrair não resolve.
+          #   · Libertadores 2024: `225 "Nacional"`, clube de fase não coberta pelo
+          #     backfill daquela season.
+          # Impacto medido: NENHUM. O único consumidor de standings é o
+          # int_futebol_team_form_pit (group_name p/ particionar o rank), e a
+          # Chapecoense recebe rank PIT correto (18,2 de média sobre n_teams=20).
+          # Nada no app lê esta tabela.
+          # A invariante que É verdadeira ficou testada de forma ESTRITA em
+          # fact_fixtures.home_team_id/away_team_id — ver ali.
           - relationships:
               arguments:
                 to: ref('dim_teams')
                 field: team_id
+              config:
+                severity: warn
       - name: team_name
         description: "Nome do time"
       - name: rank
