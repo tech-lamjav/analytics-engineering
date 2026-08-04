@@ -288,6 +288,154 @@ referente.
 
 ---
 
+## Ticket #6 — Teste 1 completo (fonte do peso de controle)
+
+`analyses/task01_teste1.sql` · **6.042 jogos encerrados**, sem exigir odd
+
+Reconciliação contra os valores publicados no re-run da Task [0]: `tende_golear` +8,1,
+`mando` +5,8, `clean_sheets_altos` +5,6 e `forca_mismatch` +11,6 **exatos**;
+`superioridade_tabela` +12,0 contra +12,1 e `defesa_forte` +3,4 contra +3,3. A definição
+de "média da mesma linha" está certa.
+
+### Os dois testes discordam quase por completo
+
+| Premissa | Teste 1 (prevê a linha) | Teste 2 (bate o preço) |
+|---|---|---|
+| `superioridade_tabela` | **+12,0** | +0,8 |
+| `forca_mismatch` | **+11,6** | −3,1 |
+| `supremacia` | **+11,2** | −1,9 |
+| `lado_coberto_forte` | **+9,7** | +2,8 |
+| `invicto_recente` | **+7,2** | **−10,7** |
+| `h2h_favoravel` | **+6,4** | **−10,7** |
+| `forma` | **+6,8** | −1,4 |
+| `clean_sheets_altos` | +5,6 | **+17,1** |
+| `raramente_perde_por_2` | +1,9 | **+6,3** |
+| `favorito_irregular` | +1,8 | **+5,9** |
+
+As premissas que melhor **preveem** o resultado da linha — superioridade de tabela,
+mismatch de força, supremacia — são as que o mercado já sabe, e valem perto de zero ou
+menos contra o preço. As que **geram valor** estão no fundo do Teste 1.
+
+Isso confirma a distinção que sustenta toda a metodologia: prever não é pagar. E confirma
+que o Teste 2 tem de ser a fonte de peso.
+
+### ⚠️ Mas isso enfraquece o controle desenhado no ADR 0001
+
+O ADR previa usar pesos do Teste 1 como controle out-of-sample dos pesos do Teste 2. A
+premissa era que os dois medissem a mesma coisa em universos diferentes. **Eles não
+medem.** São construtos distintos e quase ortogonais.
+
+Consequência: uma curva de ROI plana sob pesos do Teste 1 **não** prova que a curva sob
+pesos do Teste 2 é ajuste in-sample — prova apenas que prever a linha não gera valor, o
+que a tabela acima já mostrou.
+
+O controle continua valendo a pena (responde "premissa que prevê bem gera valor?" — não),
+mas **não substitui** um teste out-of-sample dos pesos do Teste 2. Quem carrega essa
+carga passa a ser o teste de permutação, e o ticket #8 precisa ganhar uma **divisão
+temporal** — ajustar peso na primeira metade da janela de odds e medir ROI na segunda.
+Foi a opção descartada na sessão de grilling por falta de poder; hoje é a única
+verdadeiramente out-of-sample sobre a métrica certa.
+
+---
+
+## Ticket #7 — Varredura de edge (Pedido 3)
+
+`analyses/task01_edge.sql`
+
+### ⚠️ Primeiro, um artefato que contamina o universo publicado
+
+O de-vig de **consenso** normaliza a probabilidade sobre o conjunto de saídas da linha.
+Quando só **um lado** foi precificado, ele normaliza sobre um único outcome e devolve
+`prob_justa = 1,0` — certeza. O edge vira `odd − 1`.
+
+| | |
+|---|---|
+| Linhas afetadas no universo | **172**, todas consenso, mercados 4 e 5 |
+| Edge reportado | de **+820%** a **+14.900%** |
+| Odd máxima | 150,0 |
+| Vitórias reais | **2 de 172** |
+| ROI | **−35,5%** |
+
+O Motor anuncia valor máximo exatamente onde o acerto real é 1,2%.
+
+**Produção NÃO é afetada.** O gate do mart exige ≥ 4 casas e conjunto Pinnacle completo;
+o board hoje tem 90 oportunidades, edge máximo 23%, odd máxima 4,5 e mínimo de 4 casas.
+Nenhuma dessas linhas chega ao usuário.
+
+Mas elas **estão** no universo de backtest, inclusive no que produziu os números
+publicados. O backtest é mais permissivo que o board — mede apostas que o produto nunca
+faria. Isso vale para toda a série histórica e precisa entrar no relatório final.
+
+Excluídas dos blocos abaixo, com o descarte auditado no próprio SQL.
+
+### A resposta ao Pedido 3: o filtro é VAZIO, não neutro
+
+| Corte | n | ROI |
+|---|---|---|
+| sem filtro (referência) | 8.567 | **−9,8%** |
+| edge > −30% | 8.567 | −9,8% |
+| edge > −20% | 8.567 | −9,8% |
+| edge > −10% | 8.564 | −9,8% |
+| edge > −5% | 6.759 | −9,2% |
+| edge > 0% (regra de hoje) | 1.677 | **−10,4%** |
+
+**O edge mínimo de todo o universo é −10,6%.** Não existe cauda de "preço muito pior que
+o justo" para barrar: cortar em −30% ou −20% remove **zero** linhas, e −10% remove três.
+
+A razão é estrutural: `edge = melhor odd × prob justa − 1`, e a melhor odd é tomada entre
+**todas** as casas. Pegar o melhor preço entre ~14 casas impede, por construção, que o
+preço fique muito abaixo do justo.
+
+Então a resposta não é "o filtro é neutro, fica como proteção de reputação". É **"não há o
+que filtrar"** — a regra proposta na A3 não teria agido sobre nenhuma aposta.
+
+### O preço não ordena, em nenhuma direção
+
+| Decil de edge | Faixa | n | ROI |
+|---|---|---|---|
+| 1 (pior preço) | −10,6 a −7,4 | 857 | −15,7 |
+| 5 | −3,6 a −3,0 | 857 | −11,0 |
+| 8 | −1,7 a −0,1 | 856 | **−5,7** |
+| 9 | −0,1 a +4,2 | 856 | −9,1 |
+| 10 (melhor preço) | +4,2 a +173 | 856 | −11,3 |
+
+Sem ordenação. O melhor decil é o oitavo. **A A1 (tirar o preço da nota) está
+confirmada**, e a regra de hoje (`edge > 0`) piora o resultado: −10,4% contra −9,8% de
+apostar tudo.
+
+### O maior discriminador de ROI da base não é o preço — é o benchmark
+
+| Recorte | n | ROI |
+|---|---|---|
+| sharp (Pinnacle precifica) | 3.329 | **−5,0%** |
+| derivada (Dupla Chance) | 299 | −3,9% |
+| consenso (Pinnacle não precifica) | 3.262 | **−14,9%** |
+
+Quase **10 pontos** de diferença, contra ~0 de qualquer filtro de preço. Restringir o
+board às linhas com preço sharp vale mais do que toda a família de regras de edge junta.
+Não estava no escopo desta task e não foi investigado — mas é a maior alavanca que
+apareceu.
+
+---
+
+## Instabilidade: terceira medição, dentro da mesma sessão
+
+O `dbt_loaded_at` das origens era 12:09 na primeira execução do dia e **15:01** três horas
+depois. A mesma reconciliação, mesmo código, devolveu:
+
+| Métrica | Publicado | Build 12:09 | Build 15:01 |
+|---|---|---|---|
+| Teste 3, 2+ premissas | −7,6 | −7,4 | **−7,6** |
+| Teste 3, 3+ premissas | −6,0 | −6,1 | **−6,0** |
+| Teste 3 por mercado, Gols | −7,3 | −6,9 | −7,2 |
+
+Não é uma deriva que aconteceu uma vez: é **oscilação contínua**, e desta vez ela voltou a
+cair sobre os valores publicados. Reforça a exigência de carimbar o build em qualquer
+número de Gols — e mostra que "reproduziu" e "não reproduziu" podem ser a mesma medição
+tirada em horas diferentes.
+
+---
+
 ## Ressalvas que valem para tudo neste documento
 
 - **A amostra é o gargalo, não a análise.** 168 jogos, cerca de um mês e meio, com

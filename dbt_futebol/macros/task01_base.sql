@@ -100,6 +100,48 @@
 {% endmacro %}
 
 
+{#- Liquidação por mercado: a linha ganhou ou perdeu, dado o placar.
+
+    Existe como macro porque o Teste 1 liquida SEM odds — o universo dele é todo jogo
+    encerrado, não só os que têm preço — e precisa exatamente da mesma regra que o
+    Teste 2 e o Teste 3 usam. Duplicá-la deixaria os testes medindo coisas diferentes
+    sem ninguém perceber.
+
+    `linha` é o alias de quem traz market_id/outcome_side/line_value (a CTE de odds no
+    Teste 2/3, a de premissas no Teste 1); `jogo` é o alias do fixture. Ambos incluem o
+    ponto. -#}
+{% macro task01_liquidacao(linha, jogo) %}
+    CASE
+        WHEN {{ linha }}market_id = 1 THEN
+            CASE {{ linha }}outcome_side
+                WHEN 'Home' THEN {{ jogo }}goals_home > {{ jogo }}goals_away
+                WHEN 'Away' THEN {{ jogo }}goals_away > {{ jogo }}goals_home
+                ELSE             {{ jogo }}goals_home = {{ jogo }}goals_away
+            END
+        WHEN {{ linha }}market_id = 5 THEN
+            IF({{ linha }}outcome_side = 'Over',
+               {{ jogo }}goals_home + {{ jogo }}goals_away > {{ linha }}line_value,
+               {{ jogo }}goals_home + {{ jogo }}goals_away < {{ linha }}line_value)
+        -- line_value vem na ÓTICA DO MANDANTE e é igual p/ Home e Away.
+        WHEN {{ linha }}market_id = 4 THEN
+            IF({{ linha }}outcome_side = 'Home',
+               {{ jogo }}goals_home + {{ linha }}line_value > {{ jogo }}goals_away,
+               {{ jogo }}goals_away - {{ linha }}line_value > {{ jogo }}goals_home)
+        WHEN {{ linha }}market_id = 8 THEN
+            IF({{ linha }}outcome_side = 'Yes',
+               {{ jogo }}goals_home > 0 AND {{ jogo }}goals_away > 0,
+               NOT ({{ jogo }}goals_home > 0 AND {{ jogo }}goals_away > 0))
+        -- O modelo de premissas da DC só emite '1X' e 'X2'; o ELSE é sempre 'X2'. As
+        -- linhas de '12' existem nas odds, não têm premissa e caem no JOIN — uma saída
+        -- inteira fora da medição. Reportado, não corrigido.
+        WHEN {{ linha }}market_id = 12 THEN
+            IF({{ linha }}outcome_side = '1X',
+               {{ jogo }}goals_home >= {{ jogo }}goals_away,
+               {{ jogo }}goals_away >= {{ jogo }}goals_home)
+    END
+{% endmacro %}
+
+
 {% macro task01_base(cutoff=none) %}
 
 {#- Jogos encerrados. `cutoff` congela a janela p/ reconciliar contra número publicado;
@@ -140,13 +182,32 @@ odds AS (
         best_odd,
         edge,
         n_casas,
+        n_outcomes_valor,
         prob_justa_fechamento,
         valor_fonte,
         CASE
             WHEN market_id = 12           THEN 'derivada'
             WHEN valor_fonte = 'pinnacle' THEN 'sharp'
             ELSE valor_fonte
-        END AS benchmark
+        END AS benchmark,
+        -- ⚠️ Conjunto de saídas INCOMPLETO: só um lado da linha foi precificado. O
+        -- de-vig de consenso normaliza sobre o conjunto, então com um único outcome ele
+        -- devolve prob_justa = 1,0 — certeza — e o edge vira `odd − 1`. Uma odd de 150
+        -- aparece como "edge de 14.900%".
+        --
+        -- Medido no universo de análise: 172 linhas, TODAS consenso, 2 vitórias em 172,
+        -- ROI −35,5%. É o pior lugar possível para um erro de sinal — o Motor diz valor
+        -- máximo onde o acerto real é 1,2%.
+        --
+        -- PRODUÇÃO NÃO É AFETADA: o gate do mart exige n_casas >= 4 e conjunto Pinnacle
+        -- completo, e o board hoje tem edge máximo de 23% e odd máxima 4,5. Estas
+        -- linhas nunca chegam ao usuário.
+        --
+        -- Mas elas ESTÃO no universo de backtest, inclusive no que produziu os números
+        -- publicados — o backtest é mais permissivo que o board. Exposto como flag em
+        -- vez de filtrado aqui para que a reconciliação continue reproduzindo o
+        -- publicado; quem mede valor exclui e diz que excluiu.
+        COALESCE(n_outcomes_valor < 2, TRUE) AS conjunto_incompleto
     FROM {{ ref('int_futebol_odds_devig') }}
 ),
 
@@ -220,40 +281,14 @@ apostas AS (
         o.n_casas,
         o.prob_justa_fechamento,
         o.benchmark,
+        o.conjunto_incompleto,
         j.competition,
         j.season,
         j.kickoff_utc,
         COALESCE(pit.min_jogos, 0) AS min_jogos,
         pn.n_prem,
         pn.n_prem_null,
-        CASE
-            WHEN o.market_id = 1 THEN
-                CASE o.outcome_side
-                    WHEN 'Home' THEN j.goals_home > j.goals_away
-                    WHEN 'Away' THEN j.goals_away > j.goals_home
-                    ELSE             j.goals_home = j.goals_away
-                END
-            WHEN o.market_id = 5 THEN
-                IF(o.outcome_side = 'Over',
-                   j.goals_home + j.goals_away > o.line_value,
-                   j.goals_home + j.goals_away < o.line_value)
-            -- line_value vem na ÓTICA DO MANDANTE e é igual p/ Home e Away.
-            WHEN o.market_id = 4 THEN
-                IF(o.outcome_side = 'Home',
-                   j.goals_home + o.line_value > j.goals_away,
-                   j.goals_away - o.line_value > j.goals_home)
-            WHEN o.market_id = 8 THEN
-                IF(o.outcome_side = 'Yes',
-                   j.goals_home > 0 AND j.goals_away > 0,
-                   NOT (j.goals_home > 0 AND j.goals_away > 0))
-            -- O modelo de premissas da DC só emite '1X' e 'X2'; o ELSE é sempre 'X2'.
-            -- As linhas de '12' existem nas odds, não têm premissa e caem no JOIN
-            -- abaixo — uma saída inteira fora da medição. Reportado, não corrigido.
-            WHEN o.market_id = 12 THEN
-                IF(o.outcome_side = '1X',
-                   j.goals_home >= j.goals_away,
-                   j.goals_away >= j.goals_home)
-        END AS ganhou
+        {{ task01_liquidacao('o.', 'j.') }} AS ganhou
     FROM odds AS o
     JOIN jogos_encerrados AS j
       ON j.fixture_id = o.fixture_id
