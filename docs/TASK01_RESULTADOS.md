@@ -178,7 +178,64 @@ As 19 com peso zero, da menos ruim para a pior: `historico_over` −0,5 · `form
 `ritmo_alto` −5,3 · `h2h_favoravel` −10,7 · `invicto_recente` −10,7 ·
 `desfalque_adversario` −24,9 (n=7).
 
-### ⚠️ O encolhimento não protege contra o artefato que matou a medição anterior
+### O piso de amostra não atenua os sinais — ele INVERTE os maiores
+
+O piso entrou como **coluna** do Teste 2, não como varredura posterior, porque o
+encolhimento (`k`) e o piso tratam eixos diferentes (ver abaixo). O resultado é o achado
+mais forte do ticket.
+
+**Desabam ao exigir 5 jogos disputados nos dois times:**
+
+| Premissa | dif. piso 0 | dif. piso 5 | dif. piso 10 | n: 0 → 5 |
+|---|---|---|---|---|
+| `clean_sheets_altos` | **+17,1** | **−1,7** | **−10,1** | 105 → 24 |
+| `superioridade_xg` | **+5,2** | **−8,9** | **−12,3** | 109 → 31 |
+| `tende_golear` | **+3,9** | **−18,5** | **−22,3** | 154 → 18 |
+| `superioridade_tabela` | +0,8 | −8,2 | −8,2 | 98 → 35 |
+| `mando` | +2,4 | −6,4 | −8,3 | 107 → 48 |
+| `defesa_forte` (BTTS) | +2,8 | −3,3 | −6,3 | 70 → 12 |
+| `ataques_fracos` | +2,1 | −1,1 | −1,1 | 357 → 178 |
+
+**Sobrevivem — e a maioria fica MAIS forte:**
+
+| Premissa | dif. piso 0 | dif. piso 5 | dif. piso 10 | n: 0 → 5 |
+|---|---|---|---|---|
+| `raramente_perde_por_2` | +6,3 | **+7,4** | **+7,7** | 445 → 352 |
+| `favorito_irregular` | +5,9 | **+7,1** | **+7,9** | 453 → 374 |
+| `defesas_vazaveis` (BTTS) | +2,2 | **+8,7** | +8,7 | 58 → 31 |
+| `equilibrio_defensivo` | +2,0 | **+6,4** | **+7,7** | 144 → 66 |
+| `linha_descendo` | +3,1 | **+5,3** | +5,3 | 405 → 215 |
+| `xg_baixo_combinado` | +1,5 | +3,6 | +4,1 | 307 → 133 |
+| `defesa_fora_solida` | +3,9 | +2,6 | +2,8 | 322 → 134 |
+| `historico_under` | +1,5 | +1,2 | +2,1 | 144 → 139 |
+
+### Leitura
+
+**O ranking sem piso está de cabeça para baixo.** As três maiores diferenças medidas —
+`clean_sheets_altos` (+17,1), `superioridade_xg` (+5,2) e `tende_golear` (+3,9) — são as
+três que mais dependem de jogo sem histórico (77%, 72% e 88% das linhas), e as três
+viram negativo assim que se exige 5 partidas disputadas. É o mesmo padrão dos +9,7% que
+morreram na Task [0], agora premissa por premissa em vez de agregado.
+
+Ressalva honesta: com piso 5 essas três ficam com n de 18 a 31, então o valor negativo
+também não é bem medido. A afirmação defensável não é "elas são ruins" — é **"não existe
+evidência de que funcionem fora de jogo sem passado, e o pouco que dá para medir é
+negativo"**.
+
+**Os dois sinais mais robustos do conjunto inteiro são premissas do lado azarão do
+Handicap** — `raramente_perde_por_2` e `favorito_irregular` —, que mantêm ~80% da amostra
+sob o piso e ficam mais fortes com ele (+7,7 e +7,9 no piso 10). São as únicas com sinal
+alto que não dependem de amostra curta.
+
+E `favorito_irregular` é justamente a premissa que os documentos da proposta mandavam
+remover por "valer 0 ponto e ser decorativa". A Task [0] mostrou que ela vale +8 pontos;
+o Teste 2 mostra que ela é o sinal de valor mais robusto que existe na base.
+
+**Consequência para o plano:** os pesos do ticket #8 têm de sair da medição COM piso. Os
+pesos sem piso são dominados por artefato, e usá-los faria a nota ponderada herdar
+exatamente o que a Task [0] acabou de remover. O piso deixou de ser calibragem opcional.
+
+### ⚠️ Por que o encolhimento sozinho não bastava
 
 São **dois eixos diferentes**, e o `k=50` só cobre um deles:
 

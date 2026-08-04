@@ -59,17 +59,29 @@
 WITH {{ task01_base() }},
 
 {#- Uma passada, grão (mercado, premissa, benchmark). Só as linhas em que a premissa
-    ACENDEU entram nas médias — é essa a definição do Teste 2. -#}
+    ACENDEU entram nas médias — é essa a definição do Teste 2.
+
+    O PISO DE AMOSTRA entra como COLUNA, não como execução separada. Motivo: a primeira
+    rodada do Teste 2 mostrou que o encolhimento por amostra e o piso tratam eixos
+    DIFERENTES. `k` trata `n` pequeno (a premissa acendeu poucas vezes); o piso trata
+    jogo sem histórico. `clean_sheets_altos` tem n=105 (grande, o encolhimento mal
+    encosta) e 77% das linhas em jogo com menos de 5 partidas disputadas — que é a
+    assinatura exata do artefato que matou os +9,7%. Sem ver os dois lado a lado não dá
+    para saber se um peso alto é sinal ou é o mata-mata de novo. -#}
 agregado AS (
     SELECT
         a.market_id,
         pl.premissa,
         a.benchmark,
-        COUNTIF(pl.acesa)                                        AS n,
-        AVG(IF(pl.acesa, a.prob_justa_fechamento, NULL))         AS p_odd,
-        AVG(IF(pl.acesa, CAST(a.ganhou AS INT64), NULL))         AS p_real,
         AVG(IF(pl.acesa, a.min_jogos, NULL))                     AS jogos_medios,
         AVG(IF(pl.acesa, IF(a.min_jogos < 5, 1.0, 0.0), NULL))   AS frac_curta
+        {%- for piso in [0, 5, 10] %},
+        COUNTIF(pl.acesa AND a.min_jogos >= {{ piso }})          AS n_{{ piso }},
+        AVG(IF(pl.acesa AND a.min_jogos >= {{ piso }},
+               a.prob_justa_fechamento, NULL))                   AS p_odd_{{ piso }},
+        AVG(IF(pl.acesa AND a.min_jogos >= {{ piso }},
+               CAST(a.ganhou AS INT64), NULL))                   AS p_real_{{ piso }}
+        {%- endfor %}
     FROM apostas AS a
     JOIN prem_long AS pl
       ON  pl.market_id                  = a.market_id
@@ -87,47 +99,58 @@ janela AS (
         COUNT(DISTINCT fixture_id) AS jogos_no_universo,
         COUNT(*) AS linhas_no_universo
     FROM apostas
+),
+
+{#- `preferido` calculado UMA vez, não repetido em cada coluna que depende dele. -#}
+rotulado AS (
+    SELECT
+        g.*,
+        CASE g.market_id
+            {%- for mid, m in task01_markets().items() %}
+            WHEN {{ mid }} THEN '{{ m.nome }}'
+            {%- endfor %}
+        END AS mercado,
+        g.benchmark = CASE g.market_id
+                          WHEN 12 THEN 'derivada'
+                          WHEN 8  THEN 'consenso'
+                          ELSE         'sharp'
+                      END AS preferido
+    FROM agregado AS g
 )
 
 SELECT
     j.janela_ini,
     j.janela_fim,
     j.jogos_no_universo,
-    CASE g.market_id
-        {%- for mid, m in task01_markets().items() %}
-        WHEN {{ mid }} THEN '{{ m.nome }}'
-        {%- endfor %}
-    END                                                     AS mercado,
-    g.premissa,
-    g.benchmark,
-    -- O melhor benchmark disponível de cada mercado. Só estas linhas geram peso.
-    (g.benchmark = CASE g.market_id
-                       WHEN 12 THEN 'derivada'
-                       WHEN 8  THEN 'consenso'
-                       ELSE         'sharp'
-                   END)                                     AS usado_para_peso,
-    g.n,
-    ROUND(g.p_odd  * 100, 1)                                AS a_odd_dava,
-    ROUND(g.p_real * 100, 1)                                AS aconteceu,
-    ROUND((g.p_real - g.p_odd) * 100, 1)                    AS diferenca,
-    ROUND(g.jogos_medios, 1)                                AS jogos_medios,
-    ROUND(g.frac_curta * 100, 1)                            AS pct_amostra_curta,
-    -- peso = max(diferença, 0) × n/(n+k). k=50 é o encolhimento por amostra; k=0 é a
-    -- sensibilidade que mostra o quanto o encolhimento está segurando.
-    IF(g.benchmark = CASE g.market_id
-                         WHEN 12 THEN 'derivada'
-                         WHEN 8  THEN 'consenso'
-                         ELSE         'sharp'
-                     END,
-       ROUND(GREATEST((g.p_real - g.p_odd) * 100, 0) * SAFE_DIVIDE(g.n, g.n + 50), 2),
-       NULL)                                                AS peso_k50,
-    IF(g.benchmark = CASE g.market_id
-                         WHEN 12 THEN 'derivada'
-                         WHEN 8  THEN 'consenso'
-                         ELSE         'sharp'
-                     END,
-       ROUND(GREATEST((g.p_real - g.p_odd) * 100, 0), 2),
-       NULL)                                                AS peso_k0
-FROM agregado AS g
+    r.mercado,
+    r.premissa,
+    r.benchmark,
+    r.preferido                                             AS usado_para_peso,
+    -- Fator de encolhimento aplicado ao peso: n/(n+50). Exposto em vez de um flag
+    -- binário de "n suficiente" porque o corte seria arbitrário e este número já diz
+    -- exatamente quanto da medição sobreviveu. `desfalque_adversario` (n=7) fica em
+    -- 0,12: qualquer sinal que ela tivesse seria 88% descartado por falta de amostra,
+    -- e isso é diferente de "medimos e deu ruim".
+    ROUND(SAFE_DIVIDE(r.n_0, r.n_0 + 50), 2)                AS fator_encolhimento,
+    ROUND(r.jogos_medios, 1)                                AS jogos_medios,
+    ROUND(r.frac_curta * 100, 1)                            AS pct_amostra_curta
+    {%- for piso in [0, 5, 10] %},
+    r.n_{{ piso }}                                          AS n_p{{ piso }},
+    ROUND(r.p_odd_{{ piso }}  * 100, 1)                     AS a_odd_dava_p{{ piso }},
+    ROUND(r.p_real_{{ piso }} * 100, 1)                     AS aconteceu_p{{ piso }},
+    ROUND((r.p_real_{{ piso }} - r.p_odd_{{ piso }}) * 100, 1) AS diferenca_p{{ piso }},
+    -- peso = max(diferença, 0) × n/(n+k), k=50. Ganho negativo vira ZERO, não peso
+    -- negativo: com esta amostra, −5 é indistinguível de ruído.
+    IF(r.preferido,
+       ROUND(GREATEST((r.p_real_{{ piso }} - r.p_odd_{{ piso }}) * 100, 0)
+             * SAFE_DIVIDE(r.n_{{ piso }}, r.n_{{ piso }} + 50), 2),
+       NULL)                                                AS peso_p{{ piso }}
+    {%- endfor %},
+    -- Sensibilidade: peso sem encolhimento nenhum, no piso 0. Mostra o quanto o k=50
+    -- está segurando.
+    IF(r.preferido,
+       ROUND(GREATEST((r.p_real_0 - r.p_odd_0) * 100, 0), 2),
+       NULL)                                                AS peso_p0_k0
+FROM rotulado AS r
 CROSS JOIN janela AS j
-ORDER BY mercado, usado_para_peso DESC, diferenca DESC
+ORDER BY r.mercado, r.preferido DESC, diferenca_p0 DESC
