@@ -64,8 +64,11 @@ Removing the bookmaker margin (overround) from a market's full set of odds to ob
 fair probabilities.
 
 **Prob justa de fechamento**:
-The fair probability obtained by de-vigging Pinnacle's closing odds — the benchmark
-any value claim must beat.
+The fair probability a value claim must beat. It has three possible benchmarks, in
+descending order of trust: **sharp** (de-vigged Pinnacle, for 1X2/OU/AH), **derivada**
+(computed from Pinnacle's 1X2 de-vig, the only source for Dupla Chance) and
+**consenso**. Only the first two are anchored on a sharp price; note the data stamps
+derivada as `pinnacle` too, so the three-way split exists only where analysis makes it.
 
 **Sharp**:
 Pinnacle, the reference bookmaker. "Linha sharp" is its price; its movement toward our
@@ -131,3 +134,50 @@ Head-to-head history between the two teams.
 **Pilar A / Pilar B**:
 Pilar A is this rules engine. Pilar B is the future proper statistical model
 (Dixon-Coles + xG) — out of scope today; when it exists it becomes corroboration.
+
+### Measurement and calibration
+
+Each Teste answers a different question, and only one of them can justify a weight.
+
+**Point-in-time (PIT)**:
+An aggregate over a team's fixtures rebuilt from only the matches that kicked off
+before the fixture being rated. The default for anything the Score reads.
+_Avoid_: histórico, média da temporada (both are silent about where the cut is)
+
+**Base limpa / base contaminada**:
+The premissa data as recomputed point-in-time, versus the same data before that
+correction. The contaminated state is kept only to audit the difference — no
+conclusion may rest on it.
+
+**Teste 1**:
+A premissa's hit rate where it fired, minus the average hit rate of comparable lines.
+Answers "does it predict the line?". Needs no odds, so it runs on the full history.
+
+**Teste 2**:
+A premissa's hit rate where it fired, minus the fair probability the price implied on
+those same lines. Answers "does it beat the price?" — the only Teste that may justify a
+weight, and it runs only on the odds era.
+
+**Teste 3**:
+The ROI of a gate (e.g. "2+ premissas acesas") at flat stakes on the best odd.
+Answers "does a counting rule select bets?".
+
+**Teste 4**:
+The ROI by band of nota ponderada. Answers "does the score *order* bets?" — the
+product question, which counting never asked.
+
+**Nota ponderada**:
+A 0–100 rating built from premissas weighted by their measured Teste 2 gain and
+normalised per mercado. It exists only in analysis, and is not the Score de
+Confiabilidade — whose weights are hand-set.
+_Avoid_: score (reserved for the Score de Confiabilidade)
+
+**Peso de catálogo / peso medido**:
+A peso de catálogo is the point weight a premissa carries in production, chosen by hand
+and never derived; a peso medido comes from that premissa's Teste 2 gain. Rewriting the
+first from the second requires an out-of-sample control (ADR 0001).
+
+**Amostra curta**:
+A fixture whose teams have played too few matches for a season aggregate to mean
+anything — structural in knockout competitions, and an established cause of fabricated
+signal.
