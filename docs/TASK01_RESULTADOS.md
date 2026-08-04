@@ -8,6 +8,82 @@ quando a lógica muda e não quando os números mudam.
 
 ---
 
+# Veredito
+
+## A pergunta de produto
+
+> **A nota serve para excluir, não para escolher.**
+
+Existe sinal de ordenação e ele é real: a inclinação do ROI contra a nota é +0,228
+in-sample e **+0,223 out-of-sample** — a inflação por ajuste é desprezível. Ele excede a
+curva nula de permutação (p = 0,035 no gap entre faixa alta e baixa).
+
+Mas ele ordena o **fundo**, não o topo. Fora da amostra a faixa 00–20 rende −16,7% a 2,6
+erros-padrão de zero, enquanto a faixa 80–100 rende −3,9% e é **pior** que a 60–80.
+Nenhuma faixa positiva se distingue de zero com confiança.
+
+Um corte que **descarte** a faixa baixa é defensável pelo dado de hoje. Um corte que
+**selecione** a faixa alta não é.
+
+## O que eu quase reportei errado
+
+O filtro "ao menos uma premissa forte" deu **+10,0% de ROI** — o primeiro número positivo
+de toda a investigação. Ele não sobrevive: com "forte" definido só na primeira metade da
+janela e o ROI medido na segunda, vira **−6,2%**. São **14,5 pp de viés de seleção puro**.
+
+O mecanismo é o mesmo dos +9,7% que a Task [0] matou, trocando vazamento temporal por
+vazamento de seleção. Vale registrar que ele passou perto: sem o teste temporal, esse
+número teria virado manchete.
+
+## Recomendações
+
+**B1 a B5 — não reescrever peso. Manter bloqueadas.**
+
+A medição do Teste 2 está pronta e reproduzível, mas ela **não sustenta** reescrever os
+39 pesos de catálogo. A prova está na própria task: os ganhos individuais **não se
+replicam** fora da amostra — é exatamente isso que o teste de premissa forte mediu. A
+nota agregada sobrevive porque o erro de peso individual se cancela na soma; escrever
+cada peso de catálogo a partir do seu ganho medido faria o oposto, fixando o ruído.
+
+O que dá para fazer **agora**, sem depender de peso novo:
+- **B3** — a correção do teto do azarão (30, não 13) e a decisão de **não remover**
+  `favorito_irregular` estão confirmadas duas vezes: ela vale +8 pontos em produção e é
+  o 3º maior sinal de valor do Teste 2, com uma das menores exposições a amostra curta.
+- **B4 / B5** — os diagnósticos estruturais (BTTS sem cotação Pinnacle, DC barrada por
+  aritmética) não dependem de peso e seguem válidos.
+
+**A4 — a régua que substitui o preço: adotar como exclusão, não como seleção.**
+*(Inferindo o escopo da A4 a partir do comentário de fechamento da [0]; a busca do
+ClickUp falhou e não consegui ler a task.)* O dado sustenta descartar a faixa baixa da
+nota. Não sustenta um corte de seleção no topo, nem a porta de contagem simples.
+
+**C2 (ampliar a coleta de odds) — subir de prioridade, com número.**
+O piso de amostra derruba o universo de 169 para **67 jogos**. Metade dos resultados
+desta task carrega intervalo maior que o efeito medido. Não é calibragem fina que falta,
+é amostra.
+
+**Duas frentes novas que apareceram e não existiam em nenhuma task:**
+1. **As penalidades degradam a ordenação.** O Score pós-A1 ordena pior que a nota de
+   premissas pura (+0,114 contra +0,223 out-of-sample). A corroboração é inerte, então
+   são as penalidades — calculadas sobre características da odd e descorrelacionadas do
+   resultado.
+2. **O benchmark é a maior alavanca de ROI da base.** Linhas com preço sharp rendem
+   −5,0% contra −14,9% das de consenso: **~10 pontos**, contra ~0 de qualquer filtro de
+   preço. Restringir o board a linhas com cotação Pinnacle vale mais que toda a família
+   de regras de edge junta.
+
+## Achados colaterais que precisam de dono
+
+| Achado | Produção afetada? |
+|---|---|
+| De-vig de consenso com uma só saída precificada dá `prob_justa = 1,0` e edge de até 14.900% (172 linhas, 2 vitórias em 172) | **Não** — o gate barra. Mas contamina todo backtest, inclusive o publicado |
+| O modelo de premissas da Dupla Chance não emite a saída `12`; 1 linha por jogo fora de toda medição | Não medido |
+| O backtest é mais permissivo que o board (não aplica gate de casas nem completude) | Toda a série histórica |
+| `linha_subindo`/`linha_descendo` leem odds; número de Gols muda entre builds | Backtest, não board |
+| `fact_standings_snapshot` com 13 times fora de `dim_teams` (Chapecoense B, Nacional) | `dbt test` vermelho desde 14/07 |
+
+---
+
 ## Carimbo de execução
 
 **Toda tabela desta seção precisa de carimbo.** O mercado de Gols não é reproduzível
