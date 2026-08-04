@@ -136,6 +136,101 @@ segundo é ruído.
 
 ---
 
+## Ticket #5 — Teste 2 completo nos 5 mercados e peso medido
+
+`analyses/task01_teste2.sql` · execução 2026-08-04 · janela **16/06 a 04/08/2026**, 169 jogos
+
+As 39 premissas medidas. `diferença = acerto − prob justa`, em pp, só nas linhas em que
+a premissa acendeu.
+
+### Peso medido (melhor benchmark de cada mercado)
+
+**20 das 39 têm diferença positiva; 19 vão a zero.** Com peso ≥ 1,0 sobram **17**.
+
+| Mercado | Premissa | n | A odd dava | Aconteceu | Dif. | Jogos méd. | % amostra curta | peso k50 | peso k0 |
+|---|---|---|---|---|---|---|---|---|---|
+| Gols | `clean_sheets_altos` | 105 | 51,5 | 68,6 | **+17,1** | 5,3 | **77,1** | 11,58 | 17,10 |
+| Handicap | `raramente_perde_por_2` | 445 | 63,1 | 69,4 | **+6,3** | 14,1 | 20,9 | 5,67 | 6,31 |
+| Handicap | `favorito_irregular` | 453 | 62,3 | 68,2 | **+5,9** | 14,8 | 17,4 | 5,29 | 5,88 |
+| BTTS | `ataque_dos_dois` | 32 | 50,6 | 62,5 | +11,9 | 12,1 | 37,5 | 4,65 | 11,91 |
+| 1X2 | `superioridade_xg` | 109 | 38,0 | 43,1 | +5,2 | 6,3 | **71,6** | 3,54 | 5,17 |
+| Handicap | `defesa_fora_solida` | 322 | 62,5 | 66,5 | +3,9 | 8,4 | 58,4 | 3,39 | 3,92 |
+| Gols | `defesas_firmes` | 246 | 64,6 | 68,3 | +3,7 | 11,4 | 40,7 | 3,05 | 3,67 |
+| Handicap | `tende_golear` | 154 | 44,2 | 48,1 | +3,9 | 3,5 | **88,3** | 2,91 | 3,86 |
+| Gols | `linha_descendo` | 405 | 53,0 | 56,0 | +3,1 | 10,3 | 46,9 | 2,74 | 3,08 |
+| Dupla Chance | `lado_coberto_forte` | 112 | 74,0 | 76,8 | +2,8 | 8,6 | 58,0 | 1,92 | 2,78 |
+| Gols | `ataques_fracos` | 357 | 51,7 | 53,8 | +2,1 | 9,6 | 50,1 | 1,81 | 2,07 |
+| BTTS | `defesa_forte` | 70 | 52,9 | 55,7 | +2,8 | 4,4 | **82,9** | 1,65 | 2,82 |
+| 1X2 | `mando` | 107 | 43,4 | 45,8 | +2,4 | 9,0 | 55,1 | 1,63 | 2,39 |
+| Dupla Chance | `equilibrio_defensivo` | 144 | 63,3 | 65,3 | +2,0 | 9,0 | 54,2 | 1,49 | 2,01 |
+| Gols | `xg_baixo_combinado` | 307 | 64,9 | 66,4 | +1,5 | 8,7 | 56,7 | 1,31 | 1,52 |
+| BTTS | `defesas_vazaveis` | 58 | 47,8 | 50,0 | +2,2 | 10,3 | 46,6 | 1,20 | 2,24 |
+| Gols | `historico_under` | 144 | 70,0 | 71,5 | +1,5 | 17,0 | 3,5 | 1,11 | 1,50 |
+| 1X2 | `superioridade_tabela` | 98 | 50,2 | 51,0 | +0,8 | 7,6 | 64,3 | 0,55 | 0,82 |
+| Dupla Chance | `adversario_limitado` | 160 | 68,7 | 69,4 | +0,7 | 9,7 | 50,0 | 0,51 | 0,66 |
+| BTTS | `historico_btts` | 16 | 50,0 | 50,0 | 0,0 | 18,4 | 0,0 | 0,01 | 0,03 |
+
+As 19 com peso zero, da menos ruim para a pior: `historico_over` −0,5 · `forma` −1,4 ·
+`linha_subindo` −1,5 · `supremacia` −1,9 · `ataque_trava` −2,2 · `ambos_marcam` −2,5 ·
+`xg_combinado_alto` −2,6 · `sem_rodizio` −2,7 · `adversario_fragil_fora` −2,8 ·
+`historico_seco` −0,9 · `mando_forte` −3,1 · `forca_mismatch` −3,1 ·
+`ataque_combinado` −3,6 · `ambos_vazam` −3,7 · `defesas_vazaveis` (Gols) −5,0 ·
+`ritmo_alto` −5,3 · `h2h_favoravel` −10,7 · `invicto_recente` −10,7 ·
+`desfalque_adversario` −24,9 (n=7).
+
+### ⚠️ O encolhimento não protege contra o artefato que matou a medição anterior
+
+São **dois eixos diferentes**, e o `k=50` só cobre um deles:
+
+- **n pequeno** — a premissa acendeu poucas vezes. É o que o encolhimento trata.
+  `ataque_dos_dois` (n=32) cai de 11,9 para 4,65: funcionou.
+- **amostra curta** — os jogos em que ela acendeu tinham pouco histórico. O
+  encolhimento **não vê isso**.
+
+E os três maiores sinais estão contaminados pelo segundo eixo:
+
+| Premissa | Dif. | n | % das linhas com < 5 jogos |
+|---|---|---|---|
+| `clean_sheets_altos` | +17,1 | 105 (grande) | **77,1** |
+| `superioridade_xg` | +5,2 | 109 (grande) | **71,6** |
+| `tende_golear` | +3,9 | 154 (grande) | **88,3** |
+| `defesa_forte` (BTTS) | +2,8 | 70 | **82,9** |
+
+`clean_sheets_altos` tem o maior peso da tabela e acende quase só em jogo sem histórico
+— a assinatura exata dos +9,7% que morreram. **Isso torna o ticket #9 (piso de amostra)
+não-opcional**: sem ele, a nota do #8 é dominada por uma premissa cujo sinal pode ser o
+mesmo artefato de novo.
+
+O contraste: `raramente_perde_por_2` (+6,3, n=445, só 20,9% de amostra curta) e
+`favorito_irregular` (+5,9, n=453, 17,4%) são os únicos sinais fortes que **não**
+dependem de jogo sem passado.
+
+### `favorito_irregular` é o 3º maior sinal de valor da tabela
+
+A premissa que os documentos da proposta mandavam remover — "vale 0 ponto, é
+decorativa" — mede **+5,9 pp contra o preço**, com n=453 e a segunda menor exposição a
+amostra curta. A Task [0] já tinha mostrado que ela vale +8 pontos e é premissa do
+azarão; o Teste 2 agora mostra que ela também é uma das poucas que batem o mercado.
+
+### Por que as linhas de consenso não foram pooled
+
+O consenso não é "o mesmo jogo com benchmark pior" — é **outro conjunto de linhas**. A
+prob justa média da mesma premissa muda de forma estrutural:
+
+| Mercado | Premissa | `a_odd_dava` sharp | `a_odd_dava` consenso |
+|---|---|---|---|
+| Handicap | `raramente_perde_por_2` | 63,1 | **87,7** |
+| Handicap | `mando_forte` | 43,9 | **17,1** |
+| Gols | `xg_baixo_combinado` | 64,9 | **88,1** |
+| Gols | `ritmo_alto` | 49,4 | **42,7** |
+
+A Pinnacle precifica as linhas principais; as extremas caem no consenso. Uma linha com
+17% ou 88% de probabilidade implícita é handicap grande ou total distante — população
+diferente, não amostra a mais. Juntar as duas metades teria produzido uma média sem
+referente.
+
+---
+
 ## Ressalvas que valem para tudo neste documento
 
 - **A amostra é o gargalo, não a análise.** 168 jogos, cerca de um mês e meio, com
