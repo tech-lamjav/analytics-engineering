@@ -515,6 +515,69 @@ para o corte temporal.
 
 ---
 
+## Ticket #9 — Piso coerente e a variante de premissa forte
+
+`analyses/task01_teste4_piso.sql` e `task01_premissa_forte.sql`
+
+Corrige uma incoerência do #8: lá o piso de 5 foi aplicado aos **pesos** mas o ROI foi
+medido no universo inteiro. Aqui cada corte é coerente — piso P gera os pesos com P e
+mede o ROI com P.
+
+### O piso é um filtro de competição, e o dado agora mostra o tamanho disso
+
+| Piso | Jogos | Competições que sobram |
+|---|---|---|
+| 0 | **169** | Copa do Mundo (79), Série B (39), Brasileirão (28), Sudamericana (15), Copa do Brasil (8) |
+| 5 | **69** | Brasileirão (28), Série B (39), Copa do Mundo (2) |
+| 10 | **67** | Brasileirão (28), Série B (39) |
+
+**Copa do Mundo é 47% da amostra e desaparece inteira.** O piso não corta jogos ruins,
+corta competições — e as que ele remove não são as piores: Sudamericana rende −1,6% e
+Copa do Mundo −9,7%, contra −13,4% do Brasileirão e −10,0% da Série B, que ficam.
+
+Exigir piso 10 reduz o universo a **67 jogos**. Qualquer calibragem fina em cima disso é
+ilusão, e é o argumento mais concreto que apareceu para a prioridade da task C2.
+
+### ⚠️ A variante de premissa forte: +10,0% que não sobrevive
+
+O corte "ao menos uma premissa com ganho ≥ 5 pp" produziu o **primeiro ROI positivo de
+toda a investigação**. Mas "forte" é definido pelo Teste 2 medido nos mesmos dados em que
+o ROI é medido — selecionar por critério ajustado à amostra e avaliar na mesma amostra é
+o procedimento que produziu os +9,7% que a Task [0] matou, trocando vazamento temporal
+por vazamento de seleção.
+
+O teste que decide, com "forte" definido **só na 1ª metade** e ROI medido **na 2ª**:
+
+| Piso | Cenário | n | ROI | ± EP |
+|---|---|---|---|---|
+| 5 | 1. todas as apostas, 2ª metade | 2.962 | −10,0 | 3,9 |
+| 5 | 2. forte de TODA a janela, ROI em toda (**in-sample**) | 1.235 | **+7,5** | 5,1 |
+| 5 | 3. forte de TODA a janela, ROI na 2ª metade | 1.065 | +8,3 | 5,7 |
+| 5 | 4. **forte só da 1ª metade, ROI na 2ª (OUT-OF-SAMPLE)** | 1.438 | **−6,2** | 3,4 |
+
+E o mesmo padrão nos outros pisos: **+10,0 → −3,5** (piso 0) e **+8,3 → −5,1** (piso 10).
+
+**A distância entre o cenário 3 e o 4 — 14,5 pontos percentuais — é viés de seleção
+puro.** Os dois medem o mesmo conjunto de jogos; a única diferença é se a definição de
+"forte" pôde ou não enxergar os resultados que ela seleciona.
+
+### O contraste que dá coerência a tudo
+
+| Objeto | In-sample | Out-of-sample | Sobrevive? |
+|---|---|---|---|
+| Nota ponderada (inclinação) | +0,228 | **+0,223** | **sim** |
+| Filtro "tem premissa forte" (ROI) | +7,5% | **−6,2%** | **não** |
+
+Não é contradição — é o mecanismo. A nota usa **todas** as premissas com peso contínuo,
+e erro de peso individual se cancela na soma. O filtro de premissa forte é um **limiar
+duro sobre o ganho individual**, e por construção seleciona exatamente as premissas que
+tiveram sorte na amostra. Um agrega ruído, o outro o concentra.
+
+É a mesma lição da Task [0] numa forma nova: o problema nunca foi a premissa, foi o
+procedimento de seleção.
+
+---
+
 ## Instabilidade: terceira medição, dentro da mesma sessão
 
 O `dbt_loaded_at` das origens era 12:09 na primeira execução do dia e **15:01** três horas
