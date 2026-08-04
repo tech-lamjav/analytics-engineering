@@ -58,6 +58,14 @@
          dela que ninguém levantou ainda — e que não depende do resultado de ROI.
     ────────────────────────────────────────────────────────────────────────────────
 
+    ACHADO DA GUARDA DE DESCARTE (mesma execução): além do gap já conhecido da saída
+    '12' da Dupla Chance (168 linhas, 1 por jogo), o mercado 6 — Goals Over/Under First
+    Half — tinha 3.642 linhas de odd sumindo em silêncio na janela congelada. O Motor
+    não pontua gols do 1º tempo, então excluí-lo está certo; o problema era estar sendo
+    excluído POR ACIDENTE, pelo INNER JOIN com as premissas, e não por escopo declarado.
+    O macro passou a filtrar `market_id IN (1,4,5,8,12)` explicitamente. Todos os 25
+    números acima ficaram byte a byte iguais depois da mudança — era mesmo só acidente.
+
     Rodar com:
       dbt compile --select path:analyses/task01_reconciliacao.sql
       e executar o SQL de target/compiled/... no BigQuery
@@ -173,6 +181,33 @@ cobertura AS (
     FROM bets
 ),
 
+-- Guarda de descarte silencioso. O JOIN de `bets` com as premissas é INNER, então
+-- qualquer linha de odd sem premissa correspondente some sem aviso. Já sabemos de uma
+-- (a saída '12' da Dupla Chance, que o modelo de premissas não emite); esta guarda
+-- existe para que não haja uma segunda que ninguém viu. Esperado 0 em toda linha.
+descarte AS (
+    SELECT
+        'Descarte silencioso' AS bloco,
+        CONCAT('market ', CAST(o.market_id AS STRING), ' — ', o.outcome_side,
+               IF(o.market_id = 12 AND o.outcome_side = '12',
+                  '  (gap CONHECIDO, reportado)', '')) AS metrica,
+        COUNT(*) AS n,
+        0.0 AS esperado,
+        CAST(COUNTIF(b.fixture_id IS NULL) AS FLOAT64) AS obtido
+    FROM odds AS o
+    JOIN fx AS f
+      ON f.fixture_id = o.fixture_id
+    LEFT JOIN bets AS b
+      ON  b.market_id                  = o.market_id
+      AND b.fixture_id                 = o.fixture_id
+      AND b.outcome_side               = o.outcome_side
+      AND COALESCE(b.line_value, -999) = COALESCE(o.line_value, -999)
+    WHERE (o.market_id NOT IN (4, 5)
+           OR MOD(CAST(ABS(o.line_value) * 2 AS INT64), 2) = 1)
+    GROUP BY o.market_id, o.outcome_side
+    HAVING COUNTIF(b.fixture_id IS NULL) > 0
+),
+
 -- Informativo: onde procurar, se algo acima divergir. Sem valor publicado p/ comparar.
 -- Agrupa POR benchmark, não ANY_VALUE(benchmark): os mercados 4 e 5 são MISTOS (a
 -- Pinnacle cobre a maior parte, mas não todos os jogos), e um rótulo arbitrário por
@@ -206,6 +241,7 @@ FROM (
     UNION ALL SELECT * FROM teste3_mercado
     UNION ALL SELECT * FROM teste2_gols
     UNION ALL SELECT * FROM cobertura
+    UNION ALL SELECT * FROM descarte
     UNION ALL SELECT * FROM por_mercado
 )
 ORDER BY bloco, metrica

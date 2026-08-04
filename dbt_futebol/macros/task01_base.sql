@@ -117,6 +117,12 @@ odds AS (
     FROM {{ ref('int_futebol_odds_devig') }}
     WHERE best_odd IS NOT NULL
       AND edge     IS NOT NULL
+      -- Escopo do Motor, DECLARADO e não herdado do JOIN. A coleta traz mercados que o
+      -- Motor não pontua — 6 (Goals Over/Under First Half), 7 (HT/FT Double), 10 (Exact
+      -- Score) — e eles não têm modelo de premissas. Sem esta linha eles cairiam pelo
+      -- INNER JOIN com prem_n, o que é correto por acidente: só do 6 são ~3,6 mil linhas
+      -- sumindo em silêncio na janela congelada. Escopo é decisão, não efeito colateral.
+      AND market_id IN (1, 4, 5, 8, 12)
 ),
 
 {#- Premissas em formato longo: uma linha por (aposta, premissa).
