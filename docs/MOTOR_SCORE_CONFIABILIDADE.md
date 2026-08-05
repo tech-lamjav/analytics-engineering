@@ -309,18 +309,20 @@ Preencher a coluna **Status/Notas** in-place quando cada uma for implementada �
 
 **Penalidade específica:** `linha_extrema` (−10, quando L ≤ 0,5 ou L ≥ 4,5 — odd vira juice/longshot).
 
-#### 12.2.1 — Baseline de calibração por liga (medido 2026-08-03)
+#### 12.2.1 — Baseline de calibração por liga (medido 2026-08-03; Bundesliga em 2026-08-05)
 
-Cinco das treze regras acima usam **thresholds absolutos** (`35%`, `40%`, `35%`, e os offsets
-`+0,5` / `±0,3`) calibrados no **Brasileirão**. Num ambiente de gols deslocado, todas as premissas
-de um mesmo lado disparam juntas e inflam o `PTS_PREMISSAS` de um outcome que **o mercado já
-precifica** — dupla contagem, não edge. As premissas que já são relativas à liga (`ritmo_alto`, via
-`league_pace_median`) não sofrem disso.
+Regras com **thresholds absolutos** calibrados no **Brasileirão** existem em três mercados, não só
+no Gols (ver o escopo corrigido no item aberto, abaixo). Num ambiente de gols deslocado, todas as
+premissas de um mesmo lado disparam juntas e inflam o `PTS_PREMISSAS` de um outcome que **o mercado
+já precifica** — dupla contagem, não edge. As premissas que já são relativas à liga (`ritmo_alto`,
+via `league_pace_median`) não sofrem disso.
 
-Ambiente real, 760 jogos FT por liga-temporada (`/fixtures`, seasons 2024 e 2025):
+Ambiente real por liga-temporada (`/fixtures`, seasons 2024 e 2025 — 760 jogos FT nas ligas de 20
+times, 616 na Bundesliga, que tem 18):
 
 | liga | gols/jogo | Δ vs baseline | Over 2.5 | Δ | clean sheet | viés esperado |
 |---|---|---|---|---|---|---|
+| **Bundesliga (78)** | **3,18** | **+0,70** | **61,9%** | **+15,2pp** | 40,4% | superpontua **Over** — o maior desvio do portfólio |
 | Premier League (39) | 2,84 | **+0,36** | 55,8% | **+9,1pp** | 43,3% | superpontua **Over** |
 | La Liga (140) | 2,66 | +0,17 | 49,3% | +2,6pp | 44,6% | leve, pró-Over |
 | Serie A ITA (135) | 2,49 | +0,01 | 47,0% | +0,3pp | 51,6% | — (na baseline) |
@@ -331,10 +333,31 @@ Observação contraintuitiva registrada no rollout da Serie A ITA: a fama de "li
 é folclore do catenaccio — a Serie A moderna é a liga **mais próxima da baseline** de todo o
 portfólio. O desvio real está em Premier League e Série B, ambas em produção.
 
-**Item aberto (Fase 5):** tornar os cinco thresholds relativos à mediana da própria liga-temporada,
-replicando o padrão do `league_pace_median` que já existe em `int_futebol_premissas_ou`. Isso
-autocalibra qualquer liga futura e dispensa tabela de constantes por liga. Validar com backtest
-RPS/CLV antes de aplicar — muda o comportamento de ligas já em produção.
+O rollout da Bundesliga (2026-08-05) é o caso **oposto**: ali o briefing pedia "liga de muitos gols,
+ajustar O/U pra cima" e a medição **confirmou e subestimou** — +0,70 gol/jogo e +15,2pp de Over 2.5,
+quase o dobro do desvio da Premier League. Com clean sheet de **23,1% por time-jogo** (o menor do
+portfólio, contra 29,9% do Brasileirão) e ~1,59 gol por time-jogo, as premissas do lado "muitos
+gols" disparam quase sempre nessa liga: `ambos_vazam` (Over), `ambos_marcam` + `ataque_dos_dois` +
+`defesas_vazaveis` (BTTS-Sim) e `adversario_fragil_fora` (AH). A liga entrou em produção **sem gate**,
+como as demais europeias — a decisão foi registrar o viés, não segurar a liga.
+
+**Item aberto (Fase 5):** tornar os thresholds absolutos relativos à mediana da própria
+liga-temporada, replicando o padrão do `league_pace_median` que já existe em
+`int_futebol_premissas_ou`. Isso autocalibra qualquer liga futura e dispensa tabela de constantes
+por liga. Validar com backtest RPS/CLV antes de aplicar — muda o comportamento de ligas já em
+produção.
+
+**Escopo real do item (corrigido em 2026-08-05):** não são cinco regras do Gols O/U — são ≈11, em
+**três mercados**. A varredura feita no rollout da Bundesliga encontrou o mesmo padrão em:
+
+| mercado | regras com threshold absoluto |
+|---|---|
+| Gols O/U (5) | `ambos_vazam` (cs < 35%), `clean_sheets_altos` (cs ≥ 40%), `ataques_fracos` (fts ≥ 35%), + os offsets `+0,5` / `±0,3` de `gf_comb`/`ga_comb`/`xg_comb` contra a linha |
+| BTTS (8) | `ambos_marcam` (fts < 30%), `ataque_dos_dois` (gf ≥ 1,2), `defesas_vazaveis` (cs < 35%), `ataque_trava` (fts ≥ 35%) |
+| Handicap (4) | `tende_golear` (gf ≥ 2,0 **e** ga ≤ 1,0), `adversario_fragil_fora` (ga ≥ 1,6), `defesa_fora_solida` (ga ≤ 1,1) |
+
+Todas se movem junto com o ambiente de gols da liga, e nenhuma delas é relativa hoje. Dimensionar a
+Fase 5 pelos cinco thresholds do O/U subestima o trabalho por um fator de ~2.
 
 ### 12.3 — Handicap asiático, meia-linha (`market_id` 4)
 `H` = handicap na ótica do mandante. **Valor quando** a supremacia real difere do que a linha pede (favorito dando handicap; azarão recebendo).
