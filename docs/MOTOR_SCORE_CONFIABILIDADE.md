@@ -346,6 +346,25 @@ gols" disparam quase sempre nessa liga: `ambos_vazam` (Over), `ambos_marcam` + `
 `defesas_vazaveis` (BTTS-Sim) e `adversario_fragil_fora` (AH). A liga entrou em produção **sem gate**,
 como as demais europeias — a decisão foi registrar o viés, não segurar a liga.
 
+**A dupla contagem, medida (2026-08-05).** Deixou de ser argumento: `int_futebol_premissas_ou`,
+linha 2.5, seasons 2024+2025, por liga —
+
+| liga | gols/jogo | `ataque_combinado` | `defesas_vazaveis` | **PTS Over** | **PTS Under** |
+|---|---|---|---|---|---|
+| bundesliga | 3,18 | 53,9% | 77,6% | **29,3** | 6,2 |
+| premier_league | 2,84 | 40,4% | 61,6% | 24,7 | 7,9 |
+| la_liga | 2,66 | 29,5% | 51,6% | 20,6 | 11,1 |
+| serie_a_ita | 2,49 | 25,3% | 47,8% | 17,7 | 13,3 |
+| **brasileirao** *(baseline)* | 2,48 | 17,9% | 42,1% | **15,2** | 14,2 |
+| serie_b | 2,20 | 8,8% | 24,9% | 11,9 | 17,9 |
+
+**A ordem de `PTS Over` é idêntica à ordem de gols/jogo, liga a liga** — e a de `PTS Under` é o
+espelho invertido. O `PTS_PREMISSAS` do lado Over não está medindo confiança naquela aposta; está
+medindo o ambiente de gols da liga, que é exatamente o que o mercado já precificou na odd. Uma liga
+extrema entra com ~2× o crédito de premissa da liga onde os limiares foram calibrados (29,3 vs 15,2),
+sem nenhum edge adicional. Como a faixa Alta começa em 60, o efeito prático é que um Over de
+Bundesliga alcança Alta com menos edge real que um Over de Brasileirão equivalente.
+
 **Item aberto (Fase 5):** tornar os thresholds absolutos relativos à mediana da própria
 liga-temporada, replicando o padrão do `league_pace_median` que já existe em
 `int_futebol_premissas_ou`. Isso autocalibra qualquer liga futura e dispensa tabela de constantes
