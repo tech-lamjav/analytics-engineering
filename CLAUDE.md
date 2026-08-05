@@ -2,6 +2,35 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Isolamento por worktree
+
+**Trabalho de mais de um passo neste repositório roda em git worktree.** Chame `EnterWorktree`
+no início da sessão, antes de editar qualquer arquivo.
+
+Motivo: em 2026-08-05 duas sessões escreveram `int_futebol_odds_devig.sql` ao mesmo tempo. A
+segunda sobrescreveu a primeira, e só foi percebido porque um `dbt test` pegou o arquivo no
+meio da escrita e devolveu um erro de sintaxe inexplicável. `git status` de uma sessão não
+distingue o que ela escreveu do que outra escreveu — worktree separa as duas árvores e o
+problema deixa de existir.
+
+Não vale a pena para pergunta de uma resposta só (ler um modelo, rodar uma query).
+
+**Setup da árvore nova.** `.venv/`, `target/` e `dbt_packages/` são gitignored, então o
+worktree nasce sem os três — e o `../.venv/bin/dbt` que este arquivo usa mais abaixo não
+resolve lá dentro. O `profiles.yml` é versionado e vem junto.
+
+```bash
+ln -s /caminho/do/repo/original/.venv .venv
+cd dbt_futebol && DBT_PROFILES_DIR=.. ../.venv/bin/dbt deps
+```
+
+**⚠️ Worktree isola o disco, não o BigQuery.** Os targets `dev` e `prod` do `profiles.yml`
+apontam para o **mesmo** dataset (`futebol`, `nba`) — não há dataset por pessoa. Duas sessões
+em worktrees diferentes rodando `dbt run` materializam na mesma tabela: a segunda ganha e a
+primeira não recebe sinal nenhum. Conflito de arquivo é barulhento e o worktree o elimina;
+clobber de tabela é **mudo** e o worktree não encosta nele. **Só uma sessão roda `dbt run` por
+vez**, com ou sem worktree.
+
 ## Project Overview
 
 This is a dbt (data build tool) project for NBA sports betting analytics. It ingests raw NBA data from Google Cloud Storage (sourced from the Balldontlie API and DraftKings), transforms it through BigQuery, and produces mart tables used for prop betting analysis.
