@@ -50,8 +50,27 @@ External confirmation points: the API's prediction model agrees, or the sharp li
 moved toward our side.
 
 **Degradação graciosa**:
-Missing data means the premissa simply does not fire — never an error or NULL. The
-score gets honestly lower.
+Missing data means the premissa simply does not fire — never an error or NULL. The rule
+holds when the absence is **in the world** ("there is no desfalque"): the score gets
+honestly lower. It does not hold when the absence is **in the collection** ("we never
+asked", or "we asked and kept no record") — reading that as a negative is a fabricated
+claim, not a degraded one. See ADR 0003.
+
+**Premissas sem dado**:
+The count, per rated line, of premissas whose declared input was unavailable. It is
+diagnosis, never penalty: it does not move the score. It is what makes a low score
+readable as *little evidence* instead of *evidence against*.
+
+**Insumo declarado**:
+The inputs a premissa depends on, declared per premissa in one place — the same idiom as
+the conjunto de saídas. A premissa whose input is undeclared cannot be counted as missing,
+so the declaration is what makes **premissas sem dado** honest rather than optimistic.
+
+**Dado não perguntado**:
+An input absent because the source was never consulted — as opposed to consulted and
+answered "nothing". The two are indistinguishable downstream unless the asking itself is
+recorded, and the Motor then reports the second while in fact holding the first.
+_Avoid_: dado faltante (silent about which of the two it is)
 
 ### Odds and value
 
@@ -97,8 +116,19 @@ side is corroboration.
 _Avoid_: soft book (that is the opposite concept)
 
 **Janela**:
-The odds collection window relative to kickoff: t24h, t1h, t15m. The latest available
-acts as the fechamento (closing).
+The odds collection window relative to kickoff: daily (anything beyond 24h, one capture
+per day), t24h, t1h, t15m. t15m is the fechamento (closing).
+
+**Janela de avaliação**:
+The janela whose prices a given rating was computed from. It is part of the identity of a
+rating, not a property resolved away: the same line is rated once per janela it has, and
+no janela is discarded in favour of a fresher one. See ADR 0004.
+
+**Janela de detecção**:
+The earliest janela in which a line passed the gate. Stamped on the board so an
+opportunity is published once and followed from there, instead of re-announced whenever a
+fresher price arrives.
+_Avoid_: janela usada (ambiguous between the two above)
 
 **Consenso**:
 Fallback fair probability from the median of all bookmakers, used when Pinnacle does
@@ -130,8 +160,17 @@ signal.
 
 **Desfalque**:
 A player missing a fixture. Only a desfalque of a titular importante fires premissas;
-"Questionable" (dúvida) is displayed but never fires.
+"Questionable" (dúvida) is displayed but never fires. The source publishes the list
+roughly two to three days out and not before — so on the earlier part of the board the
+premissa has **no input**, which is not the same as a negative one.
 _Avoid_: injury (a desfalque may be suspension or other absence)
+
+**Escalação confirmada**:
+The starting eleven as announced before kickoff, roughly forty minutes out — distinct
+from the escalação real recorded after the match. It is the only pre-kickoff evidence of
+who actually plays, and it arrives too late to inform any janela but t15m. Its value is
+therefore corroboration and measurement, not the desfalque premissa itself.
+_Avoid_: escalação provável (the source does not publish one)
 
 **Titular importante**:
 A regular starter by minutes played and start share — the importance proxy that makes
@@ -142,8 +181,10 @@ Squad rotation — resting starters when a bigger match looms. "Sem rodízio" me
 game matters and no midweek decision competes.
 
 **xG (expected goals)**:
-Shot-quality-based goal expectation; the strongest form signal. Only rich for the
-Brasileirão — elsewhere xG premissas degrade gracefully.
+Shot-quality-based goal expectation; the strongest form signal. Rich in the Brasileirão
+**and in the top-5 European leagues** (~100% of finished fixtures); thin in the cups and
+in Série B, with Copa do Brasil the extreme at ~10%. Where it is thin the xG premissas
+have no input at all — that is **premissas sem dado**, not a weak reading.
 
 **Forma**:
 Recent results run (wins in last 5). Deliberately low-weight: it mostly duplicates
