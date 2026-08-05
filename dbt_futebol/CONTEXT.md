@@ -61,7 +61,28 @@ The margin by which the best available odd beats the fair closing probability
 
 **De-vig**:
 Removing the bookmaker margin (overround) from a market's full set of odds to obtain
-fair probabilities.
+fair probabilities. Operates on a **conjunto de saídas**, never on a single price.
+
+**Conjunto de saídas**:
+The set of mutually exclusive and exhaustive outcomes a de-vig normalises over, for one
+(fixture, market, line) — Home/Draw/Away for 1X2, Over/Under for a goals line, the
+complementary pair for an asian handicap. Its expected size is **declared per market**,
+in one place, and the declaration is what makes a set *complete*.
+_Avoid_: "as odds do mercado" (a market has many prices across bookmakers; the set is the
+outcome axis, not the bookmaker axis)
+
+**Conjunto incompleto**:
+A set missing at least one outcome. It does **not** yield a worse fair probability — it
+yields **no** fair probability. Normalising over a partial set inflates every probability
+in it (one outcome alone yields certainty), so a partial set is not a weak estimate but an
+invalid one. A line built on an incomplete set keeps its real outcome count as diagnosis
+and loses fair probability, edge and value points.
+_Avoid_: treating a partial set as a degraded estimate
+
+**Double Chance (conjunto)**:
+Its three outcomes (1X/12/X2) are *not* exhaustive — they sum to ~2 — so Double Chance is
+never de-vigged on its own set. Its fair probability is **derived** from the 1X2 set, and
+that is the set its declaration refers to.
 
 **Prob justa de fechamento**:
 The fair probability a value claim must beat. It has three possible benchmarks, in

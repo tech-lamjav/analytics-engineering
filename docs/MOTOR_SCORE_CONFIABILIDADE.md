@@ -186,6 +186,13 @@ fixtures ───────────┘   int_futebol_premissas_btts  (S4)
 | Fase | Escopo | Entrega |
 |---|---|---|
 | **Fase 0 — Núcleo de valor** | de-vig market-aware da Pinnacle + edge/EV + `n_casas` + penalidades + gate + corroboração (`int_futebol_odds_devig`, `int_futebol_corroboracao`) | PTS_VALOR + PTS_CORROBORACAO + PENALIDADES + gate funcionando, **agnóstico de mercado** |
+
+> ⚠️ **Regra de emissão do de-vig (2026-08-05, spec #22):** o de-vig só emite valor quando o
+> **conjunto de saídas** bate exatamente com o declarado por mercado; conjunto incompleto não
+> gera estimativa pior, gera ausência de estimativa. A regra e o porquê da comparação exata
+> vivem em `dbt_futebol/docs/adr/0002-conjunto-de-saidas-declarado-por-mercado.md` — **não
+> copiada aqui de propósito**: cada cópia da regra é mais uma chance de este documento divergir
+> de produção, como já divergiu antes.
 | **Fase 1 — Premissas por mercado** | S1–S5 (1X2 primeiro = mais rico), 1 modelo `int_` por mercado, conforme §12 | PTS_PREMISSAS por mercado |
 | **Fase 2 — Dado/coleta** | S6 (predictions: extractor existe mas só 3 fixtures → **agendar coleta pré-jogo dos fixtures futuros**, 1 call/jogo) + S7 (injuries: só histórico até 31/05 → **coletar pré-jogo** + **proxy de importância**) | corroboração + premissas de desfalque |
 | **Fase 3 — Mart de Score** | `fact_value_opportunities` (soma ponderada, clamp, faixa, evidências[], avisos[]) | saída da seção 3 |

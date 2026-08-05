@@ -1,3 +1,4 @@
+{{ config(tags=['guarda']) }}
 -- Guard de regressão da Task 0 (item D).
 -- Todo desfalque que chega na premissa tem de vir de um snapshot COLETADO ANTES DO APITO.
 -- O log de /injuries da API é retroativo (99,6% das linhas são pós-jogo, inclusive de quem se
