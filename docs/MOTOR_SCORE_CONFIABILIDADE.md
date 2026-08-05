@@ -320,7 +320,12 @@ via `league_pace_median`) não sofrem disso.
 Ambiente real por liga-temporada (`/fixtures`, seasons 2024 e 2025 — 760 jogos FT nas ligas de 20
 times, 616 na Bundesliga, que tem 18):
 
-| liga | gols/jogo | Δ vs baseline | Over 2.5 | Δ | clean sheet | viés esperado |
+⚠️ A coluna `clean sheet` desta tabela é **por jogo** (% de jogos em que ao menos um dos times
+não sofreu gol) — NÃO é a mesma métrica dos thresholds das premissas, que são **por time-jogo**
+(`clean_sheet_total / played_total`). As duas convivem no mesmo texto e não são comparáveis entre
+si: Brasileirão dá 49,7% por jogo e 29,9% por time-jogo. Ao conferir um threshold, use a de time-jogo.
+
+| liga | gols/jogo | Δ vs baseline | Over 2.5 | Δ | clean sheet (por jogo) | viés esperado |
 |---|---|---|---|---|---|---|
 | **Bundesliga (78)** | **3,18** | **+0,70** | **61,9%** | **+15,2pp** | 40,4% | superpontua **Over** — o maior desvio do portfólio |
 | Premier League (39) | 2,84 | **+0,36** | 55,8% | **+9,1pp** | 43,3% | superpontua **Over** |

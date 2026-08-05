@@ -139,8 +139,9 @@ models:
       endpoints de jogo (stats/events/lineups/player_stats, subtasks 5-8). Derivada de
       /fixtures?league=&season= (espinha: fixture, league, teams, goals, score).
       Particionada por DATE(date_utc) em UTC e clusterizada por (competition, season,
-      home_team_id). Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026, Série B (72)
-      2024/25/26, Copa do Brasil (73) 2024/25/26, CONMEBOL Libertadores (13) 2024/25/26 e CONMEBOL Sudamericana (11) 2024/25/26.
+      home_team_id). As ligas cobertas são as tuplas (league_id, season) configuradas na ingestão
+      — ver o accepted_values de `competition` abaixo, que é a lista viva; enumerá-las aqui só
+      cria drift (esta descrição parou nas 6 primeiras enquanto o pipeline chegou a 11).
     columns:
       - name: fixture_id
         description: "ID do jogo na API-Football (chave primária; destrava endpoints de jogo)"
@@ -148,9 +149,20 @@ models:
           - not_null
           - unique
       - name: competition
-        description: "'brasileirao' | 'copa_mundo' | 'serie_b' | 'copa_do_brasil' | 'libertadores' | 'sudamericana' (derivado de requested_league_id; cluster key)"
+        description: >
+          Slug de produto derivado de requested_league_id (cluster key). Os valores válidos são a
+          lista de accepted_values abaixo — a descrição não os enumera de propósito, p/ não drenar
+          p/ a lista real a cada liga nova.
+          ⚠️ Este é o accepted_values da TABELA MÃE, e é o único que cobre o CASE de fact_fixtures.
+          Os 5 fatos per-fixture (stats/events/lineups/lineups_players/player_stats) herdam
+          `competition` por JOIN daqui, então não precisam do seu próprio — mas os 5 marts que
+          fazem o CASE por conta própria (odds/standings/injuries/predictions/team_season_stats)
+          precisam, e têm. Ao acrescentar liga: 6 CASE + 6 accepted_values.
+        tests:
+          - accepted_values:
+              values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana, 140 = La Liga, 39 = Premier League, 2 = Champions League, 135 = Serie A ITA, 78 = Bundesliga)"
       - name: season
         description: "Ano da temporada requisitada (cluster key)"
       - name: round
