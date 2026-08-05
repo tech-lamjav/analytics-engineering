@@ -679,3 +679,21 @@ tirada em horas diferentes.
 - Os valores `esperado` das reconciliações são os **publicados**, e a procedência de cada
   bloco está comentada no SQL. Reproduzir não valida a metodologia original — valida que
   esta implementação é a mesma.
+- ⚠️ **Os números deste documento são anteriores à task [D] (2026-08-05) e o universo mudou
+  desde então.** O de-vig emitia probabilidade justa para linha com **conjunto de saídas
+  incompleto**: quando só um lado tinha preço, normalizava sobre uma saída só e devolvia
+  prob = 1,0 — certeza — com edge de até +14.900%. O **Teste 2 era a única análise que não
+  filtrava** essas linhas (as demais já excluíam pelo flag `conjunto_incompleto`), então
+  ele mediu **172 linhas com 2 vitórias em 172 e ROI −35,5%** dentro do universo.
+
+  Efeito no headline: o benchmark **consenso sai de −14,9% para −14,5%** — menos de um
+  ponto, e **nenhuma conclusão deste documento vira**. As demais análises devolvem número
+  idêntico. Corrigido na origem (spec [#22](https://github.com/tech-lamjav/analytics-engineering/issues/22),
+  ADR `dbt_futebol/docs/adr/0002-conjunto-de-saidas-declarado-por-mercado.md`): o conjunto
+  esperado passou a ser declarado por mercado e conjunto que não bate não produz estimativa
+  pior — não produz nenhuma.
+
+  **Consequência para quem for reconciliar:** a promessa de fidelidade do `task01_base` foi
+  reapontada para o universo **corrigido**. A reconciliação **não reproduz mais** os
+  `esperado` da bala acima nos blocos que dependem do Teste 2 — isso é o comportamento
+  correto, não um bug novo.
