@@ -137,6 +137,12 @@ flags AS (
         -- pontos corridos (Brasileirão, Série B, La Liga, Premier League e Serie A ITA — 20 times, mesma dinâmica
         -- G6/Z3 de Europa/rebaixamento, então rank<=6 / rank>=n-3 vale sem mudança; revisar na recalibração por
         -- liga) e S em zona de disputa (G6 ou Z4). Copa -> FALSE (rank é por grupo, proxy não vale).
+        -- Bundesliga -> TRUE, mas é a 1ª da lista com 18 times (as outras 5 têm 20). Entra porque
+        -- n_teams vem do standings por (liga, season), então `rank >= n_teams - 3` se ajusta sozinho
+        -- (15-18) sem constante nova. RESSALVA: a Bundesliga tem 3 vagas em risco (2 quedas diretas
+        -- + 1 playoff contra a 2. Bundesliga), então a faixa de 4 posições sobre-inclui o 15º — o
+        -- proxy fica levemente mais frouxo que nas ligas de 20 (22% do grid vs 20%). Aceitável no
+        -- nível de grosseria que este proxy já assume; refinar pertence à recalibração por liga.
         -- Copa do Brasil -> FALSE também (mata-mata sem standings: s_rank/n_teams vêm NULL do
         -- LEFT JOIN e o COALESCE já derruba; fica fora do IN por decisão, não por acidente).
         -- Libertadores/Sudamericana -> FALSE também, mas por outro motivo: elas TÊM standings
@@ -147,7 +153,7 @@ flags AS (
         -- Champions League -> FALSE pelo mesmo motivo: fase de liga (36 times, 8 jogos) vira
         -- mata-mata em fevereiro e a tabela congela; G6/Z3 não modela a dinâmica top-8/9-24.
         -- TODO: refinar com rodada/congestionamento de calendário.
-        m.is_favorito AND m.competition IN ('brasileirao', 'serie_b', 'la_liga', 'premier_league', 'serie_a_ita')
+        m.is_favorito AND m.competition IN ('brasileirao', 'serie_b', 'la_liga', 'premier_league', 'serie_a_ita', 'bundesliga')
             AND COALESCE(m.s_rank <= 6 OR m.s_rank >= m.n_teams - 3, FALSE)     AS sem_rodizio,
         -- Azarão (Σ30)
         m.is_azarao AND COALESCE(m.s_n_games >= 5 AND m.s_lost2 / m.s_n_games < 0.30, FALSE) AS raramente_perde_por_2,

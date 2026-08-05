@@ -21,6 +21,7 @@ SELECT
         WHEN 39 THEN 'premier_league'
         WHEN 2  THEN 'champions_league'
         WHEN 135 THEN 'serie_a_ita'
+        WHEN 78  THEN 'bundesliga'
         ELSE 'unknown'
     END                                              AS competition,
     league_id,
