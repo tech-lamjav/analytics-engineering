@@ -36,6 +36,15 @@
     Fidelidade: o universo, a liquidação por mercado e o filtro de meia-linha são os
     mesmos que produziram os números publicados no re-run da Task [0]. Mudar qualquer
     um deles quebra a reconciliação de propósito.
+
+    ⚠️ REAPONTADA em 2026-08-05 (spec #22): o universo de referência passa a ser o
+    CORRIGIDO — sem as linhas de conjunto de saídas incompleto, que o de-vig deixou de
+    emitir. Os números publicados da Task [0.1] incluíam 172 dessas linhas no Teste 2
+    (2 vitórias em 172, ROI −35,5%), que era a única análise que não filtrava o flag
+    `conjunto_incompleto`. O headline de consenso se move de −14,9% para −14,5%:
+    ~0,4 ponto, e NENHUMA conclusão da [0.1] vira. As demais análises já filtravam o
+    flag e devolvem número idêntico — re-rodá-las só misturaria o efeito da correção
+    com a instabilidade conhecida do mercado de Gols entre builds.
 #}
 
 
@@ -208,14 +217,17 @@ odds AS (
         -- ROI −35,5%. É o pior lugar possível para um erro de sinal — o Motor diz valor
         -- máximo onde o acerto real é 1,2%.
         --
-        -- PRODUÇÃO NÃO É AFETADA: o gate do mart exige n_casas >= 4 e conjunto Pinnacle
-        -- completo, e o board hoje tem edge máximo de 23% e odd máxima 4,5. Estas
-        -- linhas nunca chegam ao usuário.
+        -- PRODUÇÃO NUNCA FOI AFETADA: o gate do mart exige conjunto Pinnacle completo e
+        -- prob justa não-nula. (Correção factual: o gate de liquidez é n_casas >= 3, não
+        -- >= 4 — a proteção efetiva vinha do gate de COMPLETUDE, não do de liquidez.)
         --
-        -- Mas elas ESTÃO no universo de backtest, inclusive no que produziu os números
-        -- publicados — o backtest é mais permissivo que o board. Exposto como flag em
-        -- vez de filtrado aqui para que a reconciliação continue reproduzindo o
-        -- publicado; quem mede valor exclui e diz que excluiu.
+        -- ⚠️ CORRIGIDO NA ORIGEM em 2026-08-05 (spec #22). O de-vig passou a exigir conjunto
+        -- de saídas completo para emitir: as linhas degeneradas agora saem daqui pelo filtro
+        -- de edge não-nulo que já existe, porque não têm mais edge. Este flag NÃO foi
+        -- removido, mas TROCOU DE PAPEL — de "exposto para reproduzir o publicado" para
+        -- TESTEMUNHA: se voltar a ser verdadeiro em alguma linha, a correção regrediu.
+        -- Mantido também para que a próxima análise VEJA que esta exclusão existe, em vez
+        -- de herdá-la em silêncio.
         COALESCE(n_outcomes_valor < 2, TRUE) AS conjunto_incompleto
     FROM {{ ref('int_futebol_odds_devig') }}
 ),

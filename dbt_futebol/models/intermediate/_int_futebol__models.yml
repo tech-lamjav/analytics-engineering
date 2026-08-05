@@ -58,15 +58,27 @@ models:
       - name: booksum_fechamento
         description: >
           Booksum Σ(1/odd) = normalizador = 1 + margem (NÃO é a margem; margem = booksum − 1).
-          Da fonte usada (Pinnacle ou mediana). NULL na DC (prob derivada do 1X2, sem booksum).
+          Da fonte usada (Pinnacle ou mediana). NULL na DC (prob derivada do 1X2, sem booksum)
+          e NULL em linha com conjunto de saídas incompleto (spec #22 — a linha não emite valor).
         tests:
+          # PROMOVIDO DE warn PARA error em 2026-08-05 (spec #22). Como aviso ele já estava
+          # vermelho desde o primeiro dia, com correspondência PERFEITA: booksum < 1 ⟺ conjunto
+          # de 1 saída ⟺ prob = 1,0, em 403 de 403 linhas, zero falso positivo. O bug era
+          # detectável desde sempre — o que faltava era o aviso significar alguma coisa.
+          # Agora que a regra de emissão elimina essas linhas (booksum vira NULL junto), ele
+          # para de disparar e passa a valer: pega o caso em que o MAPA envelheceu — conjunto
+          # completo segundo a declaração mas não segundo a realidade, com probabilidades
+          # infladas e SEM a prob 1,0 para denunciar.
+          # Continua sendo TESTE e não filtro: arbitragem real de mediana entre casas produz
+          # booksum < 1 com conjunto completo, e como filtro isso descartaria uma linha boa em
+          # silêncio. Como teste, o mesmo evento vira pergunta. Zero ocorrências na base atual.
           - dbt_utils.accepted_range:
               arguments:
                 min_value: 1.0
                 inclusive: true
-              # warn: o consenso por mediana PODERIA, em teoria, dar booksum<1 (median-arb raro).
               config:
-                severity: warn
+                severity: error
+                tags: ['guarda']
       - name: edge
         description: "best_odd * prob_justa_fechamento − 1 (>= -1 por construção, odd>1 e prob>0). NULL sem de-vig."
         tests:
@@ -385,3 +397,72 @@ models:
             combination_of_columns:
               - fixture_id
               - outcome
+
+# ============================================================================
+# UNIT TESTS — regra do CONJUNTO DE SAÍDAS (issue #22)
+#
+# Primeiro unit test do repositório. Existe porque as guardas de dados sobre
+# produção só provam o caso que produção JÁ TEM (linha de 1 saída); os outros
+# dois — conjunto parcial de um mercado de 3 saídas e mercado não declarado —
+# não existem na base hoje e ficariam verdes por vacuidade.
+#
+# As odds dão probabilidades EXATAS em ponto flutuante binário (0,5 / 0,25 /
+# edge 0,0). Um 1X2 simétrico daria 1/3 e a asserção passaria a depender de
+# arredondamento.
+# ============================================================================
+unit_tests:
+  - name: conjunto_de_saidas_governa_a_emissao_de_valor
+    model: int_futebol_odds_devig
+    description: >
+      Conjunto incompleto ou de mercado não declarado não produz prob justa pior —
+      não produz nenhuma. Cobre as três fontes de valor: consenso (fixtures 1-4),
+      mercado fora do mapa (fixture 5) e Pinnacle (fixtures 6-7), esta última sem
+      nenhuma linha degenerada em produção hoje e portanto só demonstrável aqui.
+    given:
+      - input: ref('fact_odds_snapshot')
+        rows:
+          # (1) Gols com só o Over precificado -> o bug original: normalizava sobre
+          #     uma saída e devolvia prob 1,0, edge = odd − 1 (aqui daria +200%).
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Over',  line_value: 2.5,  bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 3.0}
+
+          # (2) Gols com o par completo -> CONTROLE: a regra deixa passar o que deve.
+          - {fixture_id: 2, market_id: 5, outcome_side: 'Over',  line_value: 2.5,  bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 2.0}
+          - {fixture_id: 2, market_id: 5, outcome_side: 'Under', line_value: 2.5,  bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 2.0}
+
+          # (3) 1X2 sem o empate -> o caso que "pelo menos 2 saídas" deixaria passar:
+          #     booksum 0,75, probabilidades infladas, e SEM prob 1,0 para denunciar.
+          - {fixture_id: 3, market_id: 1, outcome_side: 'Home',  line_value: null, bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 2.0}
+          - {fixture_id: 3, market_id: 1, outcome_side: 'Away',  line_value: null, bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 4.0}
+
+          # (4) 1X2 inteiro -> CONTROLE do conjunto de 3.
+          - {fixture_id: 4, market_id: 1, outcome_side: 'Home',  line_value: null, bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 2.0}
+          - {fixture_id: 4, market_id: 1, outcome_side: 'Draw',  line_value: null, bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 4.0}
+          - {fixture_id: 4, market_id: 1, outcome_side: 'Away',  line_value: null, bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 4.0}
+
+          # (5) Mercado NÃO DECLARADO com par completo -> fail-closed: conjunto
+          #     plausível não basta, o mercado precisa estar no mapa.
+          - {fixture_id: 5, market_id: 99, outcome_side: 'Yes',  line_value: null, bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 2.0}
+          - {fixture_id: 5, market_id: 99, outcome_side: 'No',   line_value: null, bookmaker_id: 6, bookmaker_name: 'Bwin', collection_window: 't15m', odd_decimal: 2.0}
+
+          # (6) PINNACLE com um lado só -> zero linhas assim em produção hoje, mas o
+          #     de-vig da Pinnacle tem a mesma normalização e nunca teve guarda.
+          - {fixture_id: 6, market_id: 4, outcome_side: 'Home',  line_value: -0.5, bookmaker_id: 4, bookmaker_name: 'Pinnacle', collection_window: 't15m', odd_decimal: 2.0}
+
+          # (7) PINNACLE com o par completo -> CONTROLE: a âncora sharp segue intacta.
+          - {fixture_id: 7, market_id: 4, outcome_side: 'Home',  line_value: -0.5, bookmaker_id: 4, bookmaker_name: 'Pinnacle', collection_window: 't15m', odd_decimal: 2.0}
+          - {fixture_id: 7, market_id: 4, outcome_side: 'Away',  line_value: -0.5, bookmaker_id: 4, bookmaker_name: 'Pinnacle', collection_window: 't15m', odd_decimal: 2.0}
+    expect:
+      rows:
+        - {fixture_id: 1, market_id: 5,  outcome_side: 'Over',  n_outcomes_valor: 1, valor_fonte: null,       prob_justa_fechamento: null, edge: null}
+        - {fixture_id: 2, market_id: 5,  outcome_side: 'Over',  n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5,  edge: 0.0}
+        - {fixture_id: 2, market_id: 5,  outcome_side: 'Under', n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5,  edge: 0.0}
+        - {fixture_id: 3, market_id: 1,  outcome_side: 'Home',  n_outcomes_valor: 2, valor_fonte: null,       prob_justa_fechamento: null, edge: null}
+        - {fixture_id: 3, market_id: 1,  outcome_side: 'Away',  n_outcomes_valor: 2, valor_fonte: null,       prob_justa_fechamento: null, edge: null}
+        - {fixture_id: 4, market_id: 1,  outcome_side: 'Home',  n_outcomes_valor: 3, valor_fonte: 'consenso', prob_justa_fechamento: 0.5,  edge: 0.0}
+        - {fixture_id: 4, market_id: 1,  outcome_side: 'Draw',  n_outcomes_valor: 3, valor_fonte: 'consenso', prob_justa_fechamento: 0.25, edge: 0.0}
+        - {fixture_id: 4, market_id: 1,  outcome_side: 'Away',  n_outcomes_valor: 3, valor_fonte: 'consenso', prob_justa_fechamento: 0.25, edge: 0.0}
+        - {fixture_id: 5, market_id: 99, outcome_side: 'Yes',   n_outcomes_valor: 2, valor_fonte: null,       prob_justa_fechamento: null, edge: null}
+        - {fixture_id: 5, market_id: 99, outcome_side: 'No',    n_outcomes_valor: 2, valor_fonte: null,       prob_justa_fechamento: null, edge: null}
+        - {fixture_id: 6, market_id: 4,  outcome_side: 'Home',  n_outcomes_valor: 1, valor_fonte: null,       prob_justa_fechamento: null, edge: null}
+        - {fixture_id: 7, market_id: 4,  outcome_side: 'Home',  n_outcomes_valor: 2, valor_fonte: 'pinnacle', prob_justa_fechamento: 0.5,  edge: 0.0}
+        - {fixture_id: 7, market_id: 4,  outcome_side: 'Away',  n_outcomes_valor: 2, valor_fonte: 'pinnacle', prob_justa_fechamento: 0.5,  edge: 0.0}

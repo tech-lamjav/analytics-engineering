@@ -1,3 +1,4 @@
+{{ config(tags=['guarda']) }}
 -- Guard de regressão da Task 0 (look-ahead).
 -- No PRIMEIRO jogo de um time numa (competição, temporada) não existe passado: played_total tem
 -- de ser 0 e rank/médias têm de ser NULL. Era exatamente aqui que o modelo antigo entregava a

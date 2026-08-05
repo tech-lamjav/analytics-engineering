@@ -1,3 +1,4 @@
+{{ config(tags=['guarda']) }}
 -- Guarda do pareamento do Handicap asiático (market 4) da Pinnacle (bookmaker 4): o de-vig do
 -- AH depende de cada (fixture, line_value) ter os DOIS lados complementares (Home + Away) na
 -- MESMA line_value — porque a API-Football traz o handicap na ÓTICA DO MANDANTE, igual p/ Home e
