@@ -157,15 +157,17 @@ models:
           Os 5 fatos per-fixture (stats/events/lineups/lineups_players/player_stats) herdam
           `competition` por JOIN daqui, então não precisam do seu próprio — mas os 5 marts que
           fazem o CASE por conta própria (odds/standings/injuries/predictions/team_season_stats)
-          precisam, e têm. Ao acrescentar liga: 6 CASE + 6 accepted_values.
+          precisam, e têm. Ao acrescentar liga: 6 CASE + 6 accepted_values — e, se ela for de pontos
+          corridos, o `IN` de competições do `sem_rodizio` em int_futebol_premissas_ah, que é um
+          7º lugar e não tem teste que acuse a omissão (ficar fora é silêncio, não erro).
         tests:
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
               config:
                 tags: ['guarda']
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana, 140 = La Liga, 39 = Premier League, 2 = Champions League, 135 = Serie A ITA, 78 = Bundesliga)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana, 140 = La Liga, 39 = Premier League, 2 = Champions League, 135 = Serie A ITA, 78 = Bundesliga, 61 = Ligue 1)"
       - name: season
         description: "Ano da temporada requisitada (cluster key)"
       - name: round
@@ -708,7 +710,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
               config:
                 tags: ['guarda']
       - name: competition_id
@@ -861,7 +863,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
               config:
                 tags: ['guarda']
       - name: league_id
@@ -988,7 +990,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
               config:
                 tags: ['guarda']
       - name: league_id
@@ -1087,7 +1089,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
               config:
                 tags: ['guarda']
       - name: league_id
@@ -1210,7 +1212,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
               config:
                 tags: ['guarda']
       - name: league_id
