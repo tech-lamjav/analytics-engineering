@@ -61,6 +61,28 @@ muda quando a janela muda.
 Esse é também o grão que a subtask C5 está introduzindo no de-vig. Adotá-lo aqui transforma uma
 colisão entre duas frentes em convergência.
 
+## O board não herda esse grão
+
+São três camadas, e só as duas de baixo são por janela: **de-vig por janela** (ADR 0004),
+**funil por janela** (esta), e o **board continua com uma linha por linha**, avaliada na janela
+corrente e carregando `janela_deteccao` — a janela mais cedo em que a linha passou.
+
+A ADR 0004 rejeitou o board por janela com razão: quebraria a `opportunity_key` do snapshot,
+triplicaria o que o sync materializa no Postgres e empurraria para o front uma decisão de
+produto, qual das três mostrar. Nada disso muda aqui. **O board lê o funil e colapsa para a
+janela corrente**; quem guarda as três é o funil, que é onde a pergunta de CLV vive.
+
+⚠️ E fica registrada uma interação entre as duas frentes que nenhuma das duas ADRs tinha: a ADR
+0004 escreve *"oportunidade que perdeu edge sai do board"*, e dimensiona o que a mudança compra
+com **931 / 1.350 / 368 linhas** recomputando o gate de valor por janela. Esses números — e a
+própria frase — assumem o gate de hoje, em que `edge > 0` elimina. **A A2 tira o edge do gate.**
+
+Depois da A1 e da A2 a nota não se move entre janelas, então uma linha não sai mais do board por
+perder evidência: sai por preço — a porta de odd, a liquidez, a completude do conjunto. As 368
+linhas que "passam em t24h e já não passam em t15m" continuam existindo como pergunta de CLV,
+mas passam a ser um conjunto **diferente**, definido por outras portas. Quem for medir aquilo
+depois da [A] precisa remedir, não reaproveitar o número.
+
 ## Por que um booleano por porta, e não um motivo
 
 Uma linha reprova em várias portas ao mesmo tempo. Um campo único de motivo é vitória do
