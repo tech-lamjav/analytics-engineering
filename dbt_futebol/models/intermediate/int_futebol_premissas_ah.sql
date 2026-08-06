@@ -137,7 +137,7 @@ flags AS (
         -- pontos corridos (Brasileirão, Série B, La Liga, Premier League e Serie A ITA — 20 times, mesma dinâmica
         -- G6/Z3 de Europa/rebaixamento, então rank<=6 / rank>=n-3 vale sem mudança; revisar na recalibração por
         -- liga) e S em zona de disputa (G6 ou Z4). Copa -> FALSE (rank é por grupo, proxy não vale).
-        -- Bundesliga e Ligue 1 -> TRUE, e são as duas de 18 times (as outras 4 têm 20). Entram
+        -- Bundesliga e Ligue 1 -> TRUE, e são as duas de 18 times (as outras 5 têm 20). Entram
         -- porque n_teams vem do standings por (liga, season), então `rank >= n_teams - 3` se ajusta
         -- sozinho (15-18) sem constante nova. RESSALVA IDÊNTICA NAS DUAS: ambas têm 3 vagas em risco
         -- (2 quedas diretas + 1 playoff contra a 2ª divisão — 2. Bundesliga e Ligue 2), então a faixa

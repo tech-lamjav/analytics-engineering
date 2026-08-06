@@ -714,7 +714,7 @@ models:
               config:
                 tags: ['guarda']
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana)"
+        description: "ID da liga na API-Football (`requested_league_id` da resposta). A tradução p/ slug de produto está no CASE deste modelo e a lista válida no `accepted_values` de `competition` — esta descrição não a enumera de propósito, p/ não virar mais um lugar a esquecer a cada liga nova."
       - name: season
         description: "Ano da temporada (cluster key)"
         tests:
@@ -867,7 +867,7 @@ models:
               config:
                 tags: ['guarda']
       - name: league_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 13 = Libertadores, 11 = Sudamericana; cluster key — 73 nunca ocorre, mata-mata sem standings)"
+        description: "ID da liga na API-Football (`requested_league_id` da resposta). A tradução p/ slug de produto está no CASE deste modelo e a lista válida no `accepted_values` de `competition` — esta descrição não a enumera de propósito, p/ não virar mais um lugar a esquecer a cada liga nova. Nuance deste modelo: a Copa do Brasil (73) nunca ocorre — mata-mata não tem classificação."
         tests:
           - not_null
       - name: season
@@ -994,7 +994,7 @@ models:
               config:
                 tags: ['guarda']
       - name: league_id
-        description: "ID da liga na API-Football (71 = Brasileirão)"
+        description: "ID da liga na API-Football (`requested_league_id` da resposta). A tradução p/ slug de produto está no CASE deste modelo e a lista válida no `accepted_values` de `competition` — esta descrição não a enumera de propósito, p/ não virar mais um lugar a esquecer a cada liga nova. Nuance deste modelo: as ligas com coverage.injuries=FALSE nunca terão linhas; ver a nota de Coverage no modelo."
         tests:
           - not_null
       - name: season
@@ -1093,7 +1093,7 @@ models:
               config:
                 tags: ['guarda']
       - name: league_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana)"
+        description: "ID da liga na API-Football (`requested_league_id` da resposta). A tradução p/ slug de produto está no CASE deste modelo e a lista válida no `accepted_values` de `competition` — esta descrição não a enumera de propósito, p/ não virar mais um lugar a esquecer a cada liga nova."
         tests:
           - not_null
       - name: season
@@ -1216,7 +1216,7 @@ models:
               config:
                 tags: ['guarda']
       - name: league_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana)"
+        description: "ID da liga na API-Football (`requested_league_id` da resposta). A tradução p/ slug de produto está no CASE deste modelo e a lista válida no `accepted_values` de `competition` — esta descrição não a enumera de propósito, p/ não virar mais um lugar a esquecer a cada liga nova."
         tests:
           - not_null
       - name: season
