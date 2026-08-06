@@ -160,7 +160,10 @@ models:
           precisam, e têm. Ao acrescentar liga: 6 CASE + 6 accepted_values.
         tests:
           - accepted_values:
-              values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+              arguments:
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+              config:
+                tags: ['guarda']
       - name: competition_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana, 140 = La Liga, 39 = Premier League, 2 = Champions League, 135 = Serie A ITA, 78 = Bundesliga)"
       - name: season
@@ -706,6 +709,8 @@ models:
           - accepted_values:
               arguments:
                 values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+              config:
+                tags: ['guarda']
       - name: competition_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana)"
       - name: season
@@ -857,6 +862,8 @@ models:
           - accepted_values:
               arguments:
                 values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+              config:
+                tags: ['guarda']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 13 = Libertadores, 11 = Sudamericana; cluster key — 73 nunca ocorre, mata-mata sem standings)"
         tests:
@@ -982,6 +989,8 @@ models:
           - accepted_values:
               arguments:
                 values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+              config:
+                tags: ['guarda']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão)"
         tests:
@@ -1079,6 +1088,8 @@ models:
           - accepted_values:
               arguments:
                 values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+              config:
+                tags: ['guarda']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana)"
         tests:
@@ -1200,6 +1211,8 @@ models:
           - accepted_values:
               arguments:
                 values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga']
+              config:
+                tags: ['guarda']
       - name: league_id
         description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana)"
         tests:
