@@ -2,7 +2,7 @@
     materialized='table',
     partition_by={'field': 'snapshot_date', 'data_type': 'date'},
     cluster_by=['team_id', 'season'],
-    description='Agregados de temporada por time (/teams/statistics). 1 linha por (team_id, liga, season) — input direto pro modelo Poisson (força ataque/defesa, médias casa/fora). Self-contained: competition/season vêm da própria resposta (sem join em fact_fixtures). Latest-only: particionada por snapshot_date (data da coleta) e clusterizada por (team_id, season); reconstruída full a cada run (o GCS guarda só o snapshot mais recente por mode). Dedup por (team_id, liga, season) mantendo o loaded_at mais recente. Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026, Série B (72) 2024/25/26, Copa do Brasil (73) 2024/25/26, CONMEBOL Libertadores (13) 2024/25/26 e CONMEBOL Sudamericana (11) 2024/25/26.'
+    description='Agregados de temporada por time (/teams/statistics). 1 linha por (team_id, liga, season) — input direto pro modelo Poisson (força ataque/defesa, médias casa/fora). Self-contained: competition/season vêm da própria resposta (sem join em fact_fixtures). Latest-only: particionada por snapshot_date (data da coleta) e clusterizada por (team_id, season); reconstruída full a cada run (o GCS guarda só o snapshot mais recente por mode). Dedup por (team_id, liga, season) mantendo o loaded_at mais recente. Cobre toda liga-temporada registrada na ingestão — a lista viva é o CASE deste modelo mais o accepted_values de competition, e não é enumerada aqui p/ não drenar a cada liga nova.'
 ) }}
 
 WITH stats AS (
@@ -24,6 +24,7 @@ SELECT
         WHEN 2  THEN 'champions_league'
         WHEN 135 THEN 'serie_a_ita'
         WHEN 78  THEN 'bundesliga'
+        WHEN 61  THEN 'ligue_1'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS competition_id,
