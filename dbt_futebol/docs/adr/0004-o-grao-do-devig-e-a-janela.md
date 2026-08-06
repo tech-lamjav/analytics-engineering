@@ -49,6 +49,25 @@ até o fechamento — CLV negativo, que a literatura trata como o sinal mais con
 aposta era ruim. Podem ser a maior descoberta da fila ou a maior armadilha dela, e hoje não
 temos como saber qual.
 
+### Emenda de 2026-08-06: esses três números têm prazo de validade
+
+Vieram de um gate que inclui **edge positivo**, que é o gate de hoje. A subtask **A2 da task [A]
+tira o edge do gate**, e a **A1** remove as premissas que leem preço. Depois das duas, a nota
+passa a ser função pura do contexto do jogo e **não se move entre janelas** — então uma linha
+deixa de sair do board por perder evidência e passa a sair por **preço**: porta de odd, liquidez,
+completude do conjunto.
+
+As 368 continuam sendo uma pergunta de CLV legítima, mas passam a ser **outro conjunto**.
+**Remedir, não reaproveitar** — e quem for medir depois da A1+A2 e reusar este número vai estar
+comparando duas populações diferentes com o mesmo rótulo.
+
+Nada disso enfraquece a decisão desta ADR; ao contrário, deixa o motivo mais limpo. Se a nota é
+constante entre janelas, então **tudo que varia por janela é preço e veredito** — que é
+exatamente o que o grão por janela preserva e o que a pergunta de CLV interroga. O que muda é a
+frase "perder evidência", que era imprecisa mesmo antes: já hoje é o preço que move o edge.
+
+Achado da sessão de grelha da A6/A7 (ADRs 0005 e 0006), que mediu o funil do outro lado.
+
 ## Sobre "o alerta pode sair mais cedo"
 
 Não é o que esta mudança faz, e vale registrar porque o ticket afirmava o contrário. Quando um
