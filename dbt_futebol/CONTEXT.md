@@ -15,7 +15,20 @@ _Avoid_: model (reserved for statistical models)
 
 **Score de Confiabilidade**:
 The 0–100 rating of how trustworthy a value opportunity is: value points + premissa
-points + corroboration points, minus penalties, clamped.
+points + corroboration points, minus penalties, clamped. It is an **absolute** measure —
+how much evidence fired — and never a rank within its peer group. So a régua on it means
+"this much evidence", not "the best of this mercado"; markets legitimately publish at
+different rates, and that is a consequence, not a defect.
+_Avoid_: reading a score as a percentile or a quota
+
+**Teto alcançável**:
+The denominator the pontos de premissa are normalised against, per (mercado, lado): the
+observed p95, measured once over a **declared window** and **frozen**. Its job is to make
+100 mean the same thing on every lado — the top of the scale anchored at a common
+quantile. It is deliberately not the sum of the weights, which never occurs, and not
+recomputed at runtime: a denominator that moves makes the régua mean a different thing
+each day and kills every historical comparison.
+_Avoid_: teto (bare — ambiguous with the sum of the pesos)
 
 **Premissa**:
 A boolean context signal computed from the data, carrying a point weight. Fired
@@ -28,12 +41,26 @@ means the bet is not an opportunity at all. Dupla Chance has its own gate.
 
 **Faixa**:
 The confidence band over the score: Alta (>= 60), Média (40–59), Baixa (< 40).
-Thresholds differ from the NBA context.
+Thresholds differ from the NBA context. The band cuts and the **régua** are the same
+numbers wearing two hats — set the régua at a band floor and the band below it stops
+existing, leaving a column that is constant and therefore lying. So the cuts are never
+chosen apart from the régua, and never on a scale that is about to change: they come out
+of one measurement, on the scale that will actually ship.
+_Avoid_: treating the régua as independent of the bands
 
 **Value opportunity**:
 A fixture x market x outcome that passed the gate with positive edge — the product's
 unit of output.
 _Avoid_: pick, tip
+
+**Candidato**:
+A (fixture, mercado, saída, linha, janela) that **had a price in that janela** — the
+universe the gates act on, and the denominator of every funnel reading. A line nobody
+priced is not a rejected candidato, it is absence of market: that belongs to coleta, not
+to the funil. A candidato whose conjunto de saídas came in incomplete still counts —
+it exists, it just lost its fair probability.
+_Avoid_: counting every premissa row (they are generated for canonical lines with no
+market at all, and are unbounded)
 
 **Evidência**:
 A fired premissa surfaced to the user as a "why" bullet, ordered by weight.
