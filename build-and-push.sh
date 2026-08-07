@@ -118,11 +118,14 @@ echo "=========================================="
 echo "Imagem disponível em: ${FULL_IMAGE_NAME}"
 echo "Job ${JOB_NAME} carimbado com: ${PROCEDENCIA_HASH}"
 echo ""
-echo "Digest efetivamente fixado no job:"
+echo "Carimbo agora gravado no job (o que o detector le):"
 gcloud run jobs describe "$JOB_NAME" \
     --region="$GCP_REGION" \
     --project="$GCP_PROJECT_ID" \
-    --format="value(spec.template.spec.template.spec.containers[0].image)"
+    --format="value(spec.template.spec.template.spec.containers[0].env)"
+# O spec do job guarda a TAG; o digest só aparece resolvido no spec de cada execução
+# (`gcloud run jobs executions list --format='value(spec.template.spec.containers[0].image)'`).
+# Por isso o carimbo, e não o digest, é o que o detector interroga.
 echo ""
 echo "Para executar localmente:"
 echo "  docker run ${FULL_IMAGE_NAME}"
