@@ -131,11 +131,17 @@ metrics AS (
         od.ppg    AS o_ppg,
 
         -- forma: vitórias nos 5 jogos ANTERIORES ao kickoff (antes: 'W' no form do último snapshot)
-        COALESCE(s.n_wins_last5, 0) AS n_wins_last5,
+        -- SEM COALESCE (#41): time sem linha de forma tem que chegar NULL, senão o zero
+        -- forjado é indistinguível de "jogou 5 e não venceu nenhuma" e o contador de
+        -- premissas sem dado nasce zerado. A premissa segue FALSE nos dois casos — o
+        -- COALESCE(..., FALSE) da CTE `flags` é quem garante isso.
+        s.n_wins_last5 AS n_wins_last5,
 
-        -- h2h
-        COALESCE(hh.h2h_total, 0) AS h2h_total,
-        COALESCE(hh.s_wins, 0)    AS s_wins
+        -- h2h — SEM COALESCE pelo mesmo motivo: sem confronto direto registrado o total é
+        -- NULL, não zero. "Nunca se enfrentaram" e "não sabemos se se enfrentaram" eram o
+        -- mesmo 0 antes desta mudança.
+        hh.h2h_total AS h2h_total,
+        hh.s_wins    AS s_wins
     FROM outcomes o
     LEFT JOIN pit s   ON s.fixture_id  = o.fixture_id AND s.team_id  = o.s_team_id
     LEFT JOIN pit od  ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id
@@ -184,7 +190,8 @@ scored AS (
         (
             10 * CAST(f.pick_empate       AS INT64)
           + 15 * CAST(f.desfalque_proprio AS INT64)
-        ) AS penalidades_1x2_pts
+        ) AS penalidades_1x2_pts,
+        {{ futebol_premissas_sem_dado('int_futebol_premissas_1x2') }} AS premissas_sem_dado
     FROM flags f
 )
 
@@ -208,6 +215,7 @@ SELECT
     -- agregados
     pts_premissas,
     penalidades_1x2_pts,
+    premissas_sem_dado,
 
     -- "por quê": premissas que dispararam, em linguagem de gente, ordenadas por peso.
     ARRAY(SELECT e FROM UNNEST([
