@@ -163,7 +163,7 @@ models:
         tests:
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga']
               config:
                 tags: ['guarda']
       - name: competition_id
@@ -710,7 +710,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga']
               config:
                 tags: ['guarda']
       - name: competition_id
@@ -863,7 +863,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga']
               config:
                 tags: ['guarda']
       - name: league_id
@@ -990,7 +990,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga']
               config:
                 tags: ['guarda']
       - name: league_id
@@ -1089,7 +1089,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga']
               config:
                 tags: ['guarda']
       - name: league_id
@@ -1212,7 +1212,7 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga']
               config:
                 tags: ['guarda']
       - name: league_id
