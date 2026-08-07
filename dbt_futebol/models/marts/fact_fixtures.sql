@@ -20,6 +20,7 @@ SELECT
         WHEN 135 THEN 'serie_a_ita'
         WHEN 78  THEN 'bundesliga'
         WHEN 61  THEN 'ligue_1'
+        WHEN 94  THEN 'primeira_liga'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS competition_id,
