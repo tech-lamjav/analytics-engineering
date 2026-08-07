@@ -1115,12 +1115,13 @@ models:
         tests:
           - not_null
       - name: collection_window
-        description: "Janela da coleta: 't24h' (abertura ~24h) | 't1h' (intermediária ~1h) | 't15m' (fechamento ~15min — habilita CLV real)"
+        description: "Janela da coleta: 'daily' (1 captura/dia de >24h até 7 dias do apito — o que tira o board do recorte de 24h; date-stampada na landing) | 't24h' (abertura ~24h) | 't1h' (intermediária ~1h) | 't15m' (fechamento ~15min — habilita CLV real). ⚠️ O dedup deste fato é por (fixture, casa, mercado, outcome, collection_window) SEM o dia, então as N capturas diárias de um jogo colapsam na mais recente aqui; o histórico completo fica na landing até o grão mudar (#37)."
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['t24h', 't1h', 't15m']
+                # 'daily' entrou em 2026-08-07 com tech-lamjav/data-engineering#34.
+                values: ['daily', 't24h', 't1h', 't15m']
       - name: collection_timestamp
         description: "TIMESTAMP (UTC) exato da coleta do snapshot"
         tests:
