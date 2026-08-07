@@ -335,7 +335,9 @@ si: Brasileirão dá 49,7% por jogo e 29,9% por time-jogo. Ao conferir um thresh
 | liga | gols/jogo | Δ vs baseline | Over 2.5 | Δ | clean sheet (por jogo) | viés esperado |
 |---|---|---|---|---|---|---|
 | **Bundesliga (78)** | **3,18** | **+0,70** | **61,9%** | **+15,2pp** | 40,4% | superpontua **Over** — o maior desvio do portfólio |
+| **Ligue 1 (61)** | **2,90** | **+0,42** | **54,1%** | **+7,4pp** | — | superpontua **Over** — e é o caso que SEPARA as hipóteses, ver abaixo |
 | Premier League (39) | 2,84 | **+0,36** | 55,8% | **+9,1pp** | 43,3% | superpontua **Over** |
+| Primeira Liga (94) | 2,62 | +0,14 | 51,5% | +4,8pp | — | leve, pró-Over |
 | La Liga (140) | 2,66 | +0,17 | 49,3% | +2,6pp | 44,6% | leve, pró-Over |
 | Serie A ITA (135) | 2,49 | +0,01 | 47,0% | +0,3pp | 51,6% | — (na baseline) |
 | **Brasileirão (71)** | **2,48** | — | **46,7%** | — | 49,7% | *baseline* |
@@ -359,6 +361,7 @@ linha 2.5, seasons 2024+2025, por liga —
 | liga | gols/jogo | `ataque_combinado` | `defesas_vazaveis` | **PTS Over** | **PTS Under** |
 |---|---|---|---|---|---|
 | bundesliga | 3,18 | 53,9% | 77,6% | **29,3** | 6,2 |
+| **ligue_1** | **2,90** | — | — | **25,7** | — |
 | premier_league | 2,84 | 40,4% | 61,6% | 24,7 | 7,9 |
 | la_liga | 2,66 | 29,5% | 51,6% | 20,6 | 11,1 |
 | serie_a_ita | 2,49 | 25,3% | 47,8% | 17,7 | 13,3 |
@@ -371,6 +374,29 @@ medindo o ambiente de gols da liga, que é exatamente o que o mercado já precif
 extrema entra com ~2× o crédito de premissa da liga onde os limiares foram calibrados (29,3 vs 15,2),
 sem nenhum edge adicional. Como a faixa Alta começa em 60, o efeito prático é que um Over de
 Bundesliga alcança Alta com menos edge real que um Over de Brasileirão equivalente.
+
+**O caso que SEPARA as hipóteses: a Ligue 1 (medido 2026-08-07).** A evidência da Bundesliga tinha
+um limite lógico que vale nomear. Ali a ordem de gols/jogo e a de acerto de Over **coincidiam**,
+então as duas leituras possíveis do `PTS Over` — "mede o ambiente da liga" e "mede o acerto da
+aposta" — faziam a **mesma** previsão, e o dado não distinguia uma da outra.
+
+A Ligue 1 é o primeiro caso da carteira em que as duas ordens **divergem**, e por isso ela decide:
+
+| liga | gols/jogo | `PTS Over` | Over 2.5 real |
+|---|---|---|---|
+| bundesliga | 3,18 (1º) | 29,3 (1º) | 61,9% (1º) |
+| **ligue_1** | **2,90 (2º)** | **25,7 (2º)** | **54,1% (3º)** |
+| premier_league | 2,84 (3º) | 24,7 (3º) | **55,8% (2º)** |
+
+O `PTS Over` seguiu **gols/jogo**, não o acerto. Consequência direcional: a Ligue 1 recebe **+1,0
+ponto mais** que a Premier League enquanto **acerta 1,7pp menos** Over que ela — ou seja, para esse
+par a pontuação de Over ordena na **direção errada**. Não é ruído de amostra (618 e 760 linhas), e
+não é aproximação: é a mesma sequência exata de gols/jogo, agora contra uma ordem de acerto que
+discorda dela. A assinatura da Ligue 1 é de **goleada** (mais gols concentrados em menos partidas),
+e as premissas de O/U, que leem médias, não distinguem isso de jogo aberto.
+
+O baseline da Bundesliga reproduziu dígito a dígito nesta medição (29,3 · 24,7 · 20,6 · 17,7 ·
+15,2 · 11,9), então a instabilidade entre builds registrada para o board não afeta esta série.
 
 **Item aberto (Fase 5):** tornar os thresholds absolutos relativos à mediana da própria
 liga-temporada, replicando o padrão do `league_pace_median` que já existe em
