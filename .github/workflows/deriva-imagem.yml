@@ -1,0 +1,56 @@
+# Detector de deriva de imagem dbt.
+#
+# Pergunta, de hora em hora: a imagem que os Cloud Run Jobs estão rodando corresponde ao
+# código no master? Compara o carimbo de procedência gravado em cada job com o hash
+# recalculado deste checkout.
+#
+# POR QUE ESTE DETECTOR VIVE AQUI, e não numa guarda dbt:
+# a fase de guardas (`dbt test --select tag:guarda`) roda da MESMA imagem que os modelos que
+# protege. Imagem velha causa o bug E apaga o detector. Em 07/08/2026 a fase de guardas do
+# futebol passou com TOTAL=6 em vez de 13 — as 7 tags que faltavam estavam no master e não na
+# imagem, então a guarda que existia exatamente para pegar `competition='unknown'` nunca
+# rodou. Só um detector FORA da imagem enxerga essa classe de falha. Ver docs/adr/0001.
+#
+# POR QUE DE HORA EM HORA, e não uma vez por dia:
+# o job `dbt-futebol` roda ~96×/dia (workflow-futebol-odds é */15 e chama o job três vezes
+# por ciclo). Imagem velha não causa um dano diário, causa dano contínuo. Cadência horária
+# limita a ~4 execuções ruins. Não gera spam: o GitHub notifica na primeira falha de um
+# workflow agendado e na recuperação, não a cada execução. Repo público = Actions ilimitado.
+#
+# ⚠️ Em repositório público, workflow agendado é desativado após 60 dias sem atividade no
+# repo. Se este detector parar de rodar sem explicação, é a primeira coisa a conferir.
+
+name: Deriva de imagem dbt
+
+on:
+  schedule:
+    # Minuto 20 para não cair junto com os ciclos */15 dos workflows de odds.
+    - cron: '20 * * * *'
+  workflow_dispatch:
+
+jobs:
+  checa-deriva:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Autenticar no GCP
+        uses: google-github-actions/auth@v2
+        with:
+          # Mesmo secret que o deploy-dbt-docs.yml já usa (SA github-actions-dbt-docs@).
+          # Precisa de roles/run.viewer além dos papéis de BigQuery que já tinha — leitura
+          # apenas, e nunca toca o Artifact Registry: o carimbo mora no job.
+          credentials_json: ${{ secrets.BIGQUERY_SA_KEY }}
+
+      - name: Instalar gcloud
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          project_id: smartbetting-dados
+
+      - name: Checar deriva
+        run: ./scripts/checa_deriva.sh
