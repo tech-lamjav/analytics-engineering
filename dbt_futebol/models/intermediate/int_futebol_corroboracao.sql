@@ -3,9 +3,14 @@
     description='Fase 0 do Motor de Score — CORROBORAÇÃO externa (0-15), por (fixture_id, market_id, outcome_side, line_value). modelo_api_concorda (+7): o /predictions da própria API aponta o mesmo lado (hoje só implementado p/ 1X2; predictions ~vazio até a S6 coletar fixtures futuros -> majoritariamente FALSE, graceful). linha_sharp_confirma (+8): reusa o sinal já calculado no int_futebol_odds_devig (Pinnacle caiu t24h->t15m).'
 ) }}
 
+-- Reduzido à janela corrente (#37): o de-vig emite uma linha por janela, e sem a
+-- redução este modelo abriria uma linha de corroboração por janela — quebrando o
+-- próprio grão e, por tabela, o do mart. linha_sharp_confirma é invariante entre
+-- janelas (é movimento t24h->t15m da linha), então a redução não escolhe valor:
+-- só escolhe quantas vezes o mesmo valor aparece.
 WITH devig AS (
     SELECT fixture_id, market_id, outcome_side, line_value, linha_sharp_confirma
-    FROM {{ ref('int_futebol_odds_devig') }}
+    FROM ({{ futebol_devig_janela_corrente() }})
 ),
 
 preds AS (

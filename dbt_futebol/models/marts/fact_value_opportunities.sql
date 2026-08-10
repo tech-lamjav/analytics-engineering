@@ -25,9 +25,14 @@ prem_dc AS (
 ),
 
 -- line_key STRING (NULL-safe) p/ casar a linha entre modelos sem depender de igualdade FLOAT.
+-- REDUZIDO À JANELA CORRENTE (#37): o de-vig passou a emitir uma avaliação por janela
+-- coletada. Sem a redução, cada join deste mart abriria uma linha por janela e o board
+-- inflaria em silêncio — a mesma oportunidade publicada 4 vezes, uma por preço. A
+-- redução reproduz exatamente a janela que o de-vig escolhia sozinho antes da #37, e é
+-- por isso que a saída deste mart sai idêntica à de antes da mudança de grão.
 devig AS (
     SELECT *, COALESCE(CAST(line_value AS STRING), 'NONE') AS line_key
-    FROM {{ ref('int_futebol_odds_devig') }}
+    FROM ({{ futebol_devig_janela_corrente() }})
 ),
 
 corro AS (
