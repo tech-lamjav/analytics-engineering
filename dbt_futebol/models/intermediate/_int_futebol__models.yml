@@ -50,8 +50,11 @@ models:
           # A ordem das janelas vive no macro futebol_janela_prioridade, e janela fora da
           # lista cai no ELSE 0 dele. Uma só desconhecida é inofensiva (fica abaixo das
           # conhecidas); DUAS empatariam no MAX e abririam fan-out no consumidor, com a
-          # oportunidade publicada em duplicidade. Esta guarda fica vermelha primeiro —
-          # é a contrapartida de o ELSE não ser NULL.
+          # oportunidade publicada em duplicidade.
+          # ⚠️ Esta guarda REPORTA o empate, não o previne: no agendado o `dbt run` é a
+          # fase 2 e o `dbt test --select tag:guarda` é a 4, sem gate — a linha duplicada
+          # chega ao board e ao sync antes de qualquer teste rodar. Prevenção de verdade
+          # está no accepted_values de fact_odds_snapshot.collection_window, a montante.
           - accepted_values:
               arguments:
                 values: ['daily', 't24h', 't1h', 't15m']

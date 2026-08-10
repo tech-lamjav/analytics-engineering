@@ -13,9 +13,17 @@
   `ELSE 0` põe janela desconhecida ABAIXO de todas as conhecidas em vez de NULL: com
   NULL, uma linha cuja única janela fosse desconhecida teria MAX(prioridade) NULL, a
   comparação daria NULL e a linha desapareceria em silêncio — que é exatamente o modo
-  de falha que este repositório passa o tempo consertando. O ponto cego que sobra
-  (duas janelas desconhecidas empatando e abrindo fan-out) é coberto pelo
-  accepted_values de `janela_usada`, que fica vermelho antes disso acontecer.
+  de falha que este repositório passa o tempo consertando.
+
+  ⚠️ O ponto cego que SOBRA: duas janelas desconhecidas empatam no MAX e abrem fan-out.
+  O accepted_values de `janela_usada` reporta isso, mas **não previne** — e a diferença
+  importa. No `workflow_futebol.yml` a fase de `dbt run` é a 2 e a de `dbt test
+  --select tag:guarda` é a 4, sem gate (de propósito, para teste vermelho não derrubar
+  o board nem o sync). Ou seja: o fan-out seria construído, publicado e sincronizado, e
+  só depois o resumo diário reportaria. A guarda encurta o tempo até alguém saber; ela
+  não impede a linha duplicada de chegar ao board. Quem previne de verdade é o
+  accepted_values do MODELO A MONTANTE (`fact_odds_snapshot.collection_window`), porque
+  janela nova só existe aqui se antes existir lá.
 -#}
 {% macro futebol_janela_prioridade(coluna) -%}
     CASE {{ coluna }}
