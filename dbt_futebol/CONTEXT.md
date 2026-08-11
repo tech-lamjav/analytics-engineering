@@ -270,3 +270,45 @@ first from the second requires an out-of-sample control (ADR 0001).
 A fixture whose teams have played too few matches for a season aggregate to mean
 anything — structural in knockout competitions, and an established cause of fabricated
 signal.
+
+**Escopo do PIT**:
+Which competitions a PIT aggregate counts. Today it is *da competição*: only fixtures of the
+same competition as the one being rated.
+_Avoid_: "juntar os campeonatos" (silent about whether escopo, recorte, or both is changing)
+
+**Recorte do PIT**:
+Which stretch of past fixtures a PIT aggregate counts. Today it is season-to-date. A counting
+recorte ("the last N") crosses the season boundary by construction; a season recorte does not.
+_Avoid_: janela — that word is taken by the odds collection window, and the two are unrelated
+
+**Célula de medição**:
+One combination of escopo and recorte under which the whole premissa layer is rematerialised
+and remeasured. Two cells are comparable only if computed in the same run over the same frozen
+universe. The four are `base`, `escopo`, `recorte` and `ambos`, named for the axis each releases.
+_Avoid_: C1–C4 (C1, C2 and C3 already name subtasks of the [C] Coleta task)
+
+**min_jogos**:
+The smaller of the two teams' prior-fixture counts for a rated fixture, under the escopo and
+recorte in force. It is the number the piso de amostra cuts on, and what makes a fixture an
+amostra curta.
+_Avoid_: jogos disputados (ambiguous between the two teams)
+
+**min_jogos disponível / usado**:
+*Disponível* is how many prior fixtures exist in the escopo; *usado* is how many fed the average.
+They diverge only under a counting recorte, which saturates. The piso always cuts on disponível,
+so that it means the same thing in every célula.
+
+**Piso de amostra**:
+The minimum min_jogos for a line to enter a measurement. A parameter of the measurement, never
+of the Motor in production.
+
+**Premissa de tabela**:
+A premissa whose input is the team's standing — rank, ppg, or the size of the league. There are
+four. A league table exists inside one competition, so these have no juntado escopo and their
+numbers are identical across células by construction. See ADR 0008.
+
+**Família de competição**:
+How a competition labels its seasons: *ano-calendário* (Brasileirão, Série B, the cups, Copa do
+Mundo) or *split-year* (the European leagues and the Champions, where season N means N/N+1). A
+team belongs to one family, and the family decides whether releasing escopo without releasing
+recorte does anything for it.
