@@ -858,4 +858,7 @@ podem ser escritas contra a tabela como ela está — `jogos_no_universo` é 169
 premissas de tabela são idênticas no piso 0 nas quatro (a spec fala em quatro premissas; são três
 no catálogo medido, pelo motivo que a #53 registrou). Uma terceira invariante que agora existe e
 vale a pena escrever: `jogos_medios_disp = jogos_medios_usado` em toda linha de célula com recorte
-`temporada`.
+`temporada`. Ela já sai não-vacuosa dos dois lados — medida agora: 60/60 linhas iguais em `base` e
+em `escopo`, **0/60** em `recorte` e em `ambos`. Uma guarda que exigisse só a igualdade passaria em
+branco se as quatro células virassem `temporada` por engano; exigir a desigualdade do outro lado
+fecha isso.
