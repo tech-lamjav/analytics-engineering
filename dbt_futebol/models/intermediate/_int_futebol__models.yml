@@ -153,6 +153,10 @@ models:
       dataset futebol_taskF (target `taskF`). A tabela do campeonato (rank/points/ppg/n_teams/
       goal_diff) NÃO segue os eixos: classificação existe dentro de uma competição, então ela
       permanece competição+temporada em todas as células, por construção (ADR 0008).
+      ⚠️ Este NÃO é o único lugar que o eixo de escopo alcança (#52): cada um dos 5 modelos de
+      premissas tem histórico competição-scoped próprio e lê a mesma var — 9 predicados de join
+      em 6 modelos. Mexer só aqui produziria célula misturada. Tabela de quem-alcança-o-quê na
+      ADR 0007. Os valores aceitos e a validação vivem em macros/taskf_eixos.sql, uma vez só.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -275,6 +279,13 @@ models:
       (Home/Draw/Away). 7 premissas (§12.1) + penalidades pick_empate/desfalque_proprio
       + evidencias[]/avisos[]. desfalque pesado por importância (S7): só titular importante
       fora (Missing Fixture AND is_important, via int_futebol_desfalques) dispara.
+      ⚠️ MEDIÇÃO (task [F], ADR 0007, #52): o spine de xG é fonte de histórico competição-scoped
+      PRÓPRIA deste modelo e aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz
+      o comportamento acima — no default o SQL compilado é idêntico ao de antes da var. Produção
+      nunca a passa; ela serve às células de medição (dataset futebol_taskF, target `taskF`).
+      Alcança superioridade_xg. NÃO alcança superioridade_tabela (rank/ppg vêm do team_form_pit,
+      competição-scoped em todas as células, ADR 0008) nem h2h_favoravel, por motivo oposto: o
+      fact_h2h já cruza campeonatos hoje e restringi-lo seria mudar premissa.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -302,6 +313,15 @@ models:
       consenso do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de todas as casas, não de
       odds cruas), distinto da corroboração sharp da Pinnacle. last5 (historico_over/under) na
       MESMA season/competição anteriores ao jogo. evidencias[]/avisos[] = bullets pro front.
+      ⚠️ MEDIÇÃO (task [F], ADR 0007, #52): o spine de xG/ritmo e o last5 de gols são fontes de
+      histórico competição-scoped PRÓPRIAS deste modelo e aceitam a var pit_escopo
+      (da_competicao|todas), cujo DEFAULT reproduz o comportamento acima — no default o SQL
+      compilado é idêntico ao de antes da var. Produção nunca a passa; ela serve às células de
+      medição (dataset futebol_taskF, target `taskF`). Alcança xg_combinado_alto,
+      xg_baixo_combinado, ritmo_alto, historico_over e historico_under. No ritmo, o POOL de times
+      da mediana segue sendo o da competição do jogo em qualquer célula (é o benchmark "a liga em
+      que estou jogando"); o que segue o eixo é o histórico de cada time do pool, medido igual ao
+      do time avaliado.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -330,6 +350,14 @@ models:
       os dois lados; o par Home/Away é complementar). side_handicap = IF(Home, line, -line):
       <0 favorito (5 premissas, Σ40), >0 azarão (3 premissas, Σ30), =0 pick (nenhuma dispara).
       Penalidade handicap_alto (|line|>=2.5, -12). evidencias[]/avisos[] = bullets pro front.
+      ⚠️ MEDIÇÃO (task [F], ADR 0007, #52): o margin_stats é fonte de histórico competição-scoped
+      PRÓPRIA deste modelo e aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz
+      o comportamento acima — no default o SQL compilado é idêntico ao de antes da var. Produção
+      nunca a passa; ela serve às células de medição (dataset futebol_taskF, target `taskF`).
+      Alcança raramente_perde_por_2 e favorito_irregular. NÃO alcança supremacia nem sem_rodizio
+      (rank/ppg/n_teams vêm do team_form_pit, competição-scoped em todas as células, ADR 0008).
+      ⚠️ O margin_stats não tem filtro de season nem no default — já atravessa temporada hoje —,
+      então sob `todas` ele passa a contar todas as competições E todo o tempo coletado.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -360,6 +388,11 @@ models:
       sheet%/failed-to-score% sobre o total da temporada; gols por venue; historico_btts/seco =
       últimos 5 jogos de cada (>=3 ~ 60%). Sem penalidade específica (só globais). evidencias[]/
       avisos[] pro front. No mart, BTTS usa de-vig de CONSENSO (Pinnacle não precifica BTTS).
+      ⚠️ MEDIÇÃO (task [F], ADR 0007, #52): o last5 de BTTS é fonte de histórico competição-scoped
+      PRÓPRIA deste modelo e aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz
+      o comportamento acima — no default o SQL compilado é idêntico ao de antes da var. Produção
+      nunca a passa; ela serve às células de medição (dataset futebol_taskF, target `taskF`).
+      Alcança historico_btts e historico_seco.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -388,6 +421,13 @@ models:
       anteriores ao jogo (season-bounded p/ não sangrar a temporada passada na pausa de off-season).
       O 12 (sem empate) não é produzido. Penalidade odd_muito_baixa e gate próprio (>=1,25, sem
       juice) ficam no mart. evidencias[]/avisos[] pro front.
+      ⚠️ MEDIÇÃO (task [F], ADR 0007, #52): o team_hist é fonte de histórico competição-scoped
+      PRÓPRIA deste modelo e aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz
+      o comportamento acima — no default o SQL compilado é idêntico ao de antes da var. Produção
+      nunca a passa; ela serve às células de medição (dataset futebol_taskF, target `taskF`).
+      Alcança equilibrio_defensivo e invicto_recente. lado_coberto_forte e adversario_limitado
+      seguem o que o 1X2 fizer: leem x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados
+      em booleano.
     columns:
       - name: fixture_id
         tests: [not_null]

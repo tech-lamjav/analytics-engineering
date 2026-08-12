@@ -33,6 +33,13 @@ dentro do MESMO modelo — `tende_golear` juntado ao lado de `raramente_perde_po
 critério de saída é o da ADR 0008: ficam de fora **quatro** premissas, as de tabela. Com a
 enumeração antiga ficariam oito.
 
+⚠️ No `league_pace_median`, o eixo alcança o **histórico** de cada time do pool, não o **pool**.
+A mediana é o benchmark "a liga em que estou jogando": juntar campeonatos no pool compararia o
+ritmo do time contra uma liga que não existe. Os dois lados da comparação — o ritmo do time
+avaliado e o de cada time do pool — são medidos sob o mesmo escopo, que é o que a comparação
+exige. Isto **não** é a exceção da ADR 0008: `ritmo_alto` não está na lista fechada de quatro
+premissas de tabela, e é o histórico dele que muda entre células.
+
 ⚠️ O `margin_stats` do Handicap não tem filtro de temporada nem no default: ele já atravessa
 season hoje. O eixo mexe só na dimensão competição, então sob `todas` ele passa a contar todas as
 competições e todo o tempo coletado. É achado para a tabela de 39 linhas — estas duas premissas

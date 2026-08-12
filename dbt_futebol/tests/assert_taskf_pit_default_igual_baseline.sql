@@ -37,13 +37,18 @@
 --
 -- Falsificada uma vez com `--vars '{pit_escopo: todas}'`, que a deixa vermelha (12.868
 -- divergências). Consequência disso: nas células juntadas esta guarda é VERMELHA POR DESENHO,
--- porque a saída ali de fato não é a de produção. Quem roda as células exclui as duas guardas que
--- afirmam coisa de célula `base` — esta e o `assert_pit_first_game_has_no_history`, cuja
--- invariante é competição-scoped por definição (ver #53):
+-- porque a saída ali de fato não é a de produção. Ela é a ÚNICA exclusão que a medição precisa —
+-- é default-only por definição, já que o que ela afirma é justamente "o default reproduz
+-- produção":
 --
 --   dbt build --target taskF --select int_futebol_team_form_pit \
 --     --vars '{pit_escopo: todas}' \
---     --exclude assert_taskf_pit_default_igual_baseline assert_pit_first_game_has_no_history
+--     --exclude assert_taskf_pit_default_igual_baseline
+--
+-- ⚠️ Esta receita já mandou excluir também o `assert_pit_first_game_has_no_history`. NÃO EXCLUA
+-- MAIS (#52): a partição dele passou a seguir os eixos da célula, ele é verde nas quatro, e
+-- excluí-lo faz a célula rodar sem guarda de look-ahead — o defeito (Task 0) que contaminou a
+-- medição que a [F] existe para refazer.
 
 {% set colunas = [
     'fixture_id', 'team_id', 'competition', 'competition_id', 'season', 'kickoff_utc',

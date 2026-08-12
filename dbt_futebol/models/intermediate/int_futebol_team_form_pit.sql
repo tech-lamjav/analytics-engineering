@@ -41,8 +41,9 @@
       dbt run --target taskF --select int_futebol_team_form_pit \
         --vars '{pit_escopo: todas, pit_recorte: ultimos_10}'
 -#}
-{%- set pit_escopo  = taskf_eixos().escopo -%}
-{%- set pit_recorte = taskf_eixos().recorte -%}
+{%- set eixos       = taskf_eixos() -%}
+{%- set pit_escopo  = eixos.escopo -%}
+{%- set pit_recorte = eixos.recorte -%}
 {#- Fora do default, a tabela do campeonato precisa do próprio agregado, competição-scoped
     (ADR 0008) — e o rank/ppg passam a sair dele, não do agregado da célula. -#}
 {%- set tabela_propria = (pit_escopo != 'da_competicao') or (pit_recorte != 'temporada') -%}
