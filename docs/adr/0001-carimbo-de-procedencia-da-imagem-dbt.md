@@ -47,6 +47,18 @@ no master e não na imagem. Sintoma e detector desligados pela mesma causa.
    mudam comportamento: nos 30 dias anteriores foram 116 toques em `models` contra 28 nessas
    três — hashear a pasta inteira renderia ~28 alarmes falsos/mês, e um detector que grita por
    `CONTEXT.md` é ignorado em duas semanas.
+2b. **O `profiles.yml` entra pelo BLOCO do projeto, não como arquivo inteiro** (issue #65,
+   acrescentado em 12/08/2026). Ele é o único path compartilhado pelos dois alvos, e a decisão 2
+   original não tratou disso: hasheado inteiro, um target acrescentado para um projeto derruba o
+   carimbo do outro. Aconteceu no dia em que o target `taskF` (medição do futebol) pôs o
+   `dbt_nba` em deriva sem que uma linha de NBA tivesse mudado desde 26/06 — alarme falso da
+   mesma classe que a decisão 2 quis evitar, com o agravante de que o remédio sugerido era um
+   deploy num projeto dormente. Hasheando só o bloco `dbt_nba:`/`dbt_futebol:`, mudar o
+   `dev`/`prod` de um projeto continua sendo deriva DELE, que é a propriedade que importa.
+   ⚠️ A mudança **não é retrocompatível**: o valor do hash muda para os dois alvos de uma vez, e
+   o fix precisa estar no master **antes** do rebuild — o detector recalcula com o script do
+   master, então uma imagem carimbada com o script novo antes do merge sai vermelha.
+
 3. **O par `<path> <blob>` entra no hash, não só o blob.** No dbt o nome do arquivo É o nome
    do modelo: renomear sem mudar uma linha muda a tabela materializada.
 4. **`LC_ALL=C` na ordenação.** O build roda em macOS e o detector em ubuntu-latest;
