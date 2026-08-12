@@ -186,9 +186,11 @@ empilhado AS (
     UNION ALL
 
     {#- Os NULL dos rollups são CASTADOS: sem o cast o literal entra como INT64 e a união com uma
-        coluna DATE falha por falta de supertipo comum. -#}
+        coluna DATE falha por falta de supertipo comum. #}
+    {#- `AS chave` não é decoração: sem ele o SELECT tem duas colunas chamadas `familia` e o
+        GROUP BY fica ambíguo. #}
     SELECT
-        'familia', 2, familia, familia,
+        'familia', 2, familia AS chave, familia,
         CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64),
         CAST(NULL AS DATE),  CAST(NULL AS DATE),
         {{ metricas }}

@@ -78,7 +78,7 @@
 {%- set premissas_de_tabela = ['superioridade_tabela', 'supremacia', 'sem_rodizio'] -%}
 {#- Campos que, mudando, contam como "a premissa se mexeu". `n_p0` entra porque mudança no
     conjunto de linhas em que a premissa acende é efeito, não ruído. -#}
-{%- set campos_piso0 = ['n_p0', 'a_odd_dava_p0', 'aconteceu_p0', 'diferenca_p0'] -%}
+{%- set campos_piso0 = ['n_p0', 'a_odd_dava_p0', 'aconteceu_p0', 'dif_p0'] -%}
 
 WITH a AS (
     SELECT * FROM {{ source('futebol_taskF', 'taskf_teste2') }} WHERE celula = '{{ cel_a }}'

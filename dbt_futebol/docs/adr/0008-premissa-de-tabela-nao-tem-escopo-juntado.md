@@ -42,3 +42,16 @@ sinalize isso no número.
 O `min_jogos` **continua seguindo a célula**, inclusive nas linhas dessas quatro premissas. O
 piso de amostra é propriedade do jogo, não da premissa — um jogo com PIT juntado suficiente
 é o mesmo jogo, independentemente de qual premissa está sendo avaliada nele.
+
+⚠️ **Consequência disso, e a leitura exata de "idêntico por construção": a igualdade entre células
+é no PISO 0.** Nos pisos maiores as três premissas de tabela do catálogo medido mudam de número,
+porque o piso corta um conjunto diferente de jogos — e isso é o parágrafo acima em ação, não uma
+falha da decisão. Medido entre `base` e `escopo` (#53, `docs/TASKF_RESULTADOS.md`): `n_p0`
+idêntico nas três (98, 301, 188), enquanto no piso 5 `superioridade_tabela` vai de 35 para 47 e
+`supremacia` de 95 para 121. `sem_rodizio` fica em 188 nos quatro pisos das duas células — ela só
+acende em jogo que já tem histórico longo.
+
+A quarta premissa que esta ADR nomeia, `x_superioridade_tabela`, **não é uma das 39 medidas**: é
+coluna interna do `int_futebol_premissas_1x2` que a Dupla Chance reusa dentro do
+`lado_coberto_forte`, o qual também lê `forca_mismatch` e portanto segue o eixo. Quem for conferir
+a ADR na tabela do entregável procura três linhas, não quatro.
