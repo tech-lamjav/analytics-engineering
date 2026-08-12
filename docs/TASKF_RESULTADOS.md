@@ -609,14 +609,15 @@ A `base` e a `escopo` foram **re-medidas**, e não reaproveitadas da #53 — a s
 reaproveitar baseline, e desta vez havia motivo extra: os cinco modelos de premissas mudaram
 entre uma medição e outra (o eixo de recorte passou a alcançá-los).
 
-### A re-medição reproduz a #53: 119 de 120 campos-linha exatos
+### A re-medição reproduz a #53: 119 das 120 linhas exatas, e a que sobra é empate de arredondamento
 
 | célula | linhas | sem contraparte | linhas com divergência | campos divergentes |
 |---|---|---|---|---|
 | `base` | 60 | 0 | **0** | **0** |
 | `escopo` | 60 | 0 | 1 | **1** |
 
-A `base` reproduz a #53 **exatamente**, em 16 campos por linha × 60 linhas. A única divergência da
+A `base` reproduz a #53 **exatamente**: 16 campos por linha × 60 linhas, 960 campos, zero
+divergência. Nas 120 linhas das duas células juntas — 1.920 campos comparados — divergiu **um**. A única divergência da
 `escopo` é `pct_amostra_curta` na linha de **consenso** de `historico_under` (que não pesa):
 12,7 → 12,8.
 
