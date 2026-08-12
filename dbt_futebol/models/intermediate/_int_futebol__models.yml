@@ -145,6 +145,14 @@ models:
       erro médio de 0,27 posição — as diferenças são o snapshot diário estar defasado do kickoff.
       Em jogos FUTUROS o resultado é ~idêntico ao antigo (diferença média de 0,003 gol/jogo), ou
       seja, a correção muda o backtest e não mexe em produção.
+      ⚠️ MEDIÇÃO (task [F], ADR 0007): o modelo aceita as vars pit_escopo (da_competicao|todas) e
+      pit_recorte (temporada|ultimos_10), cujos DEFAULTS reproduzem exatamente o comportamento
+      descrito acima — no default o SQL compilado é idêntico ao de antes de as vars existirem, e
+      tests/assert_taskf_pit_default_igual_baseline prova a igualdade contra um baseline congelado
+      antes delas. Produção nunca as passa; elas servem às células de medição, materializadas no
+      dataset futebol_taskF (target `taskF`). A tabela do campeonato (rank/points/ppg/n_teams/
+      goal_diff) NÃO segue os eixos: classificação existe dentro de uma competição, então ela
+      permanece competição+temporada em todas as células, por construção (ADR 0008).
     columns:
       - name: fixture_id
         tests: [not_null]
