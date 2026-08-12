@@ -15,6 +15,7 @@
 --                        uma comparação "todas iguais" sobre uma tabela com uma célula só passa
 --                        em branco, e é exatamente esse o estado da tabela no meio de uma
 --                        medição interrompida.
+--   rotulo_nao_casa_...  e o nome de cada célula casa com o par de eixos gravado ao lado dele.
 --   universo_divergente  jogos, linhas e as duas pontas da janela idênticos nas quatro.
 --   jogos_fora_do_gabarito  e os jogos são os 169 que o universo congelado declara
 --                        (taskf_universo().jogos_esperados). Sem isto, quatro células medidas
@@ -101,6 +102,27 @@ presenca AS (
     WHERE e.nome IS NULL OR c.celula IS NULL
 ),
 
+-- 1b. E O RÓTULO CASA COM OS EIXOS. Quem escreve pelo taskf_teste2.sql não consegue errar isto —
+--     o nome é DERIVADO dos eixos por taskf_celula(). Mas a tabela é DDL num dataset onde um
+--     UPDATE à mão cabe (a própria falsificação desta Costura B usou um), e a partir daí o
+--     dicionário do 2×2 deixa de ser garantia e vira afirmação. Custa uma linha conferir.
+rotulos AS (
+    SELECT
+        'rotulo_nao_casa_com_os_eixos' AS motivo,
+        TO_JSON_STRING(STRUCT(celula, pit_escopo, pit_recorte, linhas)) AS linha
+    FROM (
+        SELECT celula, pit_escopo, pit_recorte, COUNT(*) AS linhas
+        FROM {{ source('futebol_taskF', 'taskf_teste2') }}
+        GROUP BY celula, pit_escopo, pit_recorte
+    )
+    WHERE celula IS DISTINCT FROM CASE
+        {%- for chave, nome in taskf_nomes_de_celula().items() %}
+        WHEN pit_escopo = '{{ chave.split('|')[0] }}' AND pit_recorte = '{{ chave.split('|')[1] }}'
+            THEN '{{ nome }}'
+        {%- endfor %}
+    END
+),
+
 -- 2. O MESMO UNIVERSO. Comparação contra a primeira célula em ordem alfabética — um par por
 --    célula divergente, e não um produto cartesiano de reclamações sobre a mesma diferença.
 referencia AS (
@@ -162,6 +184,8 @@ execucao AS (
 )
 
 SELECT motivo, linha FROM presenca
+UNION ALL
+SELECT motivo, linha FROM rotulos
 UNION ALL
 SELECT motivo, linha FROM universo
 UNION ALL
