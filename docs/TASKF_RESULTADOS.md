@@ -560,3 +560,356 @@ estas duas. Se qualquer coisa reconstruir a ancestria antes disso — um build c
 do `fact_odds_snapshot` —, a `base` e a `escopo` têm de ser re-medidas na mesma execução das duas
 novas. A Costura B (#55) pega a violação pelo `dbt_loaded_at` posterior a um `medido_em`, então
 isto é para economizar uma rodada, não para evitar um erro silencioso.
+
+---
+
+## Ticket #54 — Células `recorte` e `ambos`: o 2×2 fechado e as duas contagens de amostra
+
+`analyses/taskf_teste2.sql` + `taskf_saturacao_recorte.sql` + `taskf_delta_celulas.sql` +
+`taskf_reconciliacao_01.sql` + `taskf_monotonicidade_escopo.sql` · execução 2026-08-12 18:29 a
+18:32 UTC · commit `d40634d` · dataset `futebol_taskF`
+
+As duas células que faltavam. O 2×2 está fechado, as **quatro** foram medidas na mesma execução
+sobre o mesmo universo congelado, e `min_jogos` passa a sair em duas colunas — **disponível** e
+**usado** — porque sob recorte de contagem elas deixam de ser o mesmo número.
+
+### Veredito
+
+As quatro células medidas, **zero violação em todas as conferências**: a identidade das duas
+contagens fecha nas quatro, o piso corta o mesmo conjunto de jogos nas duas contagens em todos os
+pisos, os quatro pares de monotonicidade dão zero violações e as quatro células têm o mesmo
+conjunto de 21.054 pares. Grão verde nas quatro.
+
+O eixo de **recorte** é real e grande, mas ele **não é o eixo que resolve amostra curta** — quem
+resolve é o escopo. Soltar só a temporada leva o piso 5 de **69 para 81 jogos**; soltar só a
+competição leva a **92**; soltar os dois leva a **92** também. Em outras palavras, na janela
+medida **a temporada não acrescenta um único jogo acima do piso 5 depois que a competição já foi
+solta** — o efeito dela só aparece no piso 10 (76 → 83).
+
+O que o recorte faz, e faz muito, é mudar **qual** histórico entra: a `ambos` é a única célula em
+que `tende_golear` e `clean_sheets_altos` — duas das quatro premissas de "muito sinal, pouca
+amostra" da spec — saem do vermelho no piso 5 ao mesmo tempo.
+
+### As quatro células, na mesma execução e no mesmo universo
+
+| célula | eixos | jogos | linhas | carimbo do PIT | Teste 2 | linhas medidas |
+|---|---|---|---|---|---|---|
+| `base` | da_competicao / temporada | 169 | 8.567 | 18:29:10 | 18:29:22 | 60 (39 preferido) |
+| `escopo` | todas / temporada | 169 | 8.567 | 18:30:25 | 18:30:37 | 60 (39) |
+| `recorte` | da_competicao / ultimos_10 | 169 | 8.567 | 18:31:32 | 18:31:44 | 60 (39) |
+| `ambos` | todas / ultimos_10 | 169 | 8.567 | 18:32:39 | 18:32:50 | 60 (39) |
+
+"Mesma execução" na forma verificável que a #51 definiu: o `fact_odds_snapshot.dbt_loaded_at` é
+**13:24:15**, anterior aos quatro carimbos. As quatro leram a MESMA construção dos fatos — a
+ancestria **não** foi reconstruída nesta rodada, de propósito. Ela já estava no dataset desde a
+execução da #53 e nenhum modelo dela foi tocado pela #54; reconstruí-la só reinjetaria entre as
+células a variação de 2 linhas que a #51 documentou.
+
+A `base` e a `escopo` foram **re-medidas**, e não reaproveitadas da #53 — a spec proíbe
+reaproveitar baseline, e desta vez havia motivo extra: os cinco modelos de premissas mudaram
+entre uma medição e outra (o eixo de recorte passou a alcançá-los).
+
+### A re-medição reproduz a #53: 119 das 120 linhas exatas, e a que sobra é empate de arredondamento
+
+| célula | linhas | sem contraparte | linhas com divergência | campos divergentes |
+|---|---|---|---|---|
+| `base` | 60 | 0 | **0** | **0** |
+| `escopo` | 60 | 0 | 1 | **1** |
+
+A `base` reproduz a #53 **exatamente**: 16 campos por linha × 60 linhas, 960 campos, zero
+divergência. Nas 120 linhas das duas células juntas — 1.920 campos comparados — divergiu **um**. A única divergência da
+`escopo` é `pct_amostra_curta` na linha de **consenso** de `historico_under` (que não pesa):
+12,7 → 12,8.
+
+⚠️ **Esta comparação foi um `one-shot` e o artefato dela não existe mais.** A FASE 0 dropa a
+tabela acumulativa, então as linhas da #53 foram copiadas para uma tabela temporária antes do
+drop, comparadas, e a cópia foi removida em seguida. Diferente de todo o resto desta seção, os
+números do parágrafo acima **não** são re-deriváveis de `analyses/` — o que sobra re-derivável é a
+reconciliação contra a [0.1] (que lê os números publicados do macro versionado
+`taskf_publicado_01()`) e as tabelas da #53 transcritas neste documento. Quem precisar refazer uma
+comparação dessas num ticket futuro: declare a cópia em `sources.yml` e deixe-a viver, em vez de
+tratá-la como rascunho.
+
+O que **é** verificável sem o artefato é a natureza da divergência, e ela é aritmética fechada,
+não inferência: aquela linha
+tem `n = 400`, então a fração de amostra curta é múltipla de `1/400 = 0,25 pp`. O único valor da
+grade que arredonda para 12,7 ou 12,8 é **12,75** — ou seja, 51 linhas de 400, exatamente em cima
+do empate de `ROUND(·, 1)`. É o mesmo fenômeno que a #53 mediu nos seus três casos e sobre o qual
+avisou a #54, com a mesma causa: o `AVG` do BigQuery acumula em ponto flutuante e a ordem depende
+do layout físico da tabela, que muda quando os modelos são reconstruídos.
+
+E a reconciliação contra o Teste 2 publicado da [0.1] continua dando **38 EXATO / 1 INVESTIGAR**,
+com `linha_descendo` nos mesmos −2 de `n` e +0,2 pp — nenhuma divergência nova apareceu.
+
+### As duas contagens de amostra, medidas
+
+`analyses/taskf_saturacao_recorte.sql` · veredito **OK** nas quatro células
+
+| célula | recorte | max usado | max disp | pares saturados | usado médio | disp médio |
+|---|---|---|---|---|---|---|
+| `base` | temporada | 37 | 37 | **0** | 11,29 | 11,29 |
+| `escopo` | temporada | 60 | 60 | **0** | 13,77 | 13,77 |
+| `recorte` | ultimos_10 | **10** | **98** | 15.150 (72%) | 8,25 | 35,30 |
+| `ambos` | ultimos_10 | **10** | **149** | 16.435 (78%) | 8,62 | 44,62 |
+
+O critério de aceite pedia isto **verificado, não assumido**, e a verificação é a identidade
+inteira, par a par, nas 21.054 linhas de cada célula:
+
+- sob `temporada`, **usado = disponível** — 0 quebras, 0 pares saturados;
+- sob `ultimos_10`, **usado = LEAST(disponível, 10)** — 0 quebras, e o usado nunca passa de 10
+  enquanto o disponível chega a **149**.
+
+Os 15.150 e 16.435 pares saturados são também a guarda de **não-vacuidade**: zero saturação numa
+célula rotulada `ultimos_10` não significaria "ninguém tinha mais de 10 partidas", significaria
+que o carimbo rodou fora de ordem e o dado é de outra célula.
+
+⚠️ **As duas linhas de cima da tabela não são evidência sobre o dado, e o OK delas não deve ser
+lido como se fosse.** O modelo não emite `played_total_disponivel` no default, então o carimbo
+projeta o próprio `played_total` na coluna do disponível — nas células de recorte `temporada`,
+`usado = disponível` é verdade por construção. O que essas duas linhas ainda checam de verdade é o
+**rótulo**: uma célula de `temporada` gravada como `ultimos_10` passaria a ser cobrada pela
+identidade com teto e cairia, porque o disponível dela chega a 37 e 60. A medição propriamente
+dita são as duas linhas de baixo, onde as duas colunas vêm de contas diferentes do modelo.
+
+⚠️ **O usado médio CAI de 11,29 (base) para 8,25 (recorte) e isso não é perda de histórico.** O
+teto corta em 10 quem tinha mais, e a média de `LEAST(base, 10)` é naturalmente menor que a de
+`base`. A monotonicidade — soltar uma dimensão só acrescenta — vale sobre o **disponível**, e é
+sobre ele que ela foi conferida. Medi-la na contagem que satura acusaria violação em cima do
+próprio mecanismo que se quis medir.
+
+### O piso corta o mesmo conjunto nas duas contagens — nas quatro células
+
+| piso | `base` | `escopo` | `recorte` | `ambos` |
+|---|---|---|---|---|
+| 0 | 169 | 169 | 169 | 169 |
+| 3 | 90 | **113** | 103 | **113** |
+| 5 | **69** | **92** | **81** | **92** |
+| 10 | 67 | 76 | 73 | **83** |
+
+Cada número acima foi contado **duas vezes**, uma no disponível e uma no usado, e as oito
+comparações deram idêntico — `pisos_divergentes = 0` nas quatro células. É consequência da
+identidade (`LEAST(d, 10) >= piso` ⟺ `d >= piso`, para piso ≤ 10), mas é consequência **medida**:
+o cabeçalho do Teste 2 afirma isso ao leitor, e afirmação sem número é o que esta task existe para
+não fazer. Se um dia a varredura ganhar um piso maior que o tamanho do recorte, este bloco fica
+vermelho — e aí cortar no disponível deixa de ser inócuo e passa a ser a única escolha correta.
+
+A célula `base` reproduz aqui, mais uma vez, a tabela de piso publicada na [0.1]: 69 no piso 5 e
+67 no piso 10.
+
+### A invariante do 2×2: soltar uma dimensão só acrescenta
+
+`analyses/taskf_saturacao_recorte.sql`, bloco `monotonicidade` · veredito **OK** nos quatro pares
+
+| par | o que solta | pares com ganho | ganho médio | ganho máx | violações | chaves divergentes |
+|---|---|---|---|---|---|---|
+| `base` → `escopo` | competição | 6.434 (30,6%) | 8,13 | 48 | **0** | **0** |
+| `base` → `recorte` | temporada | 11.066 (52,6%) | 45,70 | 76 | **0** | **0** |
+| `escopo` → `ambos` | temporada | 12.126 (57,6%) | 53,56 | 119 | **0** | **0** |
+| `recorte` → `ambos` | competição | 9.061 (43,0%) | 21,64 | 137 | **0** | **0** |
+
+Os dois pares que soltam a **temporada** mexem em MUITO mais pares e por MUITO mais partidas do
+que os dois que soltam a competição — 52,6% e 57,6% dos pares, com ganho médio de 46 e 54
+partidas, contra 30,6% e 43,0% com ganho de 8 e 22. É a assinatura de o histórico do repositório
+ser mais fundo no tempo do que largo em competições: soltar a virada de temporada abre temporadas
+inteiras de trás, e soltar a competição abre só as outras competições daquele ano.
+
+⚠️ **E é exatamente por isso que o efeito no PISO é o oposto.** Ganho de partida só vira jogo novo
+acima do piso quando cai em par que estava ABAIXO dele. As partidas que o eixo de temporada
+empresta vão em peso para quem já tinha histórico (um time de Brasileirão ganha a temporada 2025
+inteira), e não para as seleções de Copa do Mundo — que são 46,7% do universo e o deserto real. A
+tabela de piso e a de monotonicidade não se contradizem: uma mede volume de histórico, a outra
+mede quantos jogos cruzam uma linha.
+
+O par `base` → `escopo` aparece aqui **e** na `taskf_monotonicidade_escopo.sql` da #53, de
+propósito: aqui ele é a quarta aresta do 2×2, lá ele vem com a conferência contra o baseline
+congelado. Os dois medem contagens diferentes (disponível e usado), que nas células de `temporada`
+são o mesmo número — e os dois dão exatamente o mesmo resultado (6.434 / 8,13 / 48 / 0). A
+repetição vira, assim, uma conferência cruzada de dois arquivos independentes.
+
+A conferência de chaves fecha o argumento: **21.054 pares nas quatro células, conjunto idêntico**,
+zero par só de um lado. Os eixos mexem no histórico que cada par carrega, nunca em quais pares
+existem.
+
+### O que mudou nas 39 premissas
+
+`analyses/taskf_delta_celulas.sql` · quatro pares rodados (`base`→`recorte`, `base`→`ambos`,
+`escopo`→`ambos`, `recorte`→`ambos`)
+
+**No agregado das 39 do benchmark preferido:**
+
+| célula | jogos médios disp | jogos médios usado | amostra curta média | com peso p5 > 0 |
+|---|---|---|---|---|
+| `base` | 10,5 | 10,5 | 45,5% | 15 |
+| `escopo` | 12,9 | 12,9 | 34,5% | 11 |
+| `recorte` | **29,1** | **6,9** | 37,4% | 15 |
+| `ambos` | **52,7** | **7,3** | 33,2% | **17** |
+
+A coluna do disponível e a do usado contando histórias opostas nas duas células de baixo é o
+achado do ticket em uma linha: o jogo passa a ter três a cinco vezes mais passado disponível, e a
+premissa continua lendo no máximo dez partidas dele.
+
+**As quatro premissas que a spec aponta como "muito sinal, pouca amostra"**, no piso 5:
+
+| premissa | `base` | `escopo` | `recorte` | `ambos` |
+|---|---|---|---|---|
+| `clean_sheets_altos` | −1,7 (n=24) | +6,3 (n=35) | +7,8 (n=63) | **+30,0 (n=34)** |
+| `defesa_forte` | −3,3 (n=12) | +10,3 (n=28) | +5,7 (n=29) | **+15,1 (n=25)** |
+| `superioridade_xg` | −8,9 (n=31) | −4,1 (n=44) | +1,7 (n=45) | −5,6 (n=60) |
+| `tende_golear` | −18,5 (n=18) | −22,7 (n=21) | −20,3 (n=49) | **+2,0 (n=52)** |
+
+E a amostra curta delas: `clean_sheets_altos` 77,1% → 49,6% (`recorte`), `defesa_forte` 82,9% →
+62,3%, `tende_golear` 88,3% → 70,7%, `superioridade_xg` 71,6% → 53,5% (`ambos`).
+
+⚠️ Isto **não** é recomendação de peso, pelo mesmo motivo que a #53 registrou: a [0.1] mostrou que
+ganho medido in-sample não se replica out-of-sample (+10,0% virou −6,2%), e a spec #49 põe peso
+fora de escopo. O que estas linhas dizem é que a evidência que a [B] vai ler muda de forma
+material — e que ela muda de forma **diferente** em cada eixo, que é a pergunta 9 da spec.
+
+**As imóveis no piso 0**, por par:
+
+| par | imóveis | quais entram além das três de tabela |
+|---|---|---|
+| `base` → `recorte` | 8 | `h2h_favoravel`, `linha_subindo`, `linha_descendo`, `desfalque_adversario`, **`historico_btts`** |
+| `base` → `ambos` | 7 | as mesmas, sem `historico_btts` |
+| `escopo` → `ambos` | 13 | as 7 + `forma`, `invicto_recente` e os quatro `historico_*` |
+
+As **três premissas de tabela** (`superioridade_tabela`, `supremacia`, `sem_rodizio`) saem imóveis
+no piso 0 em **todos** os pares — a ADR 0008 vale nas quatro células, e não só nas duas que a #53
+mediu. Nos demais pisos elas mudam, porque o `min_jogos` segue a célula; é a seção *Consequences*
+da própria ADR.
+
+⚠️ **`historico_btts` imóvel sob `recorte` NÃO é fonte que não respondeu** — e a falsificação está
+ao lado. `historico_seco` lê o **mesmo** array `last5_btts`, do mesmo CTE, e se mexe no mesmo par
+(n_p0 70 → 77, diferença −0,9 → +0,9). A fonte respondeu; o que não virou foi o booleano de uma
+premissa que acende 16 vezes em 8.567 linhas e cujo gatilho (3 de 5) é grosso demais para sentir a
+troca de uma partida. Quem for ler a tabela da #59 não deve registrar `historico_btts` como
+"fora do alcance do eixo".
+
+⚠️ **A linha das 13 imóveis em `escopo` → `ambos` é um achado, e ele foi medido.** Com as
+competições já juntadas, soltar a temporada não mexe em nenhum dos quatro `historico_*` nem na
+`forma` — todos são janelas de contagem de **5**, e uma janela de 5 só muda para quem tem menos de
+5 partidas. Contado nos pares dos fixtures da janela:
+
+| pares em `escopo` | quantos | ganham em `ambos` | disponível médio |
+|---|---|---|---|
+| com menos de 5 partidas (janela de 5 incompleta) | 279 | **62 (22%)** | 1,54 → 2,78 |
+| com 5 ou mais (janela já cheia) | 269 | 246 (91%) | 18,97 → **86,69** |
+
+Ou seja: quem ganha muito ao soltar a temporada é justamente quem **já tinha** os cinco, e para
+esses o `last5` não se move nem um pouco; quem teria a janela alterada quase todo não ganha nada —
+são as seleções da Copa do Mundo, que não têm temporada anterior nenhuma na base — e os 62 que
+ganham param, em média, em 2,78 partidas, ainda longe dos 5. A virada de temporada alcança quem
+conta **médias sobre tudo** (xG, ritmo, gols médios); quem conta os últimos cinco fica de fora
+neste universo.
+
+### ⚠️ Nas duas premissas de Handicap, o recorte ENCOLHE o histórico
+
+`raramente_perde_por_2` e `favorito_irregular` saem do `margin_stats`, que **não tem filtro de
+season nem no default** — ele já atravessa temporada hoje. Nele, portanto, `base` → `recorte` é
+"todo o tempo coletado" → "as 10 últimas", e não "a temporada" → "as 10 últimas" como em todos os
+outros sites.
+
+O número mostra: as duas acendem em MENOS linhas sob recorte (`n_p0` 445 → 388 e 453 → 427), ao
+contrário de todas as outras, e a diferença no piso 5 cai (+7,4 → +6,2 e +7,1 → +5,5) para depois
+subir em `ambos` (+8,5 e +7,9). Quem comparar o delta delas com o das demais premissas sem saber
+disso lê o sinal ao contrário. O aviso está no cabeçalho do `taskf_delta_celulas.sql`, no do
+`int_futebol_premissas_ah.sql` e na ADR 0007.
+
+### ⚠️ O teto de contagem gasta vaga com partida sem xG — o mecanismo existe, e não mordeu aqui
+
+Sob recorte de contagem, o spine de xG e o de ritmo ranqueiam as partidas **por data** e ficam com
+as 10 mais recentes; a média sai do que houver de não-nulo dentro delas. Onde o xG é esparso, uma
+partida sem xG ocupa vaga e a média sai de menos valores — coisa que a célula de `temporada`, que
+não tem teto, não sofre. E o xG **é** esparso em três das cinco competições do universo:
+
+| competição | linhas de stats | sem xG | % |
+|---|---|---|---|
+| copa_do_brasil | 562 | 484 | **86,1%** |
+| sudamericana | 888 | 586 | **66,0%** |
+| serie_b | 1.938 | 964 | **49,7%** |
+| brasileirao | 1.946 | 0 | 0% |
+| copa_mundo | 208 | 0 | 0% |
+
+É consequência de desenho, não defeito: o eixo diz "as 10 partidas anteriores", e a alternativa —
+"as 10 partidas anteriores **com xG**" — alcançaria mais fundo no tempo sem avisar, que é outra
+definição. **Medido, ele não custou cobertura nesta janela**: as três premissas de xG e a de ritmo
+acendem em MAIS linhas em `recorte` e em `ambos` do que em `base` (`superioridade_xg` 109 → 117 →
+129; `xg_combinado_alto` 320 → 324 → 361; `ritmo_alto` 465 → 503 → 511). As duas únicas quedas
+estão em `escopo` → `ambos` (`xg_baixo_combinado` 328 → 319, `ritmo_alto` 541 → 511) — que é onde
+o mecanismo apareceria, mas atribuí-las a ele exigiria uma medição de cobertura que este ticket
+não fez.
+
+Fica anotado para a #59: se a tabela final mostrar premissa de xG perdendo linha numa célula com
+teto, este é o primeiro lugar a olhar.
+
+### A quebra por família continua degenerada, como a #53 já sabia
+
+O universo congelado é 100% de competições de ano-calendário nas **quatro** células — a partição
+por família é propriedade do universo, e o universo é o mesmo nas quatro por construção. `split_year
+= 0` em `recorte` e `ambos` como já estava em `base` e `escopo`, e por isso **não** foi construída
+máquina de quebra por família por premissa: ela teria uma coluna cheia e uma vazia em qualquer
+célula. A família só volta a ser dimensão de duas pontas no universo estendido (#56).
+
+Isso vale também para a leitura que a #53 deixou pendurada: a `ambos` é a célula que alcançaria o
+caso da Champions na virada de temporada — mas a Champions **não tem um jogo** no universo
+primário (os 8 dela na janela são de 04/08 à noite, removidos pelo teto). A pergunta da spec sobre
+a fase classificatória (user story 24) segue sem amostra aqui, e é da #56/#58.
+
+### Reprodução
+
+```bash
+cd dbt_futebol
+
+# FASE 0 — só porque a #54 mudou o schema das duas tabelas acumulativas
+bq rm -f -t smartbetting-dados:futebol_taskF.taskf_teste2
+bq rm -f -t smartbetting-dados:futebol_taskF.taskf_pit_por_celula
+
+# A ANCESTRIA NÃO FOI RECONSTRUÍDA: ela já estava no dataset desde a #53 e nenhum modelo dela
+# mudou. Numa árvore limpa, rodar a fase 1 do cabeçalho do taskf_teste2.sql uma vez, antes.
+
+# as quatro células, cada uma com build -> carimbo -> Teste 2 e as MESMAS vars. Nada de `+`.
+# base    : --vars '{}'                                        (sem exclusão: a Costura A roda)
+# escopo  : --vars '{pit_escopo: todas}'                       --exclude assert_taskf_pit_default_igual_baseline
+# recorte : --vars '{pit_recorte: ultimos_10}'                 idem
+# ambos   : --vars '{pit_escopo: todas, pit_recorte: ultimos_10}' idem
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+  --select int_futebol_team_form_pit int_futebol_premissas_1x2 int_futebol_premissas_ou \
+           int_futebol_premissas_ah int_futebol_premissas_btts int_futebol_premissas_dc \
+  --vars '{pit_recorte: ultimos_10}' --exclude assert_taskf_pit_default_igual_baseline
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
+  --select taskf_pit_por_celula taskf_teste2 \
+  --vars '{taskf_git_sha: d40634d, pit_recorte: ultimos_10}'
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_pit_por_celula.sql
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_teste2.sql
+
+# as conferências, depois das quatro
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
+  --select taskf_saturacao_recorte taskf_monotonicidade_escopo taskf_reconciliacao_01
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_saturacao_recorte.sql
+
+# a comparação entre um par de células
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_delta_celulas \
+  --vars '{taskf_celula_a: base, taskf_celula_b: ambos}'
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_delta_celulas.sql
+```
+
+Os quatro `dbt build` fecham **43/43** (`base`, incluindo a Costura A) e **42/42** (as outras
+três), com `ERROR=0` e `SKIP=0`. Nas três células fora do default a única exclusão é a Costura A,
+que é default-only por definição; o guard de look-ahead `assert_pit_first_game_has_no_history`
+roda e passa nas quatro — e desde a #54 ele confere também a contagem **disponível**, que sai de
+uma window function calculada antes do teto e por isso tem um caminho próprio para vazar futuro.
+
+⚠️ **Para a #55 (Costura B) e para a #59.** O schema do `taskf_teste2` mudou: `jogos_medios` virou
+`jogos_medios_disp` e ganhou o par `jogos_medios_usado`. As duas primeiras invariantes da Costura B
+podem ser escritas contra a tabela como ela está — `jogos_no_universo` é 169 nas quatro, e as três
+premissas de tabela são idênticas no piso 0 nas quatro (a spec fala em quatro premissas; são três
+no catálogo medido, pelo motivo que a #53 registrou). Uma terceira invariante que agora existe e
+vale a pena escrever: `jogos_medios_disp = jogos_medios_usado` em toda linha de célula com recorte
+`temporada`. Ela já sai não-vacuosa dos dois lados — medida agora: 60/60 linhas iguais em `base` e
+em `escopo`, **0/60** em `recorte` e em `ambos`. Uma guarda que exigisse só a igualdade passaria em
+branco se as quatro células virassem `temporada` por engano; exigir a desigualdade do outro lado
+fecha isso.

@@ -15,7 +15,8 @@ Decidimos fazer isso com uma **var** em **todas** as fontes de histórico compet
 para o dataset `futebol_taskF`**. É o mesmo padrão que a Task 0 usou para guardar o estado
 contaminado em `futebol_task0`.
 
-São seis modelos e nove predicados de join:
+São seis modelos e nove predicados de join — e desde a #54 os **dois** eixos passam por todos
+eles, não só o de escopo:
 
 | modelo | mecanismo | premissas alcançadas |
 |---|---|---|
@@ -41,9 +42,37 @@ exige. Isto **não** é a exceção da ADR 0008: `ritmo_alto` não está na list
 premissas de tabela, e é o histórico dele que muda entre células.
 
 ⚠️ O `margin_stats` do Handicap não tem filtro de temporada nem no default: ele já atravessa
-season hoje. O eixo mexe só na dimensão competição, então sob `todas` ele passa a contar todas as
-competições e todo o tempo coletado. É achado para a tabela de 39 linhas — estas duas premissas
-nunca sofreram o zeramento de virada de temporada que as outras sofrem.
+season hoje. O eixo de escopo mexe só na dimensão competição, então sob `todas` ele passa a contar
+todas as competições e todo o tempo coletado. É achado para a tabela de 39 linhas — estas duas
+premissas nunca sofreram o zeramento de virada de temporada que as outras sofrem. E é também o
+único site em que o eixo de RECORTE **encolhe** o histórico em vez de alargá-lo: sem filtro de
+season para remover, sob `ultimos_10` sobra só o teto de contagem.
+
+## Como o eixo de recorte entra em cada site (#54)
+
+O eixo de recorte é `temporada` (default) ou `ultimos_10`, e ele **não** tem uma forma só:
+
+| forma | sites | o que muda |
+|---|---|---|
+| filtro de season sai, e só | os dois `last5` (Gols, BTTS) | `last5` já é janela de contagem de 5, e 5 é subconjunto de 10 — o teto não alcança |
+| filtro de season sai **e** entra teto de contagem | spine de xG (1X2 e Gols), `pace_team`, `league_pace_median`, `team_hist` (DC), o próprio PIT | são médias sobre tudo o que está no recorte, então o teto muda o denominador |
+| só entra o teto | `margin_stats` (Handicap) | não havia filtro de season para remover |
+
+O teto exige um nível a mais de agregação: `QUALIFY` na mesma `SELECT` de um `GROUP BY` filtra
+**depois** da agregação, com a média já feita. Por isso cada site com teto tem um CTE de pares
+ranqueados, e o FROM/JOIN — que é onde os dois eixos moram — é escrito **uma vez** por site e
+renderizado nas duas formas, pela mesma razão que a lista de valores aceitos vive numa macro só.
+
+O **tamanho** do recorte (10) também existe uma vez, em `taskf_eixos()`. Ele **não** é var: um
+botão livre de tamanho multiplicaria as células do 2x2 sem que a spec tenha pedido.
+
+⚠️ **Sob recorte de contagem, `min_jogos` vira dois números.** O **usado** (o que alimentou as
+médias) satura no tamanho do recorte; o **disponível** (o que existe no escopo) não. O piso de
+amostra corta o **disponível**, para significar a mesma coisa nas quatro células — nos pisos
+varridos hoje os dois cortam o mesmo conjunto, e isso é medido em
+`analyses/taskf_saturacao_recorte.sql`, não assumido. O modelo emite `played_total_disponivel`
+**apenas** fora do default, porque sem teto ela seria o próprio `played_total` e emiti-la mudaria
+o SQL compilado do caminho que produção usa.
 
 ## Por que isto não é opcional
 

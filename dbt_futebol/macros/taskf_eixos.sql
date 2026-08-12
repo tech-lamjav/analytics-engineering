@@ -7,6 +7,14 @@
         pit_recorte  temporada (default)     | ultimos_10
                      Qual TRECHO do passado conta.
 
+    Devolve também `tamanho_do_recorte` — o 10 de `ultimos_10`, escrito UMA vez. Ele é lido por
+    seis sites de histórico em cinco modelos, mais o PIT, mais a análise que confere a saturação
+    (analyses/taskf_saturacao_recorte.sql). Sete cópias de um literal não ficam iguais para
+    sempre, e um site com 5 enquanto os outros têm 10 mediria célula misturada sem levantar nada
+    — o mesmo argumento que trouxe a lista de valores aceitos para cá. NÃO é var: um botão livre
+    de tamanho de recorte multiplicaria as células do 2x2 sem que a spec tenha pedido, e é
+    exatamente o tipo de porta que o fail-closed abaixo existe para fechar.
+
     ⚠️ `recorte`, nunca `janela`: janela é a janela de coleta de odds (daily/t24h/t1h/t15m) e as
     duas coisas não têm relação. Ver o glossário no CONTEXT.md.
 
@@ -44,6 +52,6 @@
             "pit_recorte inválido: '" ~ recorte ~ "'. Valores aceitos: temporada | ultimos_10.") }}
     {%- endif -%}
 
-    {{ return({'escopo': escopo, 'recorte': recorte}) }}
+    {{ return({'escopo': escopo, 'recorte': recorte, 'tamanho_do_recorte': 10}) }}
 
 {% endmacro %}

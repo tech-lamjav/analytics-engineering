@@ -1,9 +1,9 @@
 {{ config(
     materialized='table',
     description='S3 do Motor de Score — premissas de contexto do mercado HANDICAP ASIATICO (market_id 4). ⚠️ Task 0 (look-ahead): supremacia/tende_golear/adversario_fragil_fora/mando_forte/sem_rodizio/defesa_fora_solida leem int_futebol_team_form_pit (point-in-time por fixture) — o lado FAVORITO era 100% contaminado. raramente_perde_por_2 e favorito_irregular já eram limpos (margin_stats com kickoff_utc <) e não mudaram. 2 linhas por (fixture, line_value): outcome_side Home e Away. Convenção dos dados (API-Football, confirmada 2026-06-24): line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ os dois lados — "Home -1.5" e "Away -1.5" são o PAR complementar (de-vig soma ~1.03, pin_n_outcomes=2). Logo o handicap NA ÓTICA DO LADO = IF(side=Home, line_value, -line_value): side_handicap<0 => FAVORITO (dá handicap), >0 => AZARÃO (recebe), =0 => pick (nenhuma premissa dispara). Favorito: 5 premissas (Σ40, §12.3); Azarão: 3 (Σ30). Penalidade específica: handicap_alto (-12, |line_value|>=2.5). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. Gate/edge/Score saem no mart fact_value_opportunities (gate de completude Pinnacle = par >=2, igual O/U).
-    ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura. ⚠️ MEDIÇÃO (task [F], ADR 0007): o margin_stats aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz exatamente o comportamento descrito acima — no default o SQL compilado é idêntico ao de antes da var existir. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. supremacia e sem_rodizio NÃO seguem o eixo (rank/ppg/n_teams vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008). ⚠️ O margin_stats não tem filtro de season nem no default — ele já atravessa temporada hoje —, então sob `todas` ele passa a contar todas as competições E todo o tempo coletado.'
+    ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura. ⚠️ MEDIÇÃO (task [F], ADR 0007): o margin_stats aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. supremacia e sem_rodizio NÃO seguem o eixo (rank/ppg/n_teams vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008). ⚠️ O margin_stats não tem filtro de season nem no default — ele já atravessa temporada hoje —, então sob `todas` ele passa a contar todas as competições E todo o tempo coletado.'
 ) }}
-{#- EIXO DE ESCOPO DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
+{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
 
     Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
     própria: o `margin_stats`, que alimenta `raramente_perde_por_2` e `favorito_irregular`. Ela
@@ -23,8 +23,15 @@
     team_form_pit, que os mantém competição-scoped em todas as células (ADR 0008).
 
     Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`) o SQL compilado é IDÊNTICO ao de antes desta var. -#}
-{%- set pit_escopo = taskf_eixos().escopo %}
+    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes destas vars.
+
+    O eixo de RECORTE (`pit_recorte`) alcança o mesmo `margin_stats` desde a #54, e ele é o único
+    site em que o recorte ENCOLHE o histórico: sem filtro de season para remover, sob
+    `ultimos_10` entra só o teto de contagem. Ver o comentário no CTE. -#}
+{%- set eixos              = taskf_eixos() %}
+{%- set pit_escopo         = eixos.escopo %}
+{%- set pit_recorte        = eixos.recorte %}
+{%- set tamanho_do_recorte = eixos.tamanho_do_recorte %}
 
 WITH fixtures AS (
     SELECT
@@ -97,12 +104,18 @@ fixture_teams AS (
     SELECT fixture_id, competition_id, kickoff_utc, away_team_id FROM fixtures
 ),
 -- Por (fixture-alvo, time): nº de jogos anteriores na mesma liga e % derrotas/vitórias por 2+.
-margin_stats AS (
-    SELECT
-        ft.fixture_id, ft.team_id,
-        COUNT(*)             AS n_games,
-        COUNTIF(r.margin <= -2) AS n_lost2,
-        COUNTIF(r.margin >=  2) AS n_won2
+{#- O FROM/JOIN existe UMA vez e é renderizado nas duas formas do CTE (agregação direta no
+    default, pares ranqueados sob recorte de contagem): é aqui que os dois eixos entram, e duas
+    cópias de um predicado de eixo não ficam iguais para sempre. Mesma técnica do `agregados_pit`
+    do int_futebol_team_form_pit.
+
+    ⚠️ ESTE SITE É O ÚNICO EM QUE O RECORTE NÃO SUBSTITUI UM FILTRO DE SEASON — ele não tem um.
+    O `margin_stats` já atravessa temporada hoje (ver o cabeçalho do modelo), então aqui
+    `base` → `recorte` é TODO O TEMPO COLETADO → as N últimas partidas, e não temporada → as N
+    últimas. Nas duas premissas que ele alimenta (`raramente_perde_por_2`, `favorito_irregular`) o
+    recorte ENCOLHE o histórico em vez de alargá-lo, ao contrário de todos os outros sites. Quem
+    ler a tabela de deltas comparando premissas precisa saber disso. -#}
+{%- set margin_from %}
     FROM fixture_teams ft
     JOIN team_results r
         ON r.team_id        = ft.team_id
@@ -110,8 +123,41 @@ margin_stats AS (
        AND r.competition_id = ft.competition_id
        {%- endif %}
        AND r.kickoff_utc    < ft.kickoff_utc
+{%- endset %}
+{%- if pit_recorte == 'ultimos_10' %}
+-- MEDIÇÃO — recorte de contagem: os pares (jogo-alvo, time) × partida anterior são ranqueados e
+-- só os N mais recentes sobrevivem, ANTES da agregação. O corte mora num CTE à parte porque
+-- QUALIFY na mesma SELECT do GROUP BY filtraria depois de a conta estar feita. O desempate é
+-- pela própria margem: `kickoff_utc` é TIMESTAMP e empate real seria dado torto, mas com ele o
+-- conjunto sobrevivente é determinístico mesmo assim.
+margin_pares AS (
+    SELECT ft.fixture_id, ft.team_id, r.margin
+{{- margin_from }}
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY ft.fixture_id, ft.team_id
+        ORDER BY r.kickoff_utc DESC, r.margin DESC
+    ) <= {{ tamanho_do_recorte }}
+),
+margin_stats AS (
+    SELECT
+        fixture_id, team_id,
+        COUNT(*)             AS n_games,
+        COUNTIF(margin <= -2) AS n_lost2,
+        COUNTIF(margin >=  2) AS n_won2
+    FROM margin_pares
+    GROUP BY fixture_id, team_id
+),
+{%- else %}
+margin_stats AS (
+    SELECT
+        ft.fixture_id, ft.team_id,
+        COUNT(*)             AS n_games,
+        COUNTIF(r.margin <= -2) AS n_lost2,
+        COUNTIF(r.margin >=  2) AS n_won2
+{{- margin_from }}
     GROUP BY ft.fixture_id, ft.team_id
 ),
+{%- endif %}
 
 -- Métricas brutas por outcome×linha.
 metrics AS (

@@ -27,7 +27,7 @@
     referência, com o risco de reconciliar a medição contra um bug meu.
 
     ────────────────────────────────────────────────────────────────────────────────
-    O QUE MUDA EM RELAÇÃO AO ORIGINAL — três coisas, e só três:
+    O QUE MUDA EM RELAÇÃO AO ORIGINAL — quatro coisas, e só quatro:
 
     1. UNIVERSO CONGELADO. `apostas` é recortada por taskf_universo_filtro(). O original rodou sem
        corte (a janela dele é o instante da execução). Ver macros/taskf_universo.sql: o teto é um
@@ -40,6 +40,35 @@
        agora porque é este ticket que define o formato da tabela, e mudar formato depois da #55
        ter testes em cima dele custa mais. A reconciliação compara só 0/5/10, que é o que a [0.1]
        publicou.
+    4. AS DUAS CONTAGENS DE AMOSTRA (#54), `jogos_medios_disp` e `jogos_medios_usado`. Ver a
+       seção abaixo — é a mudança que faz o piso significar a mesma coisa nas quatro células.
+
+    ────────────────────────────────────────────────────────────────────────────────
+    AS DUAS CONTAGENS DE AMOSTRA, E QUAL DELAS O PISO CORTA (#54)
+
+    `min_jogos` é o MENOR número de partidas anteriores entre os dois times do jogo. Sob recorte
+    de contagem ele se desdobra em dois números diferentes:
+
+      DISPONÍVEL  quantas partidas anteriores EXISTEM no escopo da célula, sem teto.
+      USADO       quantas de fato alimentaram as médias — sob `ultimos_10` ele satura em 10.
+
+    Nas células de recorte `temporada` (`base` e `escopo`) os dois são o MESMO número por
+    construção: sem teto, tudo que existe é usado. Só `recorte` e `ambos` os separam.
+
+    O PISO CORTA O DISPONÍVEL. O motivo é comparabilidade entre células: o usado não passa de 10
+    sob janela de contagem, então um piso sobre ele estaria cortando uma quantidade que tem teto
+    numa célula e não tem na outra — e "piso 10" passaria a querer dizer duas coisas diferentes
+    em duas colunas da mesma tabela. O disponível é a mesma pergunta nas quatro ("quanto passado
+    este jogo tem"), e é ela que a spec #49 manda cortar.
+
+    ⚠️ Para os pisos varridos aqui o corte dá no MESMO conjunto de linhas nos dois: como
+    `usado = LEAST(disponível, 10)`, para qualquer piso <= 10 vale `usado >= piso` ⟺
+    `disponível >= piso`. Isso é consequência, não coincidência, e está MEDIDO em
+    analyses/taskf_saturacao_recorte.sql — não é hipótese em que a tabela se apoia. Quem divergir
+    de fato é `jogos_medios`, que é média e não corte, e por isso ele sai nas duas versões.
+
+    `pct_amostra_curta` (< 5) segue o disponível, pela mesma regra do piso — e pela identidade
+    acima ele daria o mesmo número no usado nesta configuração.
 
     Fora isso a agregação é a do original, incluindo o grão (mercado, premissa, BENCHMARK) — as
     linhas de consenso do Handicap e do Gols continuam saindo marcadas `usado_para_peso = false`,
@@ -49,8 +78,16 @@
     ────────────────────────────────────────────────────────────────────────────────
     ACUMULATIVA POR CÉLULA. A tabela é criada uma vez e cada execução substitui SÓ a sua célula
     (DELETE + INSERT). As quatro convivem, que é o que a Costura B precisa. O schema é escrito
-    por extenso de propósito: ele é o contrato que as células seguintes (#53, #54) têm de cumprir,
-    e um INSERT de formato diferente falha alto em vez de alargar a tabela em silêncio.
+    por extenso de propósito: ele é o contrato que as células seguintes têm de cumprir, e um
+    INSERT de formato diferente falha alto em vez de alargar a tabela em silêncio.
+
+    ⚠️ E É POR ISSO QUE MUDAR O SCHEMA EXIGE DROPAR A TABELA. `CREATE TABLE IF NOT EXISTS` não
+    acrescenta coluna a uma tabela que já existe: com o schema novo, o INSERT de lista explícita
+    falha na primeira célula. A #54 mudou o schema (as duas contagens de amostra), então a tabela
+    foi dropada uma vez antes da primeira célula — o que só é seguro porque as quatro células são
+    re-medidas na mesma execução, que é o que a spec exige de qualquer jeito. Se um ticket futuro
+    mudar o schema de novo, é o mesmo passo, e ele NÃO é rotina: dropar sem re-medir as quatro
+    deixa a tabela com células de formatos diferentes de execuções diferentes.
 
     ⚠️ `medido_em` existe porque a spec exige que as quatro células rodem na MESMA EXECUÇÃO — o
     baseline não é reaproveitado justamente porque `linha_subindo`/`linha_descendo` leem odds ao
@@ -62,6 +99,11 @@
 
     ────────────────────────────────────────────────────────────────────────────────
     COMO RODAR (do dbt_futebol/) — DUAS FASES, e a separação não é economia, é correção.
+
+    FASE 0, só quando o schema de uma das duas tabelas acumulativas muda (foi o caso na #54):
+
+      bq rm -f -t smartbetting-dados:futebol_taskF.taskf_teste2
+      bq rm -f -t smartbetting-dados:futebol_taskF.taskf_pit_por_celula
 
     FASE 1, uma vez só para as quatro células: a ancestria inteira, que é o que popula o dataset
     de medição. Com `--target taskF` todo `ref()` resolve para futebol_taskF, então os fatos têm
@@ -120,7 +162,12 @@
 
 {%- set c      = taskf_celula() -%}
 {%- set j      = taskf_universo() -%}
-{%- set pisos  = [0, 3, 5, 10] -%}
+{%- set pisos  = taskf_pisos() -%}
+{#- Qual coluna do PIT carrega a contagem DISPONÍVEL. Sob recorte de `temporada` ela não existe no
+    modelo, e não por esquecimento: sem teto, disponível É o played_total, e emitir a coluna no
+    default mudaria o SQL compilado do caminho que produção usa — o que a ADR 0007 promete que não
+    acontece. A projeção abaixo é, portanto, exata nas quatro células, e não uma aproximação. -#}
+{%- set col_disponivel = 'played_total_disponivel' if c.recorte == 'ultimos_10' else 'played_total' -%}
 {%- set tabela = 'smartbetting-dados.futebol_taskF.taskf_teste2' -%}
 
 {#- Uma lista, três usos: o DDL, a lista de colunas do INSERT e a ordem da projeção. Escrita duas
@@ -132,7 +179,8 @@
     'janela_ini DATE', 'janela_fim DATE',
     'jogos_no_universo INT64', 'linhas_no_universo INT64',
     'mercado STRING', 'premissa STRING', 'benchmark STRING', 'usado_para_peso BOOL',
-    'fator_encolhimento FLOAT64', 'jogos_medios FLOAT64', 'pct_amostra_curta FLOAT64'
+    'fator_encolhimento FLOAT64',
+    'jogos_medios_disp FLOAT64', 'jogos_medios_usado FLOAT64', 'pct_amostra_curta FLOAT64'
 ] -%}
 {%- for piso in pisos -%}
     {%- set _ = colunas.extend([
@@ -162,18 +210,49 @@ INSERT INTO `{{ tabela }}` ({{ nomes_colunas | join(', ') }})
 
 WITH {{ task01_base() }},
 
+{#- A CONTAGEM DISPONÍVEL, no mesmo formato em que o task01_base() calcula a usada: o MENOR
+    entre os dois times, porque as premissas comparam os dois, e 0 quando não há linha no PIT.
+
+    Por que aqui e não dentro do task01_base(): o macro é o artefato que produziu os números
+    publicados da [0.1] e não é tocado por esta medição — mesmo argumento que pôs o recorte do
+    universo congelado nesta análise, e não num parâmetro novo dele. A conta é a mesma, sobre a
+    mesma tabela; o que muda é a coluna lida. -#}
+pit_disponivel AS (
+    SELECT
+        j.fixture_id,
+        LEAST(COALESCE(h.{{ col_disponivel }}, 0),
+              COALESCE(a.{{ col_disponivel }}, 0)) AS min_jogos_disponivel
+    FROM jogos_encerrados AS j
+    LEFT JOIN {{ ref('int_futebol_team_form_pit') }} AS h
+           ON h.fixture_id = j.fixture_id
+          AND h.team_id    = j.home_team_id
+    LEFT JOIN {{ ref('int_futebol_team_form_pit') }} AS a
+           ON a.fixture_id = j.fixture_id
+          AND a.team_id    = j.away_team_id
+),
+
 {#- O UNIVERSO CONGELADO. Por que o recorte cai aqui, em cima de `apostas`, e não num parâmetro
     novo do task01_base(): está no cabeçalho de macros/taskf_universo.sql, junto do predicado. -#}
 apostas_congeladas AS (
-    SELECT * FROM apostas
-    WHERE {{ taskf_universo_filtro() }}
+    SELECT
+        a.*,
+        {#- O `min_jogos` que vem do task01_base() é o USADO: ele sai do played_total do PIT, que
+            sob recorte de contagem já vem saturado. Ganha aqui um nome que diz isso — o `a.*`
+            acima mantém o original, então as duas formas convivem no CTE e só a nomeada chega à
+            tabela, que assim não tem coluna cujo sentido depende da célula que se está lendo. -#}
+        a.min_jogos                            AS min_jogos_usado,
+        COALESCE(d.min_jogos_disponivel, 0)    AS min_jogos_disponivel
+    FROM apostas AS a
+    LEFT JOIN pit_disponivel AS d
+           ON d.fixture_id = a.fixture_id
+    WHERE {{ taskf_universo_filtro('a.') }}
 ),
 
 {#- Uma passada, grão (mercado, premissa, benchmark). Só as linhas em que a premissa ACENDEU
     entram nas médias — é essa a definição do Teste 2.
 
-    O PISO DE AMOSTRA entra como COLUNA, não como execução separada, porque o encolhimento (`k`) e
-    o piso tratam eixos DIFERENTES: `k` trata `n` pequeno (a premissa acendeu poucas vezes), o
+    O PISO DE AMOSTRA — sobre o DISPONÍVEL, ver o cabeçalho — entra como COLUNA, não como execução
+    separada, porque o encolhimento (`k`) e o piso tratam eixos DIFERENTES: `k` trata `n` pequeno (a premissa acendeu poucas vezes), o
     piso trata jogo sem histórico. `clean_sheets_altos` tem n=105 (grande, o encolhimento mal
     encosta) e 77% das linhas em jogo com menos de 5 partidas disputadas — a assinatura exata do
     artefato que matou os +9,7% da Task [0]. Ver os dois lado a lado é o ponto. -#}
@@ -182,13 +261,14 @@ agregado AS (
         a.market_id,
         pl.premissa,
         a.benchmark,
-        AVG(IF(pl.acesa, a.min_jogos, NULL))                     AS jogos_medios,
-        AVG(IF(pl.acesa, IF(a.min_jogos < 5, 1.0, 0.0), NULL))   AS frac_curta
+        AVG(IF(pl.acesa, a.min_jogos_disponivel, NULL))          AS jogos_medios_disp,
+        AVG(IF(pl.acesa, a.min_jogos_usado, NULL))               AS jogos_medios_usado,
+        AVG(IF(pl.acesa, IF(a.min_jogos_disponivel < 5, 1.0, 0.0), NULL)) AS frac_curta
         {%- for piso in pisos %},
-        COUNTIF(pl.acesa AND a.min_jogos >= {{ piso }})          AS n_{{ piso }},
-        AVG(IF(pl.acesa AND a.min_jogos >= {{ piso }},
+        COUNTIF(pl.acesa AND a.min_jogos_disponivel >= {{ piso }}) AS n_{{ piso }},
+        AVG(IF(pl.acesa AND a.min_jogos_disponivel >= {{ piso }},
                a.prob_justa_fechamento, NULL))                   AS p_odd_{{ piso }},
-        AVG(IF(pl.acesa AND a.min_jogos >= {{ piso }},
+        AVG(IF(pl.acesa AND a.min_jogos_disponivel >= {{ piso }},
                CAST(a.ganhou AS INT64), NULL))                   AS p_real_{{ piso }}
         {%- endfor %}
     FROM apostas_congeladas AS a
@@ -247,7 +327,10 @@ SELECT
     -- tivesse seria 88% descartado por falta de amostra, e isso é diferente de "medimos e deu
     -- ruim".
     ROUND(SAFE_DIVIDE(r.n_0, r.n_0 + 50), 2)                AS fator_encolhimento,
-    ROUND(r.jogos_medios, 1)                                AS jogos_medios,
+    -- As duas contagens; ver o cabeçalho. Nas células de recorte `temporada` elas são iguais
+    -- por construção, e é isso que as torna comparáveis com as duas em que não são.
+    ROUND(r.jogos_medios_disp, 1)                           AS jogos_medios_disp,
+    ROUND(r.jogos_medios_usado, 1)                          AS jogos_medios_usado,
     ROUND(r.frac_curta * 100, 1)                            AS pct_amostra_curta
     {%- for piso in pisos %},
     r.n_{{ piso }}                                          AS n_p{{ piso }},

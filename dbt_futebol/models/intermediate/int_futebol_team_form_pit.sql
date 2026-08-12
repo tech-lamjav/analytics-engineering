@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     cluster_by=['fixture_id', 'team_id'],
-    description='Correção da Task 0 (look-ahead) — agregados de forma POINT-IN-TIME por (fixture_id, team_id): tudo é calculado SÓ com jogos FINALIZADOS da MESMA competição/season e com kickoff ANTERIOR ao do jogo-alvo. Substitui as duas fontes contaminadas dos 5 modelos de premissas: (A) fact_team_season_stats, que tem 1 único snapshot por (time, liga, season) — p/ 2024/2025 é a temporada FECHADA (played_total=38 aplicado à rodada 1, ~51% de cada média sendo futuro e 100% dos jogos com o próprio resultado dentro da média); e (B2) o standings_latest (MAX(snapshot_date) sem âncora no kickoff), cujo histórico só começa em 11/06/2026 e que p/ 24/25 é a tabela final. Reconstrói do fact_fixtures o mesmo conjunto de colunas consumido pelos modelos (gols pró/contra casa/fora/total, clean sheet, failed to score, played/wins/draws) MAIS a tabela do campeonato no instante do jogo (rank/points/ppg/n_wins_last5). O rank sai DENTRO do grupo (group_name das standings = estrutura do chaveamento, conhecida antes dos jogos — não é medição): liga de pontos corridos = 1 grupo, logo rank global 1-20 (Brasileirão/Série B/La Liga/PL/Serie A ITA) ou 1-36 (Champions, fase de liga); Libertadores/Sudamericana/Copa do Mundo = rank por grupo (1-4 / 1-12), igual à API; Copa do Brasil não tem standings -> sem grupo -> rank NULL, como já era. Degradação graciosa por construção: no início de temporada played_total=0 -> médias NULL -> premissa FALSE (honesto: na rodada 1 não existe passado). played_* fica exposto p/ que a recalibragem possa decidir um piso de amostra. ⚠️ MEDIÇÃO (task [F], ADR 0007): aceita as vars pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10), cujos DEFAULTS reproduzem exatamente o descrito acima — no default o SQL compilado é idêntico ao de antes das vars existirem. Produção nunca as passa; elas servem às células de medição, materializadas no dataset futebol_taskF. A tabela do campeonato (rank/points/ppg/n_teams/goal_diff) NÃO segue os eixos: classificação existe dentro de uma competição, então ela permanece competição+temporada em todas as células, por construção (ADR 0008).'
+    description='Correção da Task 0 (look-ahead) — agregados de forma POINT-IN-TIME por (fixture_id, team_id): tudo é calculado SÓ com jogos FINALIZADOS da MESMA competição/season e com kickoff ANTERIOR ao do jogo-alvo. Substitui as duas fontes contaminadas dos 5 modelos de premissas: (A) fact_team_season_stats, que tem 1 único snapshot por (time, liga, season) — p/ 2024/2025 é a temporada FECHADA (played_total=38 aplicado à rodada 1, ~51% de cada média sendo futuro e 100% dos jogos com o próprio resultado dentro da média); e (B2) o standings_latest (MAX(snapshot_date) sem âncora no kickoff), cujo histórico só começa em 11/06/2026 e que p/ 24/25 é a tabela final. Reconstrói do fact_fixtures o mesmo conjunto de colunas consumido pelos modelos (gols pró/contra casa/fora/total, clean sheet, failed to score, played/wins/draws) MAIS a tabela do campeonato no instante do jogo (rank/points/ppg/n_wins_last5). O rank sai DENTRO do grupo (group_name das standings = estrutura do chaveamento, conhecida antes dos jogos — não é medição): liga de pontos corridos = 1 grupo, logo rank global 1-20 (Brasileirão/Série B/La Liga/PL/Serie A ITA) ou 1-36 (Champions, fase de liga); Libertadores/Sudamericana/Copa do Mundo = rank por grupo (1-4 / 1-12), igual à API; Copa do Brasil não tem standings -> sem grupo -> rank NULL, como já era. Degradação graciosa por construção: no início de temporada played_total=0 -> médias NULL -> premissa FALSE (honesto: na rodada 1 não existe passado). played_* fica exposto p/ que a recalibragem possa decidir um piso de amostra. ⚠️ MEDIÇÃO (task [F], ADR 0007): aceita as vars pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10), cujos DEFAULTS reproduzem exatamente o descrito acima — no default o SQL compilado é idêntico ao de antes das vars existirem. Produção nunca as passa; elas servem às células de medição, materializadas no dataset futebol_taskF. A tabela do campeonato (rank/points/ppg/n_teams/goal_diff) NÃO segue os eixos: classificação existe dentro de uma competição, então ela permanece competição+temporada em todas as células, por construção (ADR 0008). Sob pit_recorte=ultimos_10 sai também played_total_disponivel — quantas partidas anteriores EXISTEM no escopo, sem o teto do recorte; played_total é a contagem USADA e satura em 10. A coluna NÃO é emitida no default (sem teto ela seria o próprio played_total, e emiti-la mudaria o SQL compilado do caminho que produção usa).'
 ) }}
 {#-
     EIXOS DE MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — não usados em produção.
@@ -44,6 +44,10 @@
 {%- set eixos       = taskf_eixos() -%}
 {%- set pit_escopo  = eixos.escopo -%}
 {%- set pit_recorte = eixos.recorte -%}
+{#- O tamanho do recorte de contagem (o 10 de `ultimos_10`) vem da mesma macro que valida os
+    eixos, e não de um literal digitado aqui: ele é lido também pelos seis sites de histórico dos
+    modelos de premissas e pela análise que confere a saturação. -#}
+{%- set tamanho_do_recorte = eixos.tamanho_do_recorte -%}
 {#- Fora do default, a tabela do campeonato precisa do próprio agregado, competição-scoped
     (ADR 0008) — e o rank/ppg passam a sair dele, não do agregado da célula. -#}
 {%- set tabela_propria = (pit_escopo != 'da_competicao') or (pit_recorte != 'temporada') -%}
@@ -166,7 +170,13 @@ pares AS (
         l.is_home,
         l.gf,
         l.ga,
-        l.kickoff_utc
+        l.kickoff_utc,
+        -- A contagem DISPONÍVEL: quantas partidas anteriores existem no escopo, SEM o teto do
+        -- recorte. A window function é avaliada sobre a entrada inteira do SELECT e o QUALIFY
+        -- filtra depois, então este COUNT enxerga as partidas que o teto vai descartar. Sem
+        -- linha correspondente o LEFT JOIN devolve team_id NULL e o COUNT dá 0, igual ao
+        -- played_total — o time sem passado tem as duas contagens em zero.
+        COUNT(l.team_id) OVER (PARTITION BY a.fixture_id, lt.team_id) AS played_disponivel
     FROM anchors a
     JOIN league_teams lt
         ON  lt.competition_id = a.competition_id
@@ -180,7 +190,7 @@ pares AS (
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY a.fixture_id, lt.team_id
         ORDER BY l.kickoff_utc DESC
-    ) <= 10
+    ) <= {{ tamanho_do_recorte }}
 ),
 
 pit AS (
@@ -189,7 +199,21 @@ pit AS (
         l.anchor_team_id AS team_id,
         l.competition_id,
         l.season,
-{{ agregados_pit }}
+{{ agregados_pit }},
+
+        -- MEDIÇÃO — a segunda contagem de amostra (#54). `played_total` acima é a USADA: ela
+        -- satura no tamanho do recorte, porque só as partidas que sobreviveram ao teto
+        -- alimentaram as médias. Esta é a DISPONÍVEL, sem teto. As duas existem separadas para o
+        -- piso de amostra significar a mesma coisa nas quatro células: sob recorte de contagem
+        -- um piso sobre a usada estaria cortando uma contagem que não passa de 10, e a mesma
+        -- palavra "piso 10" queria dizer duas coisas diferentes em duas células.
+        --
+        -- ⚠️ Fica DENTRO deste ramo, e não no `agregados_pit` compartilhado: no default a
+        -- coluna não é emitida e o SQL compilado segue idêntico ao de antes das vars — que é o
+        -- que a ADR 0007 promete e a Costura A verifica. Sob `temporada` ela seria redundante
+        -- por construção (sem teto, disponível É a usada), e quem carimba a célula projeta
+        -- `played_total` no lugar dela.
+        MAX(l.played_disponivel) AS played_total_disponivel
     FROM pares l
     GROUP BY l.fixture_id, l.anchor_team_id, l.competition_id, l.season
 ),
@@ -285,6 +309,11 @@ SELECT
     r.played_home,
     r.played_away,
     r.played_total,
+    {%- if pit_recorte == 'ultimos_10' %}
+    -- Ver o comentário no CTE `pit`: existe só sob recorte de contagem, que é o único caso em
+    -- que ela difere do played_total.
+    r.played_total_disponivel,
+    {%- endif %}
     r.wins_home,
     r.draws_home,
     r.wins_away,

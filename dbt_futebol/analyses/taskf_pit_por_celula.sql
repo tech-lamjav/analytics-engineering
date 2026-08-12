@@ -37,6 +37,14 @@
     enquanto ela é a corrente. As chaves (fixture, time, competição, season, kickoff) vêm junto
     porque a comparação precisa quebrar por competição e por família.
 
+    ⚠️ AS DUAS CONTAGENS (#54). `played_total` é a USADA — sob recorte de contagem ela satura no
+    tamanho do recorte, porque só as partidas que sobreviveram ao teto alimentaram as médias.
+    `played_total_disponivel` é quantas EXISTEM no escopo, sem teto. Nas células de recorte
+    `temporada` o modelo não emite a segunda coluna (emiti-la mudaria o SQL compilado do caminho
+    que produção usa), e aqui ela é projetada do próprio `played_total`: sem teto, disponível É a
+    usada, então a projeção é exata e não uma aproximação. É essa igualdade que a
+    analyses/taskf_saturacao_recorte.sql confere, em vez de tomá-la como dada.
+
     ACUMULATIVA POR CÉLULA, igual ao taskf_teste2: a tabela é criada uma vez e cada execução
     substitui SÓ a sua célula (DELETE + INSERT). As quatro convivem.
 
@@ -60,6 +68,9 @@
 
 {%- set c      = taskf_celula() -%}
 {%- set tabela = 'smartbetting-dados.futebol_taskF.taskf_pit_por_celula' -%}
+{#- Ver o cabeçalho: sob `temporada` a coluna não existe no modelo porque sem teto ela seria o
+    próprio played_total. -#}
+{%- set col_disponivel = 'played_total_disponivel' if c.recorte == 'ultimos_10' else 'played_total' -%}
 
 {#- Uma lista, três usos: o DDL, a lista de colunas do INSERT e a ordem da projeção. Escrita duas
     vezes, ela derivaria — e um INSERT posicional com colunas trocadas de lugar não dá erro, dá
@@ -70,7 +81,8 @@
     'fixture_id INT64', 'team_id INT64',
     'competition STRING', 'competition_id INT64', 'season INT64',
     'kickoff_utc TIMESTAMP',
-    'played_home INT64', 'played_away INT64', 'played_total INT64'
+    'played_home INT64', 'played_away INT64', 'played_total INT64',
+    'played_total_disponivel INT64'
 ] -%}
 {%- set nomes_colunas = [] -%}
 {%- for col in colunas -%}
@@ -101,5 +113,6 @@ SELECT
     kickoff_utc,
     played_home,
     played_away,
-    played_total
+    played_total,
+    {{ col_disponivel }} AS played_total_disponivel
 FROM {{ ref('int_futebol_team_form_pit') }}

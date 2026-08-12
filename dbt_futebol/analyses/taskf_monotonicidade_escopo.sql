@@ -40,6 +40,13 @@
     macro a faria depender das vars da linha de comando, que é exatamente o acoplamento que ela
     existe para auditar.
 
+    ⚠️ O MESMO PAR É MEDIDO TAMBÉM PELA analyses/taskf_saturacao_recorte.sql (#54), que fecha as
+    quatro arestas do 2x2 sobre a contagem DISPONÍVEL. Este arquivo continua existindo porque faz
+    duas coisas que aquele não faz: compara `played_total` (a contagem usada) e confere o lado
+    `base` contra o baseline congelado antes das vars, nas partições de insumo casado. Nas células
+    de `temporada` as duas contagens são o mesmo número, então os dois têm de concordar — e
+    concordam exatamente. Se um dia divergirem, é sinal.
+
     POR QUE ANÁLISE E NÃO TESTE SINGULAR. Um teste dbt roda dentro da execução de UMA célula, e a
     outra ainda não existe: no build da `base` ele passaria em branco (vacuidade) e no da `escopo`
     ele afirmaria algo sobre um carimbo gravado antes. As invariantes que se assere sobre a saída
