@@ -582,6 +582,16 @@ sources:
               entre builds. Com o carimbo, "mesma execução" é conferível; sem ele, é confiança.
           - name: git_sha
             description: "Commit de onde a célula foi medida (var taskf_git_sha)"
+          - name: odds_loaded_at
+            description: >
+              O `dbt_loaded_at` do fact_odds_snapshot que ESTA célula leu — qual construção dos
+              fatos alimentou a medição. Carimbado na linha, e não conferido ao vivo depois, por
+              duas razões: lido ao vivo ele decai (um rebuild posterior no dataset de medição
+              deixaria a conferência vermelha sem que as quatro células tivessem deixado de ser
+              comparáveis), e um ref() penduraria a guarda no grafo do fact_odds_snapshot, que a
+              arrastaria para dentro dos builds da medição por seleção indireta. Com ele, a
+              primeira invariante da Costura B cobra as duas pontas: idêntico nas quatro (mesma
+              construção) e anterior ao `medido_em` de cada uma (os fatos vieram antes).
           - name: jogos_no_universo
             description: >
               Jogos distintos do universo congelado (169). Idêntico nas quatro células por

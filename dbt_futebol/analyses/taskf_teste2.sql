@@ -27,7 +27,7 @@
     referência, com o risco de reconciliar a medição contra um bug meu.
 
     ────────────────────────────────────────────────────────────────────────────────
-    O QUE MUDA EM RELAÇÃO AO ORIGINAL — quatro coisas, e só quatro:
+    O QUE MUDA EM RELAÇÃO AO ORIGINAL — cinco coisas, e só cinco:
 
     1. UNIVERSO CONGELADO. `apostas` é recortada por taskf_universo_filtro(). O original rodou sem
        corte (a janela dele é o instante da execução). Ver macros/taskf_universo.sql: o teto é um
@@ -42,6 +42,9 @@
        publicou.
     4. AS DUAS CONTAGENS DE AMOSTRA (#54), `jogos_medios_disp` e `jogos_medios_usado`. Ver a
        seção abaixo — é a mudança que faz o piso significar a mesma coisa nas quatro células.
+    5. O CARIMBO DA CONSTRUÇÃO DOS FATOS (#55), `odds_loaded_at`. Ver a CTE `fatos`: é ele que
+       tira "as quatro rodaram na mesma execução" da disciplina e põe na linha, onde a Costura B
+       consegue cobrar.
 
     ────────────────────────────────────────────────────────────────────────────────
     AS DUAS CONTAGENS DE AMOSTRA, E QUAL DELAS O PISO CORTA (#54)
@@ -83,24 +86,34 @@
 
     ⚠️ E É POR ISSO QUE MUDAR O SCHEMA EXIGE DROPAR A TABELA. `CREATE TABLE IF NOT EXISTS` não
     acrescenta coluna a uma tabela que já existe: com o schema novo, o INSERT de lista explícita
-    falha na primeira célula. A #54 mudou o schema (as duas contagens de amostra), então a tabela
-    foi dropada uma vez antes da primeira célula — o que só é seguro porque as quatro células são
-    re-medidas na mesma execução, que é o que a spec exige de qualquer jeito. Se um ticket futuro
-    mudar o schema de novo, é o mesmo passo, e ele NÃO é rotina: dropar sem re-medir as quatro
-    deixa a tabela com células de formatos diferentes de execuções diferentes.
+    falha na primeira célula. Aconteceu duas vezes — a #54 (as duas contagens de amostra) e a #55
+    (o `odds_loaded_at`) —, e nas duas a tabela foi dropada antes da primeira célula, o que só é
+    seguro porque as quatro são re-medidas na mesma execução, que é o que a spec exige de qualquer
+    jeito. Se um ticket futuro mudar o schema de novo, é o mesmo passo, e ele NÃO é rotina: dropar
+    sem re-medir as quatro deixa a tabela com células de formatos diferentes de execuções
+    diferentes.
 
-    ⚠️ `medido_em` existe porque a spec exige que as quatro células rodem na MESMA EXECUÇÃO — o
-    baseline não é reaproveitado justamente porque `linha_subindo`/`linha_descendo` leem odds ao
-    vivo e viram sozinhas entre builds. Com o carimbo, "mesma execução" é conferível na tabela; sem
-    ele, é confiança. Quem escreve a Costura B (#55) precisa dele, e a forma verificável é:
-    `fact_odds_snapshot.dbt_loaded_at` ANTERIOR aos quatro `medido_em`. Isso prova o que de fato
-    importa — que as quatro leram a MESMA construção dos fatos —, que é mais forte do que os
+    ⚠️ `medido_em` e `odds_loaded_at` existem porque a spec exige que as quatro células rodem na
+    MESMA EXECUÇÃO — o baseline não é reaproveitado justamente porque `linha_subindo`/
+    `linha_descendo` leem odds ao vivo e viram sozinhas entre builds. Com os dois carimbos, "mesma
+    execução" é conferível na tabela; sem eles, é confiança. A forma verificável que a #51 definiu
+    é `fact_odds_snapshot.dbt_loaded_at` ANTERIOR aos quatro `medido_em` — porque o que de fato
+    importa é que as quatro tenham lido a MESMA construção dos fatos, o que é mais forte do que os
     quatro carimbos serem próximos entre si.
 
-    ────────────────────────────────────────────────────────────────────────────────
-    COMO RODAR (do dbt_futebol/) — DUAS FASES, e a separação não é economia, é correção.
+    A #55 levou isso um passo adiante: o `dbt_loaded_at` é gravado NA LINHA de cada célula, em vez
+    de conferido ao vivo depois. Lido ao vivo ele decai — um rebuild posterior no dataset de
+    medição deixaria a conferência vermelha sem que as quatro tivessem deixado de ser comparáveis
+    —, e a guarda passaria a depender do target com que roda. Carimbado, ele responde a pergunta
+    certa ("as quatro leram a mesma construção?") para sempre. Ver a CTE `fatos`.
 
-    FASE 0, só quando o schema de uma das duas tabelas acumulativas muda (foi o caso na #54):
+    ────────────────────────────────────────────────────────────────────────────────
+    COMO RODAR (do dbt_futebol/) — EM FASES, e a separação não é economia, é correção.
+
+    FASE 0, só quando o schema de uma das duas tabelas acumulativas muda (foi o caso na #54 e na
+    #55). Dropar só a que mudou de formato basta — a outra é reescrita célula a célula pelo
+    DELETE + INSERT da fase 2, e a fase 2 roda inteira nas quatro de qualquer forma, então as duas
+    terminam carregando a mesma execução:
 
       bq rm -f -t smartbetting-dados:futebol_taskF.taskf_teste2
       bq rm -f -t smartbetting-dados:futebol_taskF.taskf_pit_por_celula
@@ -131,6 +144,14 @@
         --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', pit_escopo: todas}'
       bq query --use_legacy_sql=false --project_id=smartbetting-dados \
         < target/compiled/dbt_futebol/analyses/taskf_teste2.sql
+
+    FASE 3, uma vez DEPOIS DAS QUATRO: a Costura B (#55), que é o portão. Enquanto ela não
+    estiver verde, as quatro células são quatro medições, e não um 2×2 comparável:
+
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt test --target taskF --select tag:costura_b
+
+    As três guardas leem SÓ a tabela acumulativa (por `source()`), não penduram em modelo nenhum
+    e por isso não entram nas fases 1 e 2 de carona.
 
     ⚠️ O CARIMBO DO PIT vem DEPOIS do build da mesma célula, sempre. O rótulo dele sai das vars em
     tempo de compilação e o dado sai do que está materializado: fora de ordem, uma célula é
@@ -175,7 +196,7 @@
     número errado. -#}
 {%- set colunas = [
     'celula STRING', 'pit_escopo STRING', 'pit_recorte STRING',
-    'medido_em TIMESTAMP', 'git_sha STRING',
+    'medido_em TIMESTAMP', 'git_sha STRING', 'odds_loaded_at TIMESTAMP',
     'janela_ini DATE', 'janela_fim DATE',
     'jogos_no_universo INT64', 'linhas_no_universo INT64',
     'mercado STRING', 'premissa STRING', 'benchmark STRING', 'usado_para_peso BOOL',
@@ -290,6 +311,27 @@ janela AS (
     FROM apostas_congeladas
 ),
 
+{#- QUAL CONSTRUÇÃO DOS FATOS ESTA CÉLULA LEU (#55). O `fact_odds_snapshot` é `materialized:
+    table` e carimba `CURRENT_TIMESTAMP()` em `dbt_loaded_at`, então o valor é o mesmo em toda a
+    tabela e identifica o build que a produziu.
+
+    Por que ele entra na LINHA da célula, e não é conferido depois contra a tabela viva: o que a
+    Costura B (#55) precisa afirmar é que as quatro células leram a MESMA construção dos fatos, e
+    isso é propriedade das quatro linhas no instante em que foram medidas. Lido ao vivo, o mesmo
+    número decai — um rebuild posterior no dataset de medição deixaria a conferência vermelha sem
+    que as quatro tivessem deixado de ser comparáveis entre si. Carimbado, ele fica verdadeiro
+    para sempre e, junto com `medido_em`, fecha a forma verificável que a #51 definiu.
+
+    E há um efeito de grafo, que é o motivo de a coluna existir em vez de o teste ler o
+    `fact_odds_snapshot` por `ref()`: com o carimbo, as três guardas da Costura B leem SÓ
+    `source('futebol_taskF', ...)` e não penduram em modelo nenhum — então elas não são
+    arrastadas para dentro dos builds das fases 1 e 2 por seleção indireta, e a Costura A segue
+    sendo a única exclusão que a medição precisa. -#}
+fatos AS (
+    SELECT MAX(dbt_loaded_at) AS odds_loaded_at
+    FROM {{ ref('fact_odds_snapshot') }}
+),
+
 {#- `preferido` calculado UMA vez, não repetido em cada coluna que depende dele. -#}
 rotulado AS (
     SELECT
@@ -313,6 +355,9 @@ SELECT
     '{{ c.recorte }}'                                       AS pit_recorte,
     CURRENT_TIMESTAMP()                                     AS medido_em,
     '{{ var("taskf_git_sha", "desconhecido") }}'            AS git_sha,
+    -- A construção dos fatos que esta célula leu; ver a CTE `fatos`. É o que deixa "as quatro
+    -- rodaram na mesma execução" ser conferível na tabela em vez de acreditado.
+    f.odds_loaded_at,
     j.janela_ini,
     j.janela_fim,
     j.jogos_no_universo,
@@ -351,3 +396,4 @@ SELECT
        NULL)                                                AS peso_p0_k0
 FROM rotulado AS r
 CROSS JOIN janela AS j
+CROSS JOIN fatos AS f
