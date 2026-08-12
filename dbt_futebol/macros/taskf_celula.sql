@@ -17,11 +17,12 @@
     A saída carrega os dois valores de eixo ao lado do nome pelo mesmo motivo: quem lê a tabela de
     medição não precisa confiar no dicionário acima, ele está na linha.
 
-    ⚠️ As listas de valores aceitos aparecem também no int_futebol_team_form_pit, que valida por
-    conta própria. A duplicação é consciente e assimétrica: o modelo valida porque produção passa
-    por ele, e esta macro valida porque uma análise compila SEM o modelo na seleção — aí a
-    validação do modelo não roda e um `pit_escopo: todos` (com S) mediria `base` calado, com o
-    rótulo `base`, que é exatamente o modo de falha que esta macro existe para fechar.
+    A LEITURA E A VALIDAÇÃO DOS EIXOS não moram aqui: vêm de taskf_eixos(), que é a fonte única
+    dos valores aceitos. Continua valendo que uma análise compila SEM os modelos na seleção — aí a
+    validação deles não roda, e é por isso que esta macro também valida (via taskf_eixos): um
+    `pit_escopo: todos` (com S) mediria `base` calado, com o rótulo `base`, que é exatamente o modo
+    de falha que esta macro existe para fechar. O que mudou é que a lista de valores aceitos existe
+    UMA vez, e não uma por consumidor.
 
     Uso:
 
@@ -31,17 +32,9 @@
 
 {% macro taskf_celula() %}
 
-    {%- set escopo  = var('pit_escopo',  'da_competicao') -%}
-    {%- set recorte = var('pit_recorte', 'temporada') -%}
-
-    {%- if escopo not in ['da_competicao', 'todas'] -%}
-        {{ exceptions.raise_compiler_error(
-            "pit_escopo inválido: '" ~ escopo ~ "'. Valores aceitos: da_competicao | todas.") }}
-    {%- endif -%}
-    {%- if recorte not in ['temporada', 'ultimos_10'] -%}
-        {{ exceptions.raise_compiler_error(
-            "pit_recorte inválido: '" ~ recorte ~ "'. Valores aceitos: temporada | ultimos_10.") }}
-    {%- endif -%}
+    {%- set eixos   = taskf_eixos() -%}
+    {%- set escopo  = eixos.escopo -%}
+    {%- set recorte = eixos.recorte -%}
 
     {%- set nomes = {
         'da_competicao|temporada':  'base',

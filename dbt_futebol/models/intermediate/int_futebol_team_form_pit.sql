@@ -18,6 +18,17 @@
     ⚠️ `recorte`, nunca `janela`: janela é a janela de coleta de odds (daily/t24h/t1h/t15m) e as
     duas coisas não têm relação. Ver o glossário no CONTEXT.md.
 
+    ⚠️ ESTE MODELO NÃO É A ÚNICA FONTE QUE O EIXO DE ESCOPO ALCANÇA. Cada um dos cinco modelos de
+    premissas tem histórico competição-scoped próprio — os `last5` de Gols, BTTS e Dupla Chance, o
+    `margin_stats` do Handicap e o spine de xG/ritmo — e todos leem a MESMA var. São nove
+    predicados de join em seis modelos; a tabela de quem-alcança-o-quê está na ADR 0007. Mexer só
+    aqui produziria célula misturada (`clean_sheets_altos` juntado ao lado de `historico_over` não
+    juntado), que é exatamente o número que não responde a pergunta da spec.
+
+    Os valores aceitos e a validação vivem em macros/taskf_eixos.sql, uma vez só: sete cópias da
+    lista — os seis modelos mais a taskf_celula() — não ficam iguais para sempre, e a divergência
+    seria muda.
+
     Os dois defaults reproduzem o comportamento de hoje, e a igualdade é fato verificado, não
     promessa: tests/assert_taskf_pit_default_igual_baseline.sql compara a saída no default contra
     o baseline congelado antes de esta var existir. No default o SQL compilado é IDÊNTICO ao de
@@ -30,16 +41,9 @@
       dbt run --target taskF --select int_futebol_team_form_pit \
         --vars '{pit_escopo: todas, pit_recorte: ultimos_10}'
 -#}
-{%- set pit_escopo  = var('pit_escopo',  'da_competicao') -%}
-{%- set pit_recorte = var('pit_recorte', 'temporada') -%}
-{%- if pit_escopo not in ['da_competicao', 'todas'] -%}
-    {{ exceptions.raise_compiler_error(
-        "pit_escopo inválido: '" ~ pit_escopo ~ "'. Valores aceitos: da_competicao | todas.") }}
-{%- endif -%}
-{%- if pit_recorte not in ['temporada', 'ultimos_10'] -%}
-    {{ exceptions.raise_compiler_error(
-        "pit_recorte inválido: '" ~ pit_recorte ~ "'. Valores aceitos: temporada | ultimos_10.") }}
-{%- endif -%}
+{%- set eixos       = taskf_eixos() -%}
+{%- set pit_escopo  = eixos.escopo -%}
+{%- set pit_recorte = eixos.recorte -%}
 {#- Fora do default, a tabela do campeonato precisa do próprio agregado, competição-scoped
     (ADR 0008) — e o rank/ppg passam a sair dele, não do agregado da célula. -#}
 {%- set tabela_propria = (pit_escopo != 'da_competicao') or (pit_recorte != 'temporada') -%}

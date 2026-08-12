@@ -273,7 +273,11 @@ signal.
 
 **Escopo do PIT**:
 Which competitions a PIT aggregate counts. Today it is *da competição*: only fixtures of the
-same competition as the one being rated.
+same competition as the one being rated. It is **not one join** — `int_futebol_team_form_pit`
+holds one, and each of the five premissa models holds its own local history besides (the `last5`
+of Gols, BTTS and Dupla Chance, the Handicap's `margin_stats`, the xG/ritmo spine). Nine
+predicates over six models; the axis reaches all of them or the cell comes out mixed. Table sheet
+in ADR 0007.
 _Avoid_: "juntar os campeonatos" (silent about whether escopo, recorte, or both is changing)
 
 **Recorte do PIT**:

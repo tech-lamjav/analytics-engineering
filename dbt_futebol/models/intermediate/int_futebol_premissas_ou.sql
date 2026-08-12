@@ -1,7 +1,24 @@
 {{ config(
     materialized='table',
-    description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). ⚠️ Task 0 (look-ahead): ataque_combinado/defesas_firmes/defesas_vazaveis/clean_sheets_altos/ataques_fracos/ambos_vazam leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; xg_combinado_alto/xg_baixo_combinado/ritmo_alto passaram a usar o spine ancorado no kickoff (item C) em vez da média da season inteira — era o caso que fazia o MESMO xG medir −2,4 no 1X2 (point-in-time) e +0,5 aqui. historico_over/under e linha_subindo/descendo já eram limpos. 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de TODAS as casas t24h->t15m; odd crua super-ponderaria o leg de odd alta), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities.'
+    description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). ⚠️ Task 0 (look-ahead): ataque_combinado/defesas_firmes/defesas_vazaveis/clean_sheets_altos/ataques_fracos/ambos_vazam leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; xg_combinado_alto/xg_baixo_combinado/ritmo_alto passaram a usar o spine ancorado no kickoff (item C) em vez da média da season inteira — era o caso que fazia o MESMO xG medir −2,4 no 1X2 (point-in-time) e +0,5 aqui. historico_over/under e linha_subindo/descendo já eram limpos. 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de TODAS as casas t24h->t15m; odd crua super-ponderaria o leg de odd alta), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG/ritmo e o last5 de gols aceitam a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz exatamente o comportamento descrito acima — no default o SQL compilado é idêntico ao de antes da var existir. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. O POOL de times da mediana de ritmo segue sendo o da competição do jogo em qualquer célula (é o benchmark "a liga em que estou jogando"); o que segue o eixo é o histórico de cada time do pool, medido igual ao do time avaliado.'
 ) }}
+{#- EIXO DE ESCOPO DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
+
+    Além do que vem do team_form_pit, este modelo tem DUAS fontes de histórico competição-scoped
+    próprias: o spine de xG/ritmo (CTEs `xg`, `pace_team`, `league_pace_median`) e o `last5` de
+    gols totais. Elas respondem ao mesmo eixo, senão a célula sai MISTURADA — `clean_sheets_altos`
+    com histórico juntado e `historico_over` sem —, e um número assim não responde a pergunta da
+    spec. As quatro premissas de tabela seguem competição-scoped em todas as células (ADR 0008),
+    mas `ritmo_alto` não é uma delas: só a mediana da liga é benchmark de competição, o ritmo de
+    cada time é histórico e segue o eixo.
+
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
+    (`da_competicao`) o SQL compilado é IDÊNTICO ao de antes desta var — nenhum ramo novo é
+    emitido no caminho que produção usa.
+
+    O eixo de RECORTE (`pit_recorte`) ainda NÃO alcança estas fontes: o filtro de season delas
+    continua fixo. É o trabalho da #54, uma linha por site. -#}
+{%- set pit_escopo = taskf_eixos().escopo %}
 
 WITH fixtures AS (
     SELECT
@@ -67,7 +84,9 @@ xg AS (
     JOIN {{ ref('fact_fixture_stats') }} st
         ON  st.team_id        = sp.team_id
         AND st.season         = sp.season
+        {%- if pit_escopo == 'da_competicao' %}
         AND st.competition_id = sp.competition_id
+        {%- endif %}
         AND st.date_utc       < DATE(sp.kickoff_utc)
     GROUP BY sp.fixture_id, sp.team_id
 ),
@@ -80,12 +99,18 @@ pace_team AS (
     JOIN {{ ref('fact_fixture_stats') }} st
         ON  st.team_id        = sp.team_id
         AND st.season         = sp.season
+        {%- if pit_escopo == 'da_competicao' %}
         AND st.competition_id = sp.competition_id
+        {%- endif %}
         AND st.date_utc       < DATE(sp.kickoff_utc)
     GROUP BY sp.fixture_id, sp.team_id, sp.competition_id, sp.season
 ),
 -- Mediana da liga sobre as médias por time NO INSTANTE DO JOGO: 1 mediana por (liga, season,
 -- fixture), e não mais uma única mediana da season fechada.
+{#- ⚠️ [F]: o POOL de times (`lt`) é da competição do jogo em qualquer célula — a mediana é o
+    benchmark "a liga em que estou jogando", e juntar campeonatos no pool compararia o ritmo do
+    time contra uma liga que não existe. O que segue o eixo é o HISTÓRICO de cada time do pool,
+    exatamente como no `pace_team` acima — os dois lados da comparação são medidos igual. #}
 league_pace_median AS (
     SELECT fixture_id,
            APPROX_QUANTILES(pace_avg, 2)[OFFSET(1)] AS pace_median
@@ -98,7 +123,9 @@ league_pace_median AS (
         JOIN {{ ref('fact_fixture_stats') }} st
             ON  st.team_id        = lt.team_id
             AND st.season         = sp.season
+            {%- if pit_escopo == 'da_competicao' %}
             AND st.competition_id = sp.competition_id
+            {%- endif %}
             AND st.date_utc       < DATE(sp.kickoff_utc)
         GROUP BY sp.fixture_id, lt.team_id
     )
@@ -132,7 +159,9 @@ last5 AS (
     FROM fixture_teams ft
     JOIN team_fixtures_long h
         ON h.team_id        = ft.team_id
+       {%- if pit_escopo == 'da_competicao' %}
        AND h.competition_id = ft.competition_id
+       {%- endif %}
        AND h.season         = ft.season
        AND h.kickoff_utc    < ft.kickoff_utc
     GROUP BY ft.fixture_id, ft.team_id
