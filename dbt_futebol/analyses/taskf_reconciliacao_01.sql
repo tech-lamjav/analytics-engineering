@@ -180,7 +180,11 @@ medido AS (
         mercado, premissa, benchmark, usado_para_peso,
         jogos_no_universo, medido_em, git_sha,
         n_p0, a_odd_dava_p0, aconteceu_p0, diferenca_p0,
-        jogos_medios, pct_amostra_curta, peso_p0, peso_p0_k0,
+        {#- A [0.1] publicou UM `jogos_medios`, e a #54 desdobrou a coluna em duas. Aqui vale a
+            DISPONÍVEL, e a escolha não muda nada nesta comparação: a célula é a `base`, cujo
+            recorte é `temporada`, e sem teto as duas contagens são o mesmo número por
+            construção. Ver o cabeçalho de analyses/taskf_teste2.sql. -#}
+        jogos_medios_disp AS jogos_medios, pct_amostra_curta, peso_p0, peso_p0_k0,
         n_p5, diferenca_p5, diferenca_p10
     FROM {{ source('futebol_taskF', 'taskf_teste2') }}
     WHERE celula = 'base'

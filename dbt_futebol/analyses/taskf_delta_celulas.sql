@@ -21,7 +21,8 @@
        linhas dessas três — é a seção "Consequences" da própria ADR 0008: o piso é propriedade do
        jogo, não da premissa. Com o histórico junto, jogos que não passavam no piso 5 passam a
        passar, então `n_p5` e `diferenca_p5` mudam mesmo com a premissa imóvel. O mesmo vale para
-       `jogos_medios` e `pct_amostra_curta`, que não têm piso e leem o `min_jogos` da célula.
+       `jogos_medios_disp`/`jogos_medios_usado` e `pct_amostra_curta`, que não têm piso e leem o
+       `min_jogos` da célula.
        Por isso o veredito das três olha SÓ o piso 0: exigir igualdade nos demais seria cobrar da
        ADR 0008 uma coisa que ela explicitamente não promete.
 
@@ -43,6 +44,20 @@
        número que a desmentiu — a expectativa existe para poder ser falsificada, e foi.
 
     ────────────────────────────────────────────────────────────────────────────────
+    ⚠️ AS DUAS CONTAGENS DE AMOSTRA (#54) SAEM SEPARADAS, e num par que envolva célula de recorte
+    de contagem elas contam histórias diferentes: `delta_jogos_disp` é o efeito do eixo (quanto
+    passado o jogo passou a ter) e `delta_jogos_usado` é ele MENOS a saturação em 10. Num par
+    `base` → `recorte` a usada pode até CAIR, com a disponível subindo — o time que tinha 25
+    partidas na temporada passa a alimentar a média com 10. Isso é o teto funcionando, não perda
+    de histórico. Ver analyses/taskf_saturacao_recorte.sql.
+
+    ⚠️ E há um par em que o eixo de recorte ENCOLHE o histórico de verdade: as duas premissas de
+    Handicap que saem do `margin_stats` (`raramente_perde_por_2`, `favorito_irregular`). Aquela
+    fonte não tem filtro de season nem no default — ela já atravessa temporada —, então nela
+    `base` → `recorte` é "todo o tempo coletado" → "as 10 últimas", e não "a temporada" → "as 10
+    últimas" como em todas as outras. Comparar o delta delas com o das demais sem saber disso
+    leva a conclusão errada.
+
     A COMPARAÇÃO É FULL OUTER de propósito: premissa que existe numa célula e não na outra sai
     como `SEM_CONTRAPARTE` em vez de desaparecer do resultado. Uma premissa some da tabela quando
     ela não acende nenhuma vez na célula (o `HAVING COUNTIF(acesa) > 0` do taskf_teste2), e isso é
@@ -82,7 +97,7 @@
         "taskf_celula_a e taskf_celula_b são a mesma célula ('" ~ cel_a ~ "') — nada a comparar.") }}
 {%- endif -%}
 
-{%- set pisos = [0, 3, 5, 10] -%}
+{%- set pisos = taskf_pisos() -%}
 {#- As premissas de tabela do catálogo medido (ADR 0008). O veredito delas é o piso 0; ver o
     cabeçalho. -#}
 {%- set premissas_de_tabela = ['superioridade_tabela', 'supremacia', 'sem_rodizio'] -%}
@@ -105,7 +120,8 @@ juntado AS (
         COALESCE(a.usado_para_peso, b.usado_para_peso)  AS usado_para_peso,
         a.celula IS NULL                                AS so_na_b,
         b.celula IS NULL                                AS so_na_a,
-        a.jogos_medios        AS jogos_medios_a,       b.jogos_medios        AS jogos_medios_b,
+        a.jogos_medios_disp   AS jogos_disp_a,         b.jogos_medios_disp   AS jogos_disp_b,
+        a.jogos_medios_usado  AS jogos_usado_a,        b.jogos_medios_usado  AS jogos_usado_b,
         a.pct_amostra_curta   AS pct_curta_a,          b.pct_amostra_curta   AS pct_curta_b,
         a.fator_encolhimento  AS encolhimento_a,       b.fator_encolhimento  AS encolhimento_b
         {%- for piso in pisos %},
@@ -133,7 +149,8 @@ classificado AS (
           IF(n_p{{ piso }}_a IS DISTINCT FROM n_p{{ piso }}_b, 1, 0)
           + IF(dif_p{{ piso }}_a IS DISTINCT FROM dif_p{{ piso }}_b, 1, 0){{ " + " if not loop.last }}
          {%- endfor %}
-          + IF(jogos_medios_a IS DISTINCT FROM jogos_medios_b, 1, 0)
+          + IF(jogos_disp_a  IS DISTINCT FROM jogos_disp_b, 1, 0)
+          + IF(jogos_usado_a IS DISTINCT FROM jogos_usado_b, 1, 0)
           + IF(pct_curta_a IS DISTINCT FROM pct_curta_b, 1, 0))  AS campos_mudados
     FROM juntado AS j
 )
@@ -153,8 +170,13 @@ SELECT
     END                                       AS veredito,
     campos_mudados,
     campos_piso0_mudados,
-    jogos_medios_a, jogos_medios_b,
-    ROUND(jogos_medios_b - jogos_medios_a, 1)    AS delta_jogos_medios,
+    -- As duas contagens de amostra (#54). A DISPONÍVEL é a que o piso corta; a USADA é a que
+    -- alimentou as médias e satura sob recorte de contagem. Comparar `base` com `recorte` pela
+    -- usada mostraria a saturação, não o efeito do eixo.
+    jogos_disp_a,  jogos_disp_b,
+    ROUND(jogos_disp_b  - jogos_disp_a,  1)      AS delta_jogos_disp,
+    jogos_usado_a, jogos_usado_b,
+    ROUND(jogos_usado_b - jogos_usado_a, 1)      AS delta_jogos_usado,
     pct_curta_a, pct_curta_b,
     ROUND(pct_curta_b - pct_curta_a, 1)          AS delta_pct_curta
     {%- for piso in pisos %},

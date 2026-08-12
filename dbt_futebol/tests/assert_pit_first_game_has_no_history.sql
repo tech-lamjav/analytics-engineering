@@ -30,6 +30,13 @@ WITH primeiro_jogo AS (
         season,
         kickoff_utc,
         played_total,
+        {%- if eixos.recorte == 'ultimos_10' %}
+        {#- A contagem DISPONÍVEL (#54) só existe sob recorte de contagem, e entra na guarda pelo
+            mesmo motivo que a usada: ela sai de uma window function calculada ANTES do QUALIFY, e
+            uma partição errada ali contaria partida posterior ao kickoff sem que o played_total
+            (que passa pelo mesmo join) precisasse mudar. -#}
+        played_total_disponivel,
+        {%- endif %}
         rank,
         goals_for_avg_home
     FROM {{ ref('int_futebol_team_form_pit') }}
@@ -42,5 +49,8 @@ WITH primeiro_jogo AS (
 SELECT *
 FROM primeiro_jogo
 WHERE played_total != 0
+   {%- if eixos.recorte == 'ultimos_10' %}
+   OR played_total_disponivel != 0
+   {%- endif %}
    OR rank IS NOT NULL
    OR goals_for_avg_home IS NOT NULL

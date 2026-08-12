@@ -592,6 +592,16 @@ sources:
               derivada p/ Dupla Chance; consenso p/ BTTS). As de consenso do Handicap e do Gols
               vêm FALSE: não pesam, mas ficam visíveis porque o ROI muito pior delas é informação
               sobre quais jogos a Pinnacle escolhe precificar.
+          - name: jogos_medios_disp
+            description: >
+              Média do `min_jogos` DISPONÍVEL (sem teto) nas linhas em que a premissa acendeu. É a
+              contagem que o piso corta, e a que a [0.1] publicou como `jogos_medios` — nas
+              células de recorte `temporada` as duas contagens são o mesmo número.
+          - name: jogos_medios_usado
+            description: >
+              Média do `min_jogos` USADO — o que de fato alimentou as médias das premissas. Sob
+              recorte de contagem ele satura em 10, e a diferença para o `_disp` é exatamente
+              quanto de histórico o teto deixou de fora.
 
       - name: taskf_pit_por_celula
         description: >
@@ -611,5 +621,15 @@ sources:
               pelo veredito de não-vacuidade da analyses/taskf_monotonicidade_escopo.sql.
           - name: played_total
             description: >
-              Partidas anteriores do time no escopo/recorte da célula, no instante do kickoff.
-              É o insumo do `min_jogos` do jogo, que é o MENOR played_total entre os dois times.
+              A contagem USADA: partidas anteriores que ALIMENTARAM as médias, no escopo/recorte
+              da célula e no instante do kickoff. Sob recorte de contagem ela satura no tamanho do
+              recorte.
+          - name: played_total_disponivel
+            description: >
+              A contagem DISPONÍVEL: quantas partidas anteriores EXISTEM no escopo da célula, sem
+              teto. Nas células de recorte `temporada` é o próprio played_total (sem teto, as duas
+              são a mesma coisa) e o modelo nem emite a coluna — a projeção acontece no carimbo.
+              É desta que sai o `min_jogos` do jogo (o MENOR entre os dois times) que o piso de
+              amostra corta, para o piso significar a mesma coisa nas quatro células.
+              A identidade `usado = LEAST(disponível, N)` é conferida em
+              analyses/taskf_saturacao_recorte.sql, não assumida.

@@ -2,7 +2,7 @@
     materialized='table',
     description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). ⚠️ Task 0 (look-ahead): ambos_marcam/defesa_forte/ataque_trava/ataque_dos_dois/defesas_vazaveis leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats. historico_btts/historico_seco já eram limpos (last5 com kickoff <). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso). ⚠️ MEDIÇÃO (task [F], ADR 0007): o last5 de BTTS aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz exatamente o comportamento descrito acima — no default o SQL compilado é idêntico ao de antes da var existir. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF.'
 ) }}
-{#- EIXO DE ESCOPO DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
+{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
 
     Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
     própria: o `last5` de BTTS, que alimenta `historico_btts` e `historico_seco`. Ela responde ao
@@ -10,11 +10,17 @@
     `historico_btts` sem —, e um número assim não responde a pergunta da spec.
 
     Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`) o SQL compilado é IDÊNTICO ao de antes desta var.
+    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes destas vars.
 
-    O eixo de RECORTE (`pit_recorte`) ainda NÃO alcança esta fonte: o filtro de season dela
-    continua fixo. É o trabalho da #54. -#}
-{%- set pit_escopo = taskf_eixos().escopo %}
+    O eixo de RECORTE (`pit_recorte`) alcança a MESMA fonte desde a #54, e aqui ele é MESMO uma
+    linha: o `last5` já é uma janela de contagem de 5, e 5 é subconjunto de 10 em qualquer ordem
+    — sob `ultimos_10` os cinco jogos mais recentes do time são os mesmos com ou sem o teto de
+    10. O que muda é só o filtro de season sair, e com ele o zeramento da virada de temporada.
+    (Nos sites de MÉDIA — o spine de Gols e o `margin_stats` do Handicap — o teto é necessário e
+    custa um nível a mais de agregação.) -#}
+{%- set eixos       = taskf_eixos() %}
+{%- set pit_escopo  = eixos.escopo %}
+{%- set pit_recorte = eixos.recorte %}
 
 WITH fixtures AS (
     SELECT
@@ -74,7 +80,9 @@ last5 AS (
        {%- if pit_escopo == 'da_competicao' %}
        AND h.competition_id = ft.competition_id
        {%- endif %}
+       {%- if pit_recorte == 'temporada' %}
        AND h.season         = ft.season
+       {%- endif %}
        AND h.kickoff_utc    < ft.kickoff_utc
     GROUP BY ft.fixture_id, ft.team_id
 ),

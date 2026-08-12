@@ -153,23 +153,38 @@ models:
       dataset futebol_taskF (target `taskF`). A tabela do campeonato (rank/points/ppg/n_teams/
       goal_diff) NÃO segue os eixos: classificação existe dentro de uma competição, então ela
       permanece competição+temporada em todas as células, por construção (ADR 0008).
-      ⚠️ Este NÃO é o único lugar que o eixo de escopo alcança (#52): cada um dos 5 modelos de
-      premissas tem histórico competição-scoped próprio e lê a mesma var — 9 predicados de join
-      em 6 modelos. Mexer só aqui produziria célula misturada. Tabela de quem-alcança-o-quê na
-      ADR 0007. Os valores aceitos e a validação vivem em macros/taskf_eixos.sql, uma vez só.
+      ⚠️ Este NÃO é o único lugar que os eixos alcançam (#52, #54): cada um dos 5 modelos de
+      premissas tem histórico competição-scoped próprio e lê as mesmas vars — 9 predicados de join
+      em 6 modelos, os DOIS eixos em todos eles. Mexer só aqui produziria célula misturada. Tabela
+      de quem-alcança-o-quê na ADR 0007. Os valores aceitos, a validação e o tamanho do recorte
+      vivem em macros/taskf_eixos.sql, uma vez só.
     columns:
       - name: fixture_id
         tests: [not_null]
       - name: team_id
         tests: [not_null]
       - name: played_total
-        description: "Jogos do time na competição/season ANTES do kickoff. 0 na estreia -> médias NULL -> premissa FALSE. Exposto p/ a recalibragem poder decidir um piso de amostra."
+        description: >
+          Jogos do time na competição/season ANTES do kickoff. 0 na estreia -> médias NULL ->
+          premissa FALSE. Exposto p/ a recalibragem poder decidir um piso de amostra.
+          ⚠️ MEDIÇÃO (#54): esta é a contagem USADA — as partidas que de fato alimentaram as
+          médias. Sob pit_recorte=ultimos_10 ela satura no tamanho do recorte; nas células de
+          recorte `temporada` (as duas que produção reproduz) não há teto e ela é também a
+          disponível.
         tests:
           - not_null
           - dbt_utils.accepted_range:
               arguments:
                 min_value: 0
                 inclusive: true
+      - name: played_total_disponivel
+        description: >
+          ⚠️ SÓ EXISTE sob pit_recorte=ultimos_10 (medição da task [F], #54) — quantas partidas
+          anteriores EXISTEM no escopo da célula, sem teto. Não é emitida no default porque sem
+          teto ela seria o próprio played_total, e emiti-la mudaria o SQL compilado do caminho
+          que produção usa. É a contagem que o piso de amostra corta, para o piso significar a
+          mesma coisa nas quatro células. Sem teste de schema por isso mesmo: um `not_null` aqui
+          ficaria vermelho no default, onde a coluna não existe.
       - name: rank
         description: "Posição na tabela (dentro do grupo) no instante do jogo. NULL sem standings (Copa do Brasil) ou antes da estreia."
         tests:

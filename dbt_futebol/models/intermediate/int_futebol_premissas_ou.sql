@@ -2,7 +2,7 @@
     materialized='table',
     description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). ⚠️ Task 0 (look-ahead): ataque_combinado/defesas_firmes/defesas_vazaveis/clean_sheets_altos/ataques_fracos/ambos_vazam leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; xg_combinado_alto/xg_baixo_combinado/ritmo_alto passaram a usar o spine ancorado no kickoff (item C) em vez da média da season inteira — era o caso que fazia o MESMO xG medir −2,4 no 1X2 (point-in-time) e +0,5 aqui. historico_over/under e linha_subindo/descendo já eram limpos. 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de TODAS as casas t24h->t15m; odd crua super-ponderaria o leg de odd alta), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG/ritmo e o last5 de gols aceitam a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz exatamente o comportamento descrito acima — no default o SQL compilado é idêntico ao de antes da var existir. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. O POOL de times da mediana de ritmo segue sendo o da competição do jogo em qualquer célula (é o benchmark "a liga em que estou jogando"); o que segue o eixo é o histórico de cada time do pool, medido igual ao do time avaliado.'
 ) }}
-{#- EIXO DE ESCOPO DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
+{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
 
     Além do que vem do team_form_pit, este modelo tem DUAS fontes de histórico competição-scoped
     próprias: o spine de xG/ritmo (CTEs `xg`, `pace_team`, `league_pace_median`) e o `last5` de
@@ -13,12 +13,17 @@
     cada time é histórico e segue o eixo.
 
     Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`) o SQL compilado é IDÊNTICO ao de antes desta var — nenhum ramo novo é
-    emitido no caminho que produção usa.
+    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes destas vars — nenhum
+    ramo novo é emitido no caminho que produção usa.
 
-    O eixo de RECORTE (`pit_recorte`) ainda NÃO alcança estas fontes: o filtro de season delas
-    continua fixo. É o trabalho da #54, uma linha por site. -#}
-{%- set pit_escopo = taskf_eixos().escopo %}
+    O eixo de RECORTE (`pit_recorte`) alcança as MESMAS fontes desde a #54. Ele não é uma linha
+    por site: no spine e na mediana o filtro de season sai E entra um teto de contagem, que exige
+    um nível a mais de agregação; no `last5` ele é só o filtro de season, porque 5 já é
+    subconjunto de 10. -#}
+{%- set eixos              = taskf_eixos() %}
+{%- set pit_escopo         = eixos.escopo %}
+{%- set pit_recorte        = eixos.recorte %}
+{%- set tamanho_do_recorte = eixos.tamanho_do_recorte %}
 
 WITH fixtures AS (
     SELECT
@@ -78,16 +83,60 @@ fixture_team_spine AS (
 
 -- xG médio de ATAQUE do time ATÉ o jogo (Brasileirão preenchido, Copa ~vazio -> NULL ->
 -- premissa de xG não dispara).
-xg AS (
-    SELECT sp.fixture_id, sp.team_id, AVG(st.expected_goals) AS xg_for_avg
+{#- O FROM/JOIN do spine existe UMA vez e é renderizado nas formas do `xg` e do `pace_team` (que
+    o compartilham) e do ramo de recorte de contagem. É aqui que os DOIS eixos entram, e é por
+    isso que ele não pode ser escrito duas vezes: duas cópias de um predicado de eixo não ficam
+    iguais para sempre, e a divergência mediria célula misturada sem levantar nada. Mesma técnica
+    do `agregados_pit` do int_futebol_team_form_pit. -#}
+{%- set spine_from %}
     FROM fixture_team_spine sp
     JOIN {{ ref('fact_fixture_stats') }} st
         ON  st.team_id        = sp.team_id
+        {%- if pit_recorte == 'temporada' %}
         AND st.season         = sp.season
+        {%- endif %}
         {%- if pit_escopo == 'da_competicao' %}
         AND st.competition_id = sp.competition_id
         {%- endif %}
         AND st.date_utc       < DATE(sp.kickoff_utc)
+{%- endset %}
+{%- if pit_recorte == 'ultimos_10' %}
+-- MEDIÇÃO — recorte de contagem. O filtro de season sai e no lugar dele os pares (jogo-alvo,
+-- time) × partida anterior são ranqueados, sobrevivendo só os N mais recentes — contagem móvel,
+-- que atravessa a virada de temporada por construção. O corte mora num CTE à parte porque
+-- QUALIFY na mesma SELECT da agregação filtraria DEPOIS do GROUP BY, com a média já feita.
+-- Desempate por fixture_id: `date_utc` é DATE, e duas partidas do mesmo time na mesma data
+-- (dado torto) escolheriam sobrevivente ao acaso. xG e ritmo saem do MESMO recorte de pares:
+-- são a mesma pergunta ("as N partidas anteriores deste time") feita a duas colunas.
+spine_pares AS (
+    SELECT
+        sp.fixture_id, sp.team_id, sp.competition_id, sp.season,
+        st.expected_goals,
+        st.total_shots,
+        st.corner_kicks
+{{- spine_from }}
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY sp.fixture_id, sp.team_id
+        ORDER BY st.date_utc DESC, st.fixture_id DESC
+    ) <= {{ tamanho_do_recorte }}
+),
+xg AS (
+    SELECT fixture_id, team_id, AVG(expected_goals) AS xg_for_avg
+    FROM spine_pares
+    GROUP BY fixture_id, team_id
+),
+
+-- Ritmo: finalizações+escanteios por time-jogo -> média do time ATÉ o jogo.
+pace_team AS (
+    SELECT fixture_id, team_id, competition_id, season,
+           AVG(total_shots + corner_kicks) AS pace_avg
+    FROM spine_pares
+    GROUP BY fixture_id, team_id, competition_id, season
+),
+{%- else %}
+xg AS (
+    SELECT sp.fixture_id, sp.team_id, AVG(st.expected_goals) AS xg_for_avg
+{{- spine_from }}
     GROUP BY sp.fixture_id, sp.team_id
 ),
 
@@ -95,39 +144,58 @@ xg AS (
 pace_team AS (
     SELECT sp.fixture_id, sp.team_id, sp.competition_id, sp.season,
            AVG(st.total_shots + st.corner_kicks) AS pace_avg
-    FROM fixture_team_spine sp
-    JOIN {{ ref('fact_fixture_stats') }} st
-        ON  st.team_id        = sp.team_id
-        AND st.season         = sp.season
-        {%- if pit_escopo == 'da_competicao' %}
-        AND st.competition_id = sp.competition_id
-        {%- endif %}
-        AND st.date_utc       < DATE(sp.kickoff_utc)
+{{- spine_from }}
     GROUP BY sp.fixture_id, sp.team_id, sp.competition_id, sp.season
 ),
+{%- endif %}
 -- Mediana da liga sobre as médias por time NO INSTANTE DO JOGO: 1 mediana por (liga, season,
 -- fixture), e não mais uma única mediana da season fechada.
 {#- ⚠️ [F]: o POOL de times (`lt`) é da competição do jogo em qualquer célula — a mediana é o
     benchmark "a liga em que estou jogando", e juntar campeonatos no pool compararia o ritmo do
     time contra uma liga que não existe. O que segue o eixo é o HISTÓRICO de cada time do pool,
     exatamente como no `pace_team` acima — os dois lados da comparação são medidos igual. #}
-league_pace_median AS (
-    SELECT fixture_id,
-           APPROX_QUANTILES(pace_avg, 2)[OFFSET(1)] AS pace_median
-    FROM (
-        SELECT sp.fixture_id, lt.team_id,
-               AVG(st.total_shots + st.corner_kicks) AS pace_avg
+{#- O FROM/JOIN do pool, também UMA vez, pelo mesmo motivo. ⚠️ O `lt` continua escopado por
+    (competição, season) nas quatro células: o eixo de recorte é sobre o TRECHO do passado de cada
+    time, não sobre quem está no pool. Soltá-lo aqui compararia o time contra uma liga que não
+    existe — a mesma razão pela qual o eixo de escopo também não toca o pool (ADR 0007). -#}
+{%- set pool_from %}
         FROM (SELECT DISTINCT fixture_id, competition_id, season, kickoff_utc FROM fixture_team_spine) sp
         JOIN (SELECT DISTINCT competition_id, season, team_id FROM fixture_team_spine) lt
             ON lt.competition_id = sp.competition_id AND lt.season = sp.season
         JOIN {{ ref('fact_fixture_stats') }} st
             ON  st.team_id        = lt.team_id
+            {%- if pit_recorte == 'temporada' %}
             AND st.season         = sp.season
+            {%- endif %}
             {%- if pit_escopo == 'da_competicao' %}
             AND st.competition_id = sp.competition_id
             {%- endif %}
             AND st.date_utc       < DATE(sp.kickoff_utc)
+{%- endset %}
+league_pace_median AS (
+    SELECT fixture_id,
+           APPROX_QUANTILES(pace_avg, 2)[OFFSET(1)] AS pace_median
+    FROM (
+    {%- if pit_recorte == 'ultimos_10' %}
+        -- MEDIÇÃO — o corte desce um nível: o histórico de CADA time do pool é recortado nas N
+        -- partidas mais recentes antes de virar média, exatamente como o do time avaliado no
+        -- `spine_pares`. Os dois lados da comparação medidos igual é o que a mediana exige.
+        SELECT fixture_id, team_id, AVG(total_shots + corner_kicks) AS pace_avg
+        FROM (
+            SELECT sp.fixture_id, lt.team_id, st.total_shots, st.corner_kicks
+    {{- pool_from }}
+            QUALIFY ROW_NUMBER() OVER (
+                PARTITION BY sp.fixture_id, lt.team_id
+                ORDER BY st.date_utc DESC, st.fixture_id DESC
+            ) <= {{ tamanho_do_recorte }}
+        )
+        GROUP BY fixture_id, team_id
+    {%- else %}
+        SELECT sp.fixture_id, lt.team_id,
+               AVG(st.total_shots + st.corner_kicks) AS pace_avg
+    {{- pool_from }}
         GROUP BY sp.fixture_id, lt.team_id
+    {%- endif %}
     )
     GROUP BY fixture_id
 ),
@@ -136,6 +204,10 @@ league_pace_median AS (
 -- competição, MESMA season e ANTERIORES ao jogo. 1 array de totais por (fixture-alvo, time).
 -- O filtro de season evita sangrar jogos da temporada passada através da pausa de off-season
 -- (consistente com os joins de tss, que já são season-scoped).
+{# ⚠️ [F]: aqui o recorte de contagem NÃO precisa de teto. O `last5` já é uma janela de contagem
+    de 5, e 5 é subconjunto de 10 em qualquer ordem: sob `ultimos_10` os cinco jogos mais recentes
+    do time são os mesmos com ou sem o corte em 10. O que muda é só o filtro de season sair, e é
+    por isso que este site é uma linha enquanto os do spine são um CTE a mais. -#}
 finished AS (
     SELECT competition_id, season, kickoff_utc, home_team_id, away_team_id,
            goals_home + goals_away AS total_goals
@@ -162,7 +234,9 @@ last5 AS (
        {%- if pit_escopo == 'da_competicao' %}
        AND h.competition_id = ft.competition_id
        {%- endif %}
+       {%- if pit_recorte == 'temporada' %}
        AND h.season         = ft.season
+       {%- endif %}
        AND h.kickoff_utc    < ft.kickoff_utc
     GROUP BY ft.fixture_id, ft.team_id
 ),

@@ -2,7 +2,7 @@
     materialized='table',
     description='S1 do Motor de Score — premissas de contexto do mercado RESULTADO (1X2). 3 linhas por fixture (outcome Home/Draw/Away). S = lado apostado, O = adversário. ⚠️ Task 0 (look-ahead): forca_mismatch/mando/superioridade_tabela/forma leem int_futebol_team_form_pit (point-in-time por fixture), NÃO mais fact_team_season_stats + standings_latest — que em 24/25 entregavam a temporada fechada e a tabela final a jogos da rodada 1. Cada premissa é um booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.1 do épico MOTOR_SCORE_CONFIABILIDADE.md). Penalidades específicas: pick_empate (-10), desfalque_proprio (-15). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/injuries). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz exatamente o comportamento descrito acima — no default o SQL compilado é idêntico ao de antes da var existir. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. superioridade_tabela NÃO segue o eixo (rank/ppg vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008), e o h2h_favoravel também não, por motivo oposto: o fact_h2h já cruza campeonatos hoje, e restringi-lo seria mudar premissa.'
 ) }}
-{#- EIXO DE ESCOPO DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
+{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
 
     Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
     própria: o spine de xG (CTE `xg`), que alimenta `superioridade_xg`. Ela responde ao mesmo
@@ -13,11 +13,16 @@
     por motivo oposto: ele JÁ cruza campeonatos hoje, e restringi-lo seria mudar premissa.
 
     Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`) o SQL compilado é IDÊNTICO ao de antes desta var.
+    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes desta var.
 
-    O eixo de RECORTE (`pit_recorte`) ainda NÃO alcança esta fonte: o filtro de season dela
-    continua fixo. É o trabalho da #54. -#}
-{%- set pit_escopo = taskf_eixos().escopo %}
+    O eixo de RECORTE (`pit_recorte`) alcança a MESMA fonte desde a #54: sob `ultimos_10` o
+    filtro de season sai e o spine passa a ler as N partidas mais recentes do time, atravessando
+    a virada de temporada. Os dois eixos entram pelo mesmo FROM/JOIN, escrito uma vez logo acima
+    do CTE. -#}
+{%- set eixos              = taskf_eixos() %}
+{%- set pit_escopo         = eixos.escopo %}
+{%- set pit_recorte        = eixos.recorte %}
+{%- set tamanho_do_recorte = eixos.tamanho_do_recorte %}
 
 WITH fixtures AS (
     SELECT
@@ -66,15 +71,18 @@ fixture_team_spine AS (
 -- DATE(kickoff)) — time-bounded igual ao h2h/last5, sem look-ahead em fixtures já jogadas. P/ jogos
 -- FUTUROS == média da season (todos os jogos com stats são anteriores). Brasileirão preenchido;
 -- Copa ~vazio -> NULL -> premissa de xG não dispara.
-xg AS (
-    SELECT
-        sp.fixture_id, sp.team_id,
-        AVG(st.expected_goals)  AS xg_for_avg,
-        AVG(opp.expected_goals) AS xg_against_avg
+{#- O FROM/JOIN existe UMA vez e é renderizado nas duas formas do CTE `xg` (média direta no
+    default, pares ranqueados sob recorte de contagem). É aqui que os DOIS eixos entram, e é por
+    isso que ele não pode ser escrito duas vezes: duas cópias de um predicado de eixo não ficam
+    iguais para sempre, e a divergência mediria célula misturada sem levantar nada. Mesma técnica
+    do `agregados_pit` do int_futebol_team_form_pit. -#}
+{%- set xg_from %}
     FROM fixture_team_spine sp
     JOIN {{ ref('fact_fixture_stats') }} st
         ON  st.team_id        = sp.team_id
+        {%- if pit_recorte == 'temporada' %}
         AND st.season         = sp.season
+        {%- endif %}
         {%- if pit_escopo == 'da_competicao' %}
         AND st.competition_id = sp.competition_id
         {%- endif %}
@@ -82,8 +90,43 @@ xg AS (
     JOIN {{ ref('fact_fixture_stats') }} opp
         ON  opp.fixture_id = st.fixture_id
         AND opp.team_id   != st.team_id
+{%- endset %}
+{%- if pit_recorte == 'ultimos_10' %}
+-- MEDIÇÃO — recorte de contagem. O filtro de season sai e no lugar dele os pares (jogo-alvo,
+-- time) × partida anterior são ranqueados, sobrevivendo só os N mais recentes — contagem móvel,
+-- que atravessa a virada de temporada por construção. O corte mora num CTE à parte porque
+-- QUALIFY na mesma SELECT da agregação filtraria DEPOIS do GROUP BY, com a média já feita.
+-- Desempate por fixture_id: `date_utc` é DATE, e duas partidas do mesmo time na mesma data
+-- (dado torto) escolheriam sobrevivente ao acaso.
+xg_pares AS (
+    SELECT
+        sp.fixture_id, sp.team_id,
+        st.expected_goals  AS xg_for,
+        opp.expected_goals AS xg_against
+{{- xg_from }}
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY sp.fixture_id, sp.team_id
+        ORDER BY st.date_utc DESC, st.fixture_id DESC
+    ) <= {{ tamanho_do_recorte }}
+),
+xg AS (
+    SELECT
+        fixture_id, team_id,
+        AVG(xg_for)     AS xg_for_avg,
+        AVG(xg_against) AS xg_against_avg
+    FROM xg_pares
+    GROUP BY fixture_id, team_id
+),
+{%- else %}
+xg AS (
+    SELECT
+        sp.fixture_id, sp.team_id,
+        AVG(st.expected_goals)  AS xg_for_avg,
+        AVG(opp.expected_goals) AS xg_against_avg
+{{- xg_from }}
     GROUP BY sp.fixture_id, sp.team_id
 ),
+{%- endif %}
 
 -- ============================================================================
 -- S7: desfalque PESADO POR IMPORTÂNCIA. Conta só TITULAR IMPORTANTE fora
