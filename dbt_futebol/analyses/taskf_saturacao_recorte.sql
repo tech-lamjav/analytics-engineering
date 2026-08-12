@@ -21,8 +21,9 @@
       que o dado gravado sob esse rótulo é de outra célula, porque o carimbo rodou fora de ordem.
       É o mesmo modo de falha que o `MESMO_CONTEUDO_NAS_DUAS` da análise de escopo pega.
 
-    `piso` — uma linha por célula. Cortar no disponível e cortar no usado dão o MESMO conjunto de
-      jogos, em todos os pisos varridos. É consequência da identidade acima (para piso <= N,
+    `piso` — uma linha por célula, sobre os jogos AVALIADOS do universo congelado (os 169, e não
+      todos os fixtures da janela — ver o CTE `fixtures_do_universo`). Cortar no disponível e
+      cortar no usado dão o MESMO conjunto de jogos, em todos os pisos varridos. É consequência da identidade acima (para piso <= N,
       `LEAST(d, N) >= piso` ⟺ `d >= piso`), mas o cabeçalho do Teste 2 afirma isso ao leitor e
       afirmação sem número é o que esta task existe para não fazer. Se um dia a varredura ganhar
       um piso MAIOR que N, este bloco fica vermelho — e aí a escolha de cortar no disponível
@@ -65,6 +66,10 @@
 
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 
+    ⚠️ O QUE ELA NÃO FAZ: comparar o número das premissas entre células. Isso é o
+    analyses/taskf_delta_celulas.sql, que aceita qualquer par dos quatro nomes. Aqui só se
+    verifica que as contagens que aquele número usa significam a mesma coisa nas quatro.
+
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
 
@@ -79,7 +84,24 @@
     ('recorte', 'ambos')
 ] -%}
 
-WITH cel AS (
+WITH {{ task01_base() }},
+
+{#- Os jogos AVALIADOS do universo congelado — os 169 —, e não todos os fixtures da janela. O
+    carimbo guarda o PIT inteiro de propósito (fan-out e perda de linha são defeitos do mecanismo
+    e não se limitam à janela), mas o bloco `piso` conta JOGOS e tem de contar os mesmos jogos que
+    o Teste 2, senão os números não conversam com a tabela publicada. Mesma construção da
+    analyses/taskf_familia_e_mecanismo.sql.
+
+    Ler o universo da célula que está materializada é seguro: o conjunto de fixtures avaliados não
+    depende do PIT (ele entra por LEFT JOIN, só para o min_jogos), e ser idêntico nas quatro é a
+    primeira invariante da Costura B. -#}
+fixtures_do_universo AS (
+    SELECT DISTINCT fixture_id
+    FROM apostas
+    WHERE {{ taskf_universo_filtro() }}
+),
+
+cel AS (
     SELECT
         celula,
         pit_recorte,
@@ -104,7 +126,7 @@ saturacao AS (
         MAX(disp)                                                    AS max_disp,
         COUNTIF(disp > usado)                                        AS pares_saturados,
         COUNTIF(disp > {{ n }})                                      AS pares_acima_do_teto,
-        {#- `pit_recorte` é coluna de linha, não agrupada — dentro do argumento de um agregado
+        {# `pit_recorte` é coluna de linha, não agrupada — dentro do argumento de um agregado
             isso é legal, e aninhar ANY_VALUE dentro de COUNTIF não seria. -#}
         COUNTIF(usado != IF(pit_recorte = 'ultimos_10',
                             LEAST(disp, {{ n }}), disp))             AS quebra_da_identidade,
@@ -117,7 +139,7 @@ saturacao AS (
 ),
 
 -- ── piso ────────────────────────────────────────────────────────────────────────────────────
-{#- O piso é propriedade do JOGO: o menor played_total entre os dois times, que é o que o
+{# O piso é propriedade do JOGO: o menor played_total entre os dois times, que é o que o
     task01_base() calcula. Aqui ele sai do MIN sobre as duas linhas do par — e o recorte do
     universo congelado entra porque é sobre ele que os números do Teste 2 são lidos. -#}
 por_jogo AS (
@@ -127,7 +149,7 @@ por_jogo AS (
         MIN(usado) AS min_usado,
         MIN(disp)  AS min_disp
     FROM cel
-    WHERE {{ taskf_universo_filtro() }}
+    JOIN fixtures_do_universo USING (fixture_id)
     GROUP BY celula, fixture_id
 ),
 
