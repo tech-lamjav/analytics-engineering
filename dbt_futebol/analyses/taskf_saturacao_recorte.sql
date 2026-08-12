@@ -47,6 +47,16 @@
         base    → escopo    (solta a competição, mantém a temporada — a da #53, refeita)
         recorte → ambos     (solta a competição, com a temporada já solta)
 
+      ⚠️ O PAR `base` → `escopo` TAMBÉM É MEDIDO PELA analyses/taskf_monotonicidade_escopo.sql,
+      e a repetição é deliberada. Aqui ele é a quarta aresta do 2x2 — tirá-lo deixaria a tabela
+      com três linhas e faria uma das quatro afirmações depender de outro arquivo, que é pior de
+      ler do que a repetição. Os dois não são cópia um do outro: aquele compara `played_total` e
+      confere o lado `base` contra o baseline congelado nas partições de insumo casado; este
+      compara o `disponível` das quatro células entre si. Nas células de `temporada` as duas
+      colunas são o mesmo número, então os dois TÊM de dar o mesmo resultado — e dão, exatamente
+      (6.434 pares com ganho, 8,13 de ganho médio, 48 de máximo, 0 violações). Divergirem é sinal,
+      não ruído.
+
       ⚠️ A comparação é sobre o DISPONÍVEL, e tem de ser. No usado ela seria falsa por desenho: um
       time com 25 jogos na temporada tem `base` = 25 e `recorte` usado = 10, e isso é o teto
       funcionando, não perda de histórico. Medir monotonicidade na contagem que satura acusaria

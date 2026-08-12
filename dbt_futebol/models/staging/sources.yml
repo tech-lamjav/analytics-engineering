@@ -631,5 +631,9 @@ sources:
               são a mesma coisa) e o modelo nem emite a coluna — a projeção acontece no carimbo.
               É desta que sai o `min_jogos` do jogo (o MENOR entre os dois times) que o piso de
               amostra corta, para o piso significar a mesma coisa nas quatro células.
-              A identidade `usado = LEAST(disponível, N)` é conferida em
-              analyses/taskf_saturacao_recorte.sql, não assumida.
+              ⚠️ A identidade `usado = LEAST(disponível, N)` é CONFERIDA em
+              analyses/taskf_saturacao_recorte.sql nas células com teto, onde as duas colunas vêm
+              de contas diferentes do modelo. Nas células de recorte `temporada` ela é verdade por
+              construção — a projeção acima —, e ali a mesma conferência checa o RÓTULO, não o
+              dado: uma célula de `temporada` gravada como `ultimos_10` cairia na identidade com
+              teto.

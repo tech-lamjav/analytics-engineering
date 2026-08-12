@@ -621,7 +621,17 @@ divergência. Nas 120 linhas das duas células juntas — 1.920 campos comparado
 `escopo` é `pct_amostra_curta` na linha de **consenso** de `historico_under` (que não pesa):
 12,7 → 12,8.
 
-É empate de arredondamento, e desta vez a prova é aritmética fechada, não inferência: aquela linha
+⚠️ **Esta comparação foi um `one-shot` e o artefato dela não existe mais.** A FASE 0 dropa a
+tabela acumulativa, então as linhas da #53 foram copiadas para uma tabela temporária antes do
+drop, comparadas, e a cópia foi removida em seguida. Diferente de todo o resto desta seção, os
+números do parágrafo acima **não** são re-deriváveis de `analyses/` — o que sobra re-derivável é a
+reconciliação contra a [0.1] (que lê os números publicados do macro versionado
+`taskf_publicado_01()`) e as tabelas da #53 transcritas neste documento. Quem precisar refazer uma
+comparação dessas num ticket futuro: declare a cópia em `sources.yml` e deixe-a viver, em vez de
+tratá-la como rascunho.
+
+O que **é** verificável sem o artefato é a natureza da divergência, e ela é aritmética fechada,
+não inferência: aquela linha
 tem `n = 400`, então a fração de amostra curta é múltipla de `1/400 = 0,25 pp`. O único valor da
 grade que arredonda para 12,7 ou 12,8 é **12,75** — ou seja, 51 linhas de 400, exatamente em cima
 do empate de `ROUND(·, 1)`. É o mesmo fenômeno que a #53 mediu nos seus três casos e sobre o qual
@@ -709,6 +719,12 @@ empresta vão em peso para quem já tinha histórico (um time de Brasileirão ga
 inteira), e não para as seleções de Copa do Mundo — que são 46,7% do universo e o deserto real. A
 tabela de piso e a de monotonicidade não se contradizem: uma mede volume de histórico, a outra
 mede quantos jogos cruzam uma linha.
+
+O par `base` → `escopo` aparece aqui **e** na `taskf_monotonicidade_escopo.sql` da #53, de
+propósito: aqui ele é a quarta aresta do 2×2, lá ele vem com a conferência contra o baseline
+congelado. Os dois medem contagens diferentes (disponível e usado), que nas células de `temporada`
+são o mesmo número — e os dois dão exatamente o mesmo resultado (6.434 / 8,13 / 48 / 0). A
+repetição vira, assim, uma conferência cruzada de dois arquivos independentes.
 
 A conferência de chaves fecha o argumento: **21.054 pares nas quatro células, conjunto idêntico**,
 zero par só de um lado. Os eixos mexem no histórico que cada par carrega, nunca em quais pares
