@@ -1,7 +1,26 @@
 {{ config(
     materialized='table',
-    description='S5 do Motor de Score — premissas de contexto do mercado DUPLA CHANCE (market_id 12). ⚠️ Task 0 (look-ahead): equilibrio_defensivo/adversario_limitado leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; lado_coberto_forte herda a correção via int_futebol_premissas_1x2 (era a premissa MAIS contaminada, com as duas fontes sujas). invicto_recente já era limpa. 2 linhas por fixture: 1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). DC é aposta de proteção: vale quando o mercado superprecifica a zebra do lado DESCOBERTO (O). 4 premissas (Σ34, sem clamp — bem abaixo de 55), espelha §12.5. lado_coberto_forte REUSA forca_mismatch/superioridade_tabela do int_futebol_premissas_1x2 (do lado S); adversario_limitado reusa o h2h_favoravel do 1X2. equilibrio_defensivo e invicto_recente derivam de fact_team_season_stats (gols sofridos no total) e dos jogos FINALIZADOS da MESMA season/competição anteriores ao jogo (goleados = cedeu 3+, e derrotas nos últimos 5) — o filtro de season evita sangrar a temporada passada pela pausa de off-season. O 12 (sem empate) NÃO é produzido (não casa com o padrão S/O da §12.5). Penalidade específica (odd_muito_baixa <1,20) e o gate próprio (melhor_odd >=1,25, sem odd_juice) são aplicados no mart fact_value_opportunities. Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front.'
+    description='S5 do Motor de Score — premissas de contexto do mercado DUPLA CHANCE (market_id 12). ⚠️ Task 0 (look-ahead): equilibrio_defensivo/adversario_limitado leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; lado_coberto_forte herda a correção via int_futebol_premissas_1x2 (era a premissa MAIS contaminada, com as duas fontes sujas). invicto_recente já era limpa. 2 linhas por fixture: 1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). DC é aposta de proteção: vale quando o mercado superprecifica a zebra do lado DESCOBERTO (O). 4 premissas (Σ34, sem clamp — bem abaixo de 55), espelha §12.5. lado_coberto_forte REUSA forca_mismatch/superioridade_tabela do int_futebol_premissas_1x2 (do lado S); adversario_limitado reusa o h2h_favoravel do 1X2. equilibrio_defensivo e invicto_recente derivam de fact_team_season_stats (gols sofridos no total) e dos jogos FINALIZADOS da MESMA season/competição anteriores ao jogo (goleados = cedeu 3+, e derrotas nos últimos 5) — o filtro de season evita sangrar a temporada passada pela pausa de off-season. O 12 (sem empate) NÃO é produzido (não casa com o padrão S/O da §12.5). Penalidade específica (odd_muito_baixa <1,20) e o gate próprio (melhor_odd >=1,25, sem odd_juice) são aplicados no mart fact_value_opportunities. Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. ⚠️ MEDIÇÃO (task [F], ADR 0007): o team_hist aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz exatamente o comportamento descrito acima — no default o SQL compilado é idêntico ao de antes da var existir. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. lado_coberto_forte e adversario_limitado seguem o que o 1X2 fizer: leem x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados em booleano.'
 ) }}
+{#- EIXO DE ESCOPO DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
+
+    Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
+    própria: o `team_hist`, que alimenta `equilibrio_defensivo` (thrash_rate) e `invicto_recente`
+    (last5_lost). Ela responde ao mesmo eixo, senão a célula sai MISTURADA — o `s_ga_total` da
+    mesma premissa `equilibrio_defensivo` vem do team_form_pit e viria juntado, e o `thrash_rate`
+    ao lado dele não —, e um número assim não responde a pergunta da spec. Como no Handicap, esta
+    fonte não está na enumeração da spec #49; está na regra que ela declara. Ver o cabeçalho do
+    int_futebol_premissas_ah.sql.
+
+    `lado_coberto_forte` e `adversario_limitado` seguem o que o 1X2 fizer: leem
+    x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados em booleano.
+
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
+    (`da_competicao`) o SQL compilado é IDÊNTICO ao de antes desta var.
+
+    O eixo de RECORTE (`pit_recorte`) ainda NÃO alcança esta fonte: o filtro de season dela
+    continua fixo. É o trabalho da #54. -#}
+{%- set pit_escopo = taskf_eixos().escopo %}
 
 WITH fixtures AS (
     SELECT
@@ -69,7 +88,9 @@ team_hist AS (
     FROM team_fixtures tf
     JOIN team_results_long h
         ON h.team_id        = tf.team_id
+       {%- if pit_escopo == 'da_competicao' %}
        AND h.competition_id = tf.competition_id
+       {%- endif %}
        AND h.season         = tf.season
        AND h.kickoff_utc    < tf.kickoff_utc
     GROUP BY tf.fixture_id, tf.team_id

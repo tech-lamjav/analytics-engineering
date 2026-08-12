@@ -1,8 +1,30 @@
 {{ config(
     materialized='table',
     description='S3 do Motor de Score — premissas de contexto do mercado HANDICAP ASIATICO (market_id 4). ⚠️ Task 0 (look-ahead): supremacia/tende_golear/adversario_fragil_fora/mando_forte/sem_rodizio/defesa_fora_solida leem int_futebol_team_form_pit (point-in-time por fixture) — o lado FAVORITO era 100% contaminado. raramente_perde_por_2 e favorito_irregular já eram limpos (margin_stats com kickoff_utc <) e não mudaram. 2 linhas por (fixture, line_value): outcome_side Home e Away. Convenção dos dados (API-Football, confirmada 2026-06-24): line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ os dois lados — "Home -1.5" e "Away -1.5" são o PAR complementar (de-vig soma ~1.03, pin_n_outcomes=2). Logo o handicap NA ÓTICA DO LADO = IF(side=Home, line_value, -line_value): side_handicap<0 => FAVORITO (dá handicap), >0 => AZARÃO (recebe), =0 => pick (nenhuma premissa dispara). Favorito: 5 premissas (Σ40, §12.3); Azarão: 3 (Σ30). Penalidade específica: handicap_alto (-12, |line_value|>=2.5). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. Gate/edge/Score saem no mart fact_value_opportunities (gate de completude Pinnacle = par >=2, igual O/U).
-    ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura.'
+    ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura. ⚠️ MEDIÇÃO (task [F], ADR 0007): o margin_stats aceita a var pit_escopo (da_competicao|todas), cujo DEFAULT reproduz exatamente o comportamento descrito acima — no default o SQL compilado é idêntico ao de antes da var existir. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. supremacia e sem_rodizio NÃO seguem o eixo (rank/ppg/n_teams vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008). ⚠️ O margin_stats não tem filtro de season nem no default — ele já atravessa temporada hoje —, então sob `todas` ele passa a contar todas as competições E todo o tempo coletado.'
 ) }}
+{#- EIXO DE ESCOPO DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa esta var.
+
+    Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
+    própria: o `margin_stats`, que alimenta `raramente_perde_por_2` e `favorito_irregular`. Ela
+    responde ao mesmo eixo, senão a célula sai MISTURADA — `tende_golear` com histórico juntado e
+    `raramente_perde_por_2` sem —, e um número assim não responde a pergunta da spec. Vale notar
+    que a spec #49 e o ticket #52 enumeram só o `last5` de Gols, o de BTTS e o spine de xG; a
+    regra que eles declaram, porém, é "todas as fontes de histórico competição-scoped", e o
+    critério de saída da spec (user story 26) fixa em QUATRO as premissas que ficam fora do
+    merge — as quatro de tabela da ADR 0008. Deixar esta fonte de fora faria seis.
+
+    ⚠️ Este `margin_stats` NÃO tem filtro de season hoje: já atravessa temporada. O eixo mexe só
+    na dimensão competição, então sob `todas` ele vira histórico de todas as competições e de
+    todo o tempo coletado. É correto — e é achado para a tabela de 39 linhas, porque significa que
+    estas duas premissas nunca sofreram o zeramento de virada de temporada que as outras sofrem.
+
+    `supremacia` e `sem_rodizio` ficam de fora por desenho: leem rank/ppg/n_teams do
+    team_form_pit, que os mantém competição-scoped em todas as células (ADR 0008).
+
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
+    (`da_competicao`) o SQL compilado é IDÊNTICO ao de antes desta var. -#}
+{%- set pit_escopo = taskf_eixos().escopo %}
 
 WITH fixtures AS (
     SELECT
@@ -84,7 +106,9 @@ margin_stats AS (
     FROM fixture_teams ft
     JOIN team_results r
         ON r.team_id        = ft.team_id
+       {%- if pit_escopo == 'da_competicao' %}
        AND r.competition_id = ft.competition_id
+       {%- endif %}
        AND r.kickoff_utc    < ft.kickoff_utc
     GROUP BY ft.fixture_id, ft.team_id
 ),
