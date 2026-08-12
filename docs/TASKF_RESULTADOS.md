@@ -521,3 +521,9 @@ Os dois `dbt build` fecham **43/43** (base) e **42/42** (escopo), com `ERROR=0` 
 `base` isso inclui a Costura A; na `escopo`, o guard de look-ahead
 `assert_pit_first_game_has_no_history` e as seis guardas de grão passam — a partição do guard
 segue os eixos da célula desde a #52, e ele **não** deve ser excluído.
+
+⚠️ **Para a #54:** as células `recorte` e `ambos` entram na mesma tabela e serão comparadas com
+estas duas. Se qualquer coisa reconstruir a ancestria antes disso — um build com `+`, um rebuild
+do `fact_odds_snapshot` —, a `base` e a `escopo` têm de ser re-medidas na mesma execução das duas
+novas. A Costura B (#55) pega a violação pelo `dbt_loaded_at` posterior a um `medido_em`, então
+isto é para economizar uma rodada, não para evitar um erro silencioso.
