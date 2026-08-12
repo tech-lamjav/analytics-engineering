@@ -55,19 +55,46 @@
     ⚠️ `medido_em` existe porque a spec exige que as quatro células rodem na MESMA EXECUÇÃO — o
     baseline não é reaproveitado justamente porque `linha_subindo`/`linha_descendo` leem odds ao
     vivo e viram sozinhas entre builds. Com o carimbo, "mesma execução" é conferível na tabela; sem
-    ele, é confiança. Quem escreve a Costura B (#55) precisa dele.
+    ele, é confiança. Quem escreve a Costura B (#55) precisa dele, e a forma verificável é:
+    `fact_odds_snapshot.dbt_loaded_at` ANTERIOR aos quatro `medido_em`. Isso prova o que de fato
+    importa — que as quatro leram a MESMA construção dos fatos —, que é mais forte do que os
+    quatro carimbos serem próximos entre si.
 
-    Rodar com (do dbt_futebol/) — a célula sai das vars, e a camada de premissas em futebol_taskF
-    tem de ter sido construída com as MESMAS vars antes:
+    ────────────────────────────────────────────────────────────────────────────────
+    COMO RODAR (do dbt_futebol/) — DUAS FASES, e a separação não é economia, é correção.
+
+    FASE 1, uma vez só para as quatro células: a ancestria inteira, que é o que popula o dataset
+    de medição. Com `--target taskF` todo `ref()` resolve para futebol_taskF, então os fatos têm
+    de existir lá antes.
 
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
         --select +int_futebol_premissas_1x2 +int_futebol_premissas_ou +int_futebol_premissas_ah \
                  +int_futebol_premissas_btts +int_futebol_premissas_dc +int_futebol_corroboracao
 
+    FASE 2, uma vez POR CÉLULA: só os nós que respondem às vars — o PIT e os cinco modelos de
+    premissas. Nada de `+`.
+
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+        --select int_futebol_team_form_pit int_futebol_premissas_1x2 int_futebol_premissas_ou \
+                 int_futebol_premissas_ah int_futebol_premissas_btts int_futebol_premissas_dc \
+        --vars '{pit_escopo: todas}'        # a célula; ausente = base
+
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_teste2 \
-        --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"'}'
+        --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', pit_escopo: todas}'
       bq query --use_legacy_sql=false --project_id=smartbetting-dados \
         < target/compiled/dbt_futebol/analyses/taskf_teste2.sql
+
+    ⚠️ NÃO use `+` na fase 2. O `+` reconstrói o `fact_odds_snapshot` a partir do NDJSON da landing
+    a cada célula, e aí as quatro deixam de ler a mesma construção dos fatos. O argumento que
+    sustenta a comparação entre células — um viés comum às quatro cancela — vale exatamente
+    porque elas leem UMA construção. Reconstruir por célula reinjeta entre elas a mesma variação
+    de 2 linhas que a reconciliação da `base` encontrou, e aí ela deixa de cancelar e passa a ser
+    lida como efeito de escopo. É também um rescan completo do NDJSON por célula, sem ganho.
+
+    ⚠️ Nas células de escopo juntado, duas guardas ficam vermelhas POR DESENHO — elas afirmam
+    coisa da célula `base`. Ver o cabeçalho de tests/assert_taskf_pit_default_igual_baseline.sql:
+
+      --exclude assert_taskf_pit_default_igual_baseline assert_pit_first_game_has_no_history
 
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 

@@ -167,18 +167,36 @@ que `% amostra curta` **sobe** ao removê-las e `jogos médios` não se move.
 4. **`int_futebol_team_form_pit`** — descartada. A Costura A passou nesta execução: a saída no
    default é igual, linha a linha, ao baseline congelado antes das vars.
 
+5. **Dedup não-determinístico do `fact_odds_snapshot`** — descartada, e vale registrar porque a
+   suspeita era boa. O dedup é `ROW_NUMBER() OVER (PARTITION BY fixture, casa, mercado, outcome,
+   janela ORDER BY loaded_at DESC)` — **sem critério de desempate**. Duas capturas com o mesmo
+   `loaded_at` e odds diferentes trocariam de vencedora entre builds *sem dado novo nenhum*, que
+   é exatamente a assinatura procurada. Medido nos 169 jogos, mercado de Gols: **108.196 chaves,
+   zero empates no topo, zero empates que mudariam a odd**. A porta existe, mas não passou
+   ninguém por ela nesta janela. Fica anotado como risco latente do modelo, não como causa.
+
 **O que sobra**, e fica registrado como resíduo aberto: o `fact_odds_snapshot` é reconstruído do
 NDJSON do GCS a cada build, e o `collection_date` vem do dado, não do instante da ingestão. Um
 arquivo que tenha chegado ao bucket depois de 04/08 carimbado com data anterior entraria na tabela
 sem aparecer no teste 2 acima — e uma casa a mais na média de t15m basta para virar uma linha
-marginal. É a única hipótese que sobrevive a tudo que foi medido, e ela é **candidata, não causa
-provada**.
+marginal. Das hipóteses levantadas é a única que sobrevive, e ela é **candidata, não causa
+provada**. Todas as sobreviventes moram no mesmo lugar: a reconstrução do `fact_odds_snapshot` a
+cada build.
 
 **Por que isso não invalida a medição:** o resíduo é 2 linhas em 1 premissa de 39, ele move a
 diferença em 0,2 pp, e ele afeta as quatro células **da mesma forma** — as quatro leem o mesmo
-`fact_odds_snapshot` na mesma execução. A [F] compara células entre si; um viés comum às quatro
-cancela na comparação. Ele importaria se alguém reaproveitasse o baseline publicado da [0.1] como
-célula `base`, que é exatamente o que a spec proíbe.
+`fact_odds_snapshot`. A [F] compara células entre si; um viés comum às quatro cancela na
+comparação. Ele importaria se alguém reaproveitasse o baseline publicado da [0.1] como célula
+`base`, que é exatamente o que a spec proíbe.
+
+⚠️ **Mas "o mesmo `fact_odds_snapshot`" é uma condição, não um dado.** Ela só vale se a ancestria
+for construída **uma vez** e as células seguintes rebuildarem só os nós que respondem às vars — o
+PIT e os cinco modelos de premissas. Rebuildar com `+` por célula reconstrói o
+`fact_odds_snapshot` do NDJSON a cada uma, e aí esta mesma variação de 2 linhas passa a existir
+*entre* as células, onde ela deixa de cancelar e vira efeito de escopo aos olhos de quem lê. O
+cabeçalho do `analyses/taskf_teste2.sql` traz as duas fases separadas por isso. Para a #55: a
+forma verificável de "mesma execução" é `fact_odds_snapshot.dbt_loaded_at` anterior aos quatro
+`medido_em`.
 
 ### O que a medição produziu além da reconciliação
 
@@ -197,7 +215,7 @@ ficam visíveis. Duas coisas nela não existiam antes:
 ```bash
 cd dbt_futebol
 
-# 1. a camada de premissas na célula base (vars no default), no dataset de medição
+# 1. a ancestria inteira, UMA vez para as quatro células (na base as vars ficam no default)
 DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
   --select +int_futebol_premissas_1x2 +int_futebol_premissas_ou +int_futebol_premissas_ah \
            +int_futebol_premissas_btts +int_futebol_premissas_dc +int_futebol_corroboracao
