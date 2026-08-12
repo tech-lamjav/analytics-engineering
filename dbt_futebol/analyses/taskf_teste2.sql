@@ -71,18 +71,28 @@
         --select +int_futebol_premissas_1x2 +int_futebol_premissas_ou +int_futebol_premissas_ah \
                  +int_futebol_premissas_btts +int_futebol_premissas_dc +int_futebol_corroboracao
 
-    FASE 2, uma vez POR CÉLULA: só os nós que respondem às vars — o PIT e os cinco modelos de
-    premissas. Nada de `+`.
+    FASE 2, uma vez POR CÉLULA, TRÊS PASSOS NA ORDEM: build → carimbo do PIT → Teste 2, os três
+    com as MESMAS `--vars`. O build toca só os nós que respondem às vars — o PIT e os cinco
+    modelos de premissas. Nada de `+`.
 
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
         --select int_futebol_team_form_pit int_futebol_premissas_1x2 int_futebol_premissas_ou \
                  int_futebol_premissas_ah int_futebol_premissas_btts int_futebol_premissas_dc \
         --vars '{pit_escopo: todas}'        # a célula; ausente = base
 
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_pit_por_celula \
+        --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', pit_escopo: todas}'
+      bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+        < target/compiled/dbt_futebol/analyses/taskf_pit_por_celula.sql
+
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_teste2 \
         --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', pit_escopo: todas}'
       bq query --use_legacy_sql=false --project_id=smartbetting-dados \
         < target/compiled/dbt_futebol/analyses/taskf_teste2.sql
+
+    ⚠️ O CARIMBO DO PIT vem DEPOIS do build da mesma célula, sempre. O rótulo dele sai das vars em
+    tempo de compilação e o dado sai do que está materializado: fora de ordem, uma célula é
+    gravada com o nome de outra. Ver o cabeçalho de analyses/taskf_pit_por_celula.sql.
 
     ⚠️ NÃO use `+` na fase 2. O `+` reconstrói o `fact_odds_snapshot` a partir do NDJSON da landing
     a cada célula, e aí as quatro deixam de ler a mesma construção dos fatos. O argumento que
@@ -91,10 +101,17 @@
     de 2 linhas que a reconciliação da `base` encontrou, e aí ela deixa de cancelar e passa a ser
     lida como efeito de escopo. É também um rescan completo do NDJSON por célula, sem ganho.
 
-    ⚠️ Nas células de escopo juntado, duas guardas ficam vermelhas POR DESENHO — elas afirmam
-    coisa da célula `base`. Ver o cabeçalho de tests/assert_taskf_pit_default_igual_baseline.sql:
+    ⚠️ Nas células fora do default, UMA guarda fica vermelha por desenho: a Costura A, que é
+    default-only por definição — o que ela afirma é justamente "o default reproduz produção". Ela
+    é a única exclusão que a medição precisa. Ver o cabeçalho de
+    tests/assert_taskf_pit_default_igual_baseline.sql:
 
-      --exclude assert_taskf_pit_default_igual_baseline assert_pit_first_game_has_no_history
+      --exclude assert_taskf_pit_default_igual_baseline
+
+    ⚠️ Esta receita já mandou excluir também o `assert_pit_first_game_has_no_history`. NÃO EXCLUA
+    MAIS (#52): a partição dele passou a seguir os eixos da célula, ele é verde nas quatro, e
+    excluí-lo faz a célula rodar sem guarda de look-ahead — o defeito (Task 0) que contaminou a
+    medição que a [F] existe para refazer.
 
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 

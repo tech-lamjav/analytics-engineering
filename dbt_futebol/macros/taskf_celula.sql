@@ -36,17 +36,33 @@
     {%- set escopo  = eixos.escopo -%}
     {%- set recorte = eixos.recorte -%}
 
-    {%- set nomes = {
-        'da_competicao|temporada':  'base',
-        'todas|temporada':          'escopo',
-        'da_competicao|ultimos_10': 'recorte',
-        'todas|ultimos_10':         'ambos'
-    } -%}
-
     {{ return({
-        'nome':    nomes[escopo ~ '|' ~ recorte],
+        'nome':    taskf_nomes_de_celula()[escopo ~ '|' ~ recorte],
         'escopo':  escopo,
         'recorte': recorte
     }) }}
 
+{% endmacro %}
+
+
+{#-
+    O 2x2 em forma de dicionário, exposto à parte para que os NOMES das quatro células existam uma
+    vez só. Quem rotula uma célula chama taskf_celula(); quem precisa da LISTA dos quatro nomes
+    — as análises que comparam duas células e validam qual par foi pedido — lê daqui:
+
+        {%- set validas = taskf_nomes_de_celula().values() | list -%}
+
+    É o mesmo argumento que pôs os valores aceitos dos eixos em taskf_eixos() e a digital do
+    insumo do PIT em taskf_fingerprint_insumo_pit(): uma segunda cópia da lista não fica igual à
+    primeira para sempre, e a divergência aqui seria muda — uma análise recusando `ambos` como
+    nome inválido depois de a #54 o materializar devolveria zero linha, que se parece com "as duas
+    células são idênticas".
+-#}
+{% macro taskf_nomes_de_celula() %}
+    {{ return({
+        'da_competicao|temporada':  'base',
+        'todas|temporada':          'escopo',
+        'da_competicao|ultimos_10': 'recorte',
+        'todas|ultimos_10':         'ambos'
+    }) }}
 {% endmacro %}
