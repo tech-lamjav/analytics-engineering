@@ -30,9 +30,17 @@
        se mexer. Se elas não se mexerem, o eixo não alcançou todas as fontes e a célula está
        misturada.
 
-    4. `h2h_favoravel` e `adversario_limitado` (que o reusa) são as imunes por definição: o
-       `fact_h2h` já cruza campeonatos hoje e a spec o deixa como está. Elas só podem mudar via
-       piso — `n_p5` para cima, `diferenca_p0` parada.
+    4. `h2h_favoravel` (1X2) é a ÚNICA imune por definição: o `fact_h2h` já cruza campeonatos hoje
+       e a spec o deixa como está — "é a única fonte imune ao efeito medido" (#49). Ela só pode
+       mudar via piso: `n_p5` para cima, `diferenca_p0` parada.
+
+       ⚠️ `adversario_limitado` (DC) NÃO é imune, embora reuse o h2h. A premissa é
+       `o_aproveitamento < 45 OR x_h2h_favoravel`, e `o_aproveitamento` sai de
+       `wins_total/draws_total/played_total` do PIT — que seguem o eixo. Medido entre `base` e
+       `escopo`: `n_p0` 160 → 165 e `diferenca_p0` +0,7 → +1,2. Uma premissa que reusa fonte imune
+       só herda a imunidade se **todos** os seus insumos forem imunes; aqui o OR basta para
+       quebrá-la. Esta linha esteve errada no primeiro commit desta análise e foi corrigida com o
+       número que a desmentiu — a expectativa existe para poder ser falsificada, e foi.
 
     ────────────────────────────────────────────────────────────────────────────────
     A COMPARAÇÃO É FULL OUTER de propósito: premissa que existe numa célula e não na outra sai
@@ -60,7 +68,9 @@
 
 {%- set cel_a = var('taskf_celula_a', 'base') -%}
 {%- set cel_b = var('taskf_celula_b', 'escopo') -%}
-{%- set celulas_validas = ['base', 'escopo', 'recorte', 'ambos'] -%}
+{#- Os quatro nomes vêm da macro que os define, nunca de uma segunda lista digitada aqui: uma
+    cópia que precisa ficar igual para sempre não fica, e a divergência seria muda. -#}
+{%- set celulas_validas = taskf_nomes_de_celula().values() | list -%}
 {%- for c in [cel_a, cel_b] -%}
     {%- if c not in celulas_validas -%}
         {{ exceptions.raise_compiler_error(

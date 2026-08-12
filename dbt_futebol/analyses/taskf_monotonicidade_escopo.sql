@@ -58,7 +58,11 @@
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
 
-{%- set carimbos = 'smartbetting-dados.futebol_taskF.taskf_pit_por_celula' -%}
+{#- O carimbo é lido por `source()`, como todo o resto do dataset de medição — o schema é fixo em
+    futebol_taskF na declaração, então ele não segue o `--target` (que é o motivo de a ESCRITA, em
+    analyses/taskf_pit_por_celula.sql, ser literal). CODING_STANDARDS.md: "Relations only via
+    ref() / source() — never hardcoded table names". -#}
+{%- set carimbos = source('futebol_taskF', 'taskf_pit_por_celula') -%}
 
 WITH {{ taskf_fingerprint_insumo_pit() }},
 
@@ -78,12 +82,12 @@ particoes_casadas AS (
 
 cel_base AS (
     SELECT fixture_id, team_id, competition, competition_id, season, kickoff_utc, played_total
-    FROM `{{ carimbos }}` WHERE celula = 'base'
+    FROM {{ carimbos }} WHERE celula = 'base'
 ),
 
 cel_escopo AS (
     SELECT fixture_id, team_id, competition, competition_id, season, kickoff_utc, played_total
-    FROM `{{ carimbos }}` WHERE celula = 'escopo'
+    FROM {{ carimbos }} WHERE celula = 'escopo'
 ),
 
 -- FULL OUTER para que par que existe de um lado só apareça, em vez de sumir no join.
@@ -126,7 +130,7 @@ carimbos_das_celulas AS (
         MIN(IF(celula = 'escopo', medido_em, NULL)) AS escopo_medido_em,
         MIN(IF(celula = 'base',   git_sha,   NULL)) AS base_git_sha,
         MIN(IF(celula = 'escopo', git_sha,   NULL)) AS escopo_git_sha
-    FROM `{{ carimbos }}`
+    FROM {{ carimbos }}
     WHERE celula IN ('base', 'escopo')
 ),
 

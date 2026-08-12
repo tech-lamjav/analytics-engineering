@@ -407,6 +407,17 @@ Consequência aritmética, não interpretação: a coluna `ano_calendario` da qu
 inteira das 39 premissas, campo a campo, porque a partição contém 100% das linhas. A coluna
 `split_year` é **vazia**.
 
+⚠️ **E isso vale para as QUATRO células, não só para esta.** A partição por família é propriedade
+do UNIVERSO, e o universo é o mesmo nas quatro por construção — é a primeira invariante da Costura
+B. Os eixos mudam o histórico que cada jogo carrega, nunca quais jogos são medidos. Então
+`split_year = 0` já está decidido para `recorte` e `ambos` (#54) e para o entregável (#59) no
+universo primário: **não há por que construir máquina de quebra por família por premissa**, ela
+teria uma coluna cheia e uma vazia em qualquer célula. A família só volta a ser uma dimensão com
+duas pontas no **universo estendido** (#56), que alcança o presente e onde as europeias já jogaram.
+
+(A classificação é por slug de competição, e `n_competition_ids = 1` nas 13 — nenhum slug agrega
+dois IDs hoje, então a quebra não tem como duplicar jogo.)
+
 **E a família split-year não entra nem como FONTE de histórico.** Medido: dos times que disputam
 os 169 jogos do universo, **zero** têm qualquer partida numa competição split-year sob o mesmo
 rótulo de `season`. Não é só que não há jogo split-year medido — não há jogo split-year que o
@@ -444,12 +455,34 @@ muda nelas é só o piso de amostra:
 | `linha_subindo`, `linha_descendo` (Gols) | leem preço, não histórico |
 | `desfalque_adversario` (1X2) | lê o boletim de desfalques |
 
+⚠️ **Reusar fonte imune não dá imunidade, e `adversario_limitado` é o caso.** Ela é a única
+premissa das 39 que consome o `fact_h2h` de segunda mão, e a expectativa de partida — escrita no
+cabeçalho da análise antes de rodar — era que ela acompanhasse o `h2h_favoravel` na lista acima.
+**Não acompanha:** `n_p0` vai de 160 para 165 e `diferenca_p0` de +0,7 para +1,2. A definição é
+`o_aproveitamento < 45 OR x_h2h_favoravel`, e `o_aproveitamento` sai de
+`wins_total/draws_total/played_total` do PIT — o OR basta para o eixo alcançá-la. A regra geral,
+para a [B] e para o resto da [F]: uma premissa só herda imunidade se **todos** os seus insumos
+forem imunes. `lado_coberto_forte` (DC) tem a mesma forma e também se mexe.
+
 **A ADR 0008 está implementada como diz.** As três premissas de tabela têm `n_p0` e `diferenca_p0`
 idênticos entre as células (98/98, 301/301, 188/188). ⚠️ Mas elas **mudam** nos pisos maiores, e
 isso é a própria ADR: o `min_jogos` segue a célula inclusive nas linhas delas, porque o piso é
 propriedade do jogo. `superioridade_tabela` vai de n=35 para n=47 no piso 5; `supremacia`, de 95
 para 121. `sem_rodizio` é a exceção dentro da exceção — 188 nos quatro pisos nas duas células —,
 assinatura de uma premissa que só acende em jogo com histórico longo.
+
+⚠️ **Para quem escrever a Costura B (#55).** A segunda invariante que a spec #49 enuncia — "as
+quatro premissas de tabela com números idênticos nas quatro células" — fica vermelha se for
+implementada ao pé da letra, e por dois motivos já conhecidos e medidos, nenhum deles um defeito:
+
+- são **três** premissas no catálogo medido, não quatro. A quarta que a ADR 0008 nomeia,
+  `x_superioridade_tabela`, é coluna interna do `int_futebol_premissas_1x2` que a Dupla Chance
+  reusa dentro do `lado_coberto_forte` — e este também lê `forca_mismatch`, então segue o eixo;
+- a identidade é **no piso 0**. Nos demais pisos elas mudam porque o `min_jogos` segue a célula,
+  que é a seção *Consequences* da própria ADR 0008.
+
+A ADR 0008 foi atualizada com essa leitura e os números. O enunciado da spec não foi editado — ele
+é o registro do que se sabia antes de medir.
 
 **As outras 32 se mexem**, que é o esperado: as fontes de histórico competição-scoped próprias dos
 cinco modelos (os `last5` de Gols/BTTS/DC, o `margin_stats` do Handicap, o spine de xG/ritmo)

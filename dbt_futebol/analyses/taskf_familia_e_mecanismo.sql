@@ -53,7 +53,11 @@
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
 
-{%- set carimbos = 'smartbetting-dados.futebol_taskF.taskf_pit_por_celula' -%}
+{#- O carimbo é lido por `source()`, como todo o resto do dataset de medição. Só a ESCRITA dele
+    (analyses/taskf_pit_por_celula.sql) é literal, e por um motivo específico da ADR 0007 — o
+    destino não pode seguir o `--target`. CODING_STANDARDS.md: "Relations only via ref() /
+    source() — never hardcoded table names". -#}
+{%- set carimbos = source('futebol_taskF', 'taskf_pit_por_celula') -%}
 {%- set pisos    = [3, 5, 10] -%}
 
 WITH {{ task01_base() }},
@@ -88,8 +92,8 @@ pares AS (
         b.competition,
         b.played_total AS played_base,
         e.played_total AS played_escopo
-    FROM (SELECT * FROM `{{ carimbos }}` WHERE celula = 'base')   AS b
-    JOIN (SELECT * FROM `{{ carimbos }}` WHERE celula = 'escopo') AS e
+    FROM (SELECT * FROM {{ carimbos }} WHERE celula = 'base')   AS b
+    JOIN (SELECT * FROM {{ carimbos }} WHERE celula = 'escopo') AS e
       USING (fixture_id, team_id)
     JOIN fixtures_do_universo USING (fixture_id)
 ),
@@ -134,6 +138,7 @@ por_competicao AS (
     SELECT
         f.competition,
         f.competition_id,
+        f.n_competition_ids,
         f.familia,
         f.temporadas_observadas,
         f.temporadas_atravessando,
@@ -175,7 +180,7 @@ por_competicao AS (
 empilhado AS (
     SELECT
         'competicao' AS nivel, 1 AS nivel_ord, competition AS chave, familia,
-        competition_id, temporadas_observadas, temporadas_atravessando,
+        competition_id, n_competition_ids, temporadas_observadas, temporadas_atravessando,
         primeiro_kickoff, ultimo_kickoff,
         jogos_no_universo, linhas_no_universo, pares, pares_com_ganho, soma_do_ganho, ganho_max
         {%- for piso in pisos %},
@@ -191,7 +196,7 @@ empilhado AS (
         GROUP BY fica ambíguo. #}
     SELECT
         'familia', 2, familia AS chave, familia,
-        CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64),
+        CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64),
         CAST(NULL AS DATE),  CAST(NULL AS DATE),
         {{ metricas }}
     FROM por_competicao
@@ -201,7 +206,7 @@ empilhado AS (
 
     SELECT
         'total', 3, 'TODAS', CAST(NULL AS STRING),
-        CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64),
+        CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64),
         CAST(NULL AS DATE),  CAST(NULL AS DATE),
         {{ metricas }}
     FROM por_competicao
@@ -212,6 +217,7 @@ SELECT
     chave,
     familia,
     competition_id,
+    n_competition_ids,
     temporadas_observadas,
     temporadas_atravessando,
     primeiro_kickoff,

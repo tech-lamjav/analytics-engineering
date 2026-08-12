@@ -32,8 +32,17 @@
     pontas do calendário — para que quem lê a tabela publicada possa conferir a classificação em
     vez de acreditar nela.
 
-    Emite UMA CTE no escopo do chamador, `familia_competicao`, com uma linha por competição. Uma
-    CTE do chamador com esse nome a sombreia em silêncio.
+    ⚠️ O GRÃO É O SLUG (`competition`), NÃO O `competition_id`, e isso é deliberado. Quem consome
+    a classificação junta pelo que tem na mão, e o `apostas` do task01_base() carrega só o slug —
+    é ele, portanto, que precisa ser único aqui. O slug sai de um CASE sobre o league_id no
+    `fact_fixtures`, então nada impede que dois IDs passem a cair no mesmo slug (uma fase
+    classificatória cadastrada à parte, por exemplo); com o grão em (id, slug), esse dia
+    duplicaria as linhas do consumidor em silêncio. Medido hoje: 13 competições, 1 para 1.
+    `n_competition_ids` sai junto para que a hipótese continue conferível em vez de suposta.
+
+    Emite DUAS CTEs no escopo do chamador — `fam_por_temporada` (o insumo) e `familia_competicao`
+    (o resultado, uma linha por competição). Uma CTE do chamador com qualquer um dos dois nomes as
+    sombreia em silêncio.
 
     Uso:
 
@@ -59,16 +68,17 @@ fam_por_temporada AS (
 
 familia_competicao AS (
     SELECT
-        competition_id,
         competition,
+        MIN(competition_id)               AS competition_id,
+        COUNT(DISTINCT competition_id)    AS n_competition_ids,
         IF(LOGICAL_OR(atravessa_a_virada), 'split_year', 'ano_calendario') AS familia,
-        COUNT(*)                    AS temporadas_observadas,
-        COUNTIF(atravessa_a_virada) AS temporadas_atravessando,
+        COUNT(DISTINCT season)      AS temporadas_observadas,
+        COUNT(DISTINCT IF(atravessa_a_virada, season, NULL)) AS temporadas_atravessando,
         SUM(n_fixtures)             AS fixtures_observados,
         MIN(primeiro_kickoff)       AS primeiro_kickoff,
         MAX(ultimo_kickoff)         AS ultimo_kickoff
     FROM fam_por_temporada
-    GROUP BY competition_id, competition
+    GROUP BY competition
 )
 
 {% endmacro %}
