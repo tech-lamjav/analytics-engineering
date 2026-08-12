@@ -509,8 +509,10 @@ sources:
   # de as vars pit_escopo/pit_recorte entrarem no int_futebol_team_form_pit, e é essa anterioridade
   # que dá valor a eles. O schema é fixo em `futebol_taskF` de propósito — o baseline não segue o
   # target, senão a Costura A compararia produção contra ela mesma rodada com --target dev/prod.
-  # Exceção consciente ao "só modelo de staging lê source": o consumidor é o teste singular da
-  # Costura A, e `source()` é o único handle do dbt para uma tabela congelada que não é modelo.
+  # Exceção consciente ao "só modelo de staging lê source": os consumidores são o teste singular da
+  # Costura A (sobre os baselines) e a análise de reconciliação da #51 (sobre o taskf_teste2), e
+  # `source()` é o único handle do dbt para uma tabela que não é modelo. Nenhum MODELO lê daqui —
+  # se um dia ler, a medição terá vazado para o caminho que o board serve.
   - name: futebol_taskF
     description: >
       Dataset de medição da task [F] (ADR 0007). Guarda o baseline de equivalência da Costura A.
@@ -555,3 +557,38 @@ sources:
         description: >
           Quando o baseline foi congelado, de qual commit, e com quantas linhas/partições.
           Uma linha só.
+
+      - name: taskf_teste2
+        description: >
+          A saída do Teste 2 da medição, uma linha por (célula, mercado, premissa, benchmark).
+          Acumulativa: cada execução de analyses/taskf_teste2.sql substitui SÓ a sua célula
+          (DELETE + INSERT), e as quatro convivem — é sobre esta tabela que a Costura B (#55)
+          verifica as três invariantes. Também não é modelo, pelo mesmo motivo dos baselines
+          acima: o destino está escrito no SQL e fixo em futebol_taskF, então um `dbt build`
+          distraído não tem como publicá-la no dataset do board.
+        columns:
+          - name: celula
+            description: >
+              base | escopo | recorte | ambos. DERIVADA dos dois eixos por taskf_celula(), nunca
+              digitada — uma célula não tem como ser gravada com o nome de outra.
+          - name: pit_escopo
+            description: "O eixo de escopo que produziu a linha (da_competicao | todas)"
+          - name: pit_recorte
+            description: "O eixo de recorte que produziu a linha (temporada | ultimos_10)"
+          - name: medido_em
+            description: >
+              Quando a célula foi materializada. Existe porque a spec exige que as quatro rodem na
+              MESMA execução — `linha_subindo`/`linha_descendo` leem odds ao vivo e viram sozinhas
+              entre builds. Com o carimbo, "mesma execução" é conferível; sem ele, é confiança.
+          - name: git_sha
+            description: "Commit de onde a célula foi medida (var taskf_git_sha)"
+          - name: jogos_no_universo
+            description: >
+              Jogos distintos do universo congelado (169). Idêntico nas quatro células por
+              construção — é a primeira invariante da Costura B.
+          - name: usado_para_peso
+            description: >
+              A linha está no benchmark PREFERIDO do mercado (sharp p/ 1X2, Handicap e Gols;
+              derivada p/ Dupla Chance; consenso p/ BTTS). As de consenso do Handicap e do Gols
+              vêm FALSE: não pesam, mas ficam visíveis porque o ROI muito pior delas é informação
+              sobre quais jogos a Pinnacle escolhe precificar.
