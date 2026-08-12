@@ -4,6 +4,14 @@ Pre-match value betting for football (Brasileirão-first, plus cups and European
 leagues): a deterministic rules engine rates every fixture x market x outcome with a
 reliability score and explains why.
 
+> ⚠️ **Antes de mudar o grão ou as colunas de qualquer modelo sincronizado para o
+> Postgres, leia `docs/contrato-serving-rpcs.md`.** O `check_schema_parity` do sync
+> responde "o sync sobrevive?", não "os leitores sobrevivem?" — as RPCs
+> `public.get_futebol_*` assumem o grão de várias dessas tabelas, e mudá-lo passa o
+> parity inteiro e ainda entrega dado errado ao app. Isso já custou duas vezes, em
+> 07/08 e 10/08. O documento traz a matriz de quem lê o quê, com o estado de cada
+> ponto de leitura verificado no banco vivo.
+
 ## Language
 
 ### The score engine

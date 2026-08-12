@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). 1 linha por (fixture_id, market_id, outcome_side, line_value). Calcula, na janela de FECHAMENTO mais recente disponível (t15m>t1h>t24h): best_odd/avg_odd/n_casas entre TODAS as casas, o de-vig market-aware da Pinnacle (bookmaker_id=4) sobre o conjunto de outcomes do mercado, o edge e o PTS_VALOR (0-30), as 4 penalidades globais e o sinal linha_sharp (movimento Pinnacle t24h->t15m). NÃO aplica o gate (isso é no mart). De-vig correto p/ mercados exaustivos por (market,line): 1X2(3)/O/U(2)/BTTS(2)/Asian Handicap(4, 2). FALLBACK DE CONSENSO (S4, 2026-06-25): a Pinnacle NÃO precifica BTTS(8)/HT-FT(7)/Dupla Chance(12) — confirmado 0 fixtures. Nesses casos prob_justa_fechamento/booksum_fechamento/edge/PTS_VALOR caem na MEDIANA das casas (med_odd, de-vig de consenso), marcado por valor_fonte=consenso (vs pinnacle); n_outcomes_valor=COALESCE(pin_n_outcomes,cons_n_outcomes) p/ o ramo BTTS gatear. O COALESCE preserva 1X2/O/U/AH (Pinnacle presente -> usa Pinnacle). Consenso carrega a margem das casas -> rotular como estimativa no front. ✅ Confirmado 2026-06-24 (S3): no AH a API-Football traz line_value na ÓTICA DO MANDANTE, IGUAL p/ Home e Away — logo "Home -1.5"/"Away -1.5" são o par complementar e já caem na MESMA partição (fixture, market, line_key), de-vig soma ~1.03 com pin_n_outcomes=2 (sem pareamento extra). ✅ Double Chance(12) RESOLVIDO (S5, 2026-06-26): a Pinnacle não precifica DC, mas as 3 saídas (1X/12/X2) NÃO são exaustivas (somam ~2) — logo o consenso quebraria. Em vez disso a prob_justa da DC é DERIVADA do de-vig 1X2 da Pinnacle (P(1X)=P(Home)+P(Draw), P(12)=P(Home)+P(Away), P(X2)=P(Draw)+P(Away)) via dc_devig; valor_fonte=pinnacle (âncora sharp), n_outcomes_valor=3 (gate = conjunto 1X2 completo). TANTO o consenso QUANTO o de-vig da Pinnacle excluem o market 12 (a DC cai sempre no dc_devig derivado do 1X2, mesmo se a Pinnacle passar a precificá-lo). NOTA: a coluna booksum_fechamento é a SOMA Σ(1/odd) (=1+margem), NÃO a margem (margem = booksum_fechamento − 1). ⚠️ REGRA DE EMISSÃO (spec #22, 2026-08-05): o de-vig só emite valor quando o CONJUNTO DE SAÍDAS usado bate EXATAMENTE com o declarado em futebol_conjunto_saidas() (1:3, 4:2, 5:2, 6:2, 8:2, 12:3 — a entrada 12 é o conjunto 1X2 DE ORIGEM, não as 3 saídas da DC). Conjunto incompleto não gera estimativa pior, gera AUSÊNCIA de estimativa: prob_justa/booksum/edge/pts_valor/valor_fonte viram NULL e a linha sai da base de valor; n_outcomes_valor PERMANECE REAL (diagnóstico + tração da guarda). Antes disso, 403 linhas normalizavam sobre UMA saída e devolviam prob=1,0 e edge=odd−1 (odd 150 -> +14.900%), com 2 vitórias em 172 no recorte liquidado. A regra é escrita UMA VEZ na projeção final, sobre a coluna já consolidada -> cobre Pinnacle, DC derivada e consenso de uma vez (a Pinnacle nunca teve essa guarda). Mercado não declarado NÃO emite (fail-closed); o ponto cego disso é coberto por assert_devig_conjunto_declarado. Ver docs/adr/0002-conjunto-de-saidas-declarado-por-mercado.md.'
+    description='Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). ⚠️ GRÃO (#37, ADR 0004): 1 linha por (fixture_id, market_id, outcome_side, line_value, JANELA) — cada janela coletada recebe a sua avaliação e o modelo NÃO escolhe janela; quem escolhe é o consumidor, pelo macro futebol_devig_janela_corrente(). São QUATRO janelas (daily<t24h<t1h<t15m), não três: a daily entrou em 07/08/2026. Calcula, DENTRO DE CADA JANELA, sem vazar de uma para outra: best_odd/avg_odd/n_casas entre TODAS as casas, o de-vig market-aware da Pinnacle (bookmaker_id=4) sobre o conjunto de outcomes do mercado, o edge e o PTS_VALOR (0-30), as 4 penalidades globais e o sinal linha_sharp (movimento Pinnacle t24h->t15m). NÃO aplica o gate (isso é no mart). De-vig correto p/ mercados exaustivos por (market,line): 1X2(3)/O/U(2)/BTTS(2)/Asian Handicap(4, 2). FALLBACK DE CONSENSO (S4, 2026-06-25): a Pinnacle NÃO precifica BTTS(8)/HT-FT(7)/Dupla Chance(12) — confirmado 0 fixtures. Nesses casos prob_justa_fechamento/booksum_fechamento/edge/PTS_VALOR caem na MEDIANA das casas (med_odd, de-vig de consenso), marcado por valor_fonte=consenso (vs pinnacle); n_outcomes_valor=COALESCE(pin_n_outcomes,cons_n_outcomes) p/ o ramo BTTS gatear. O COALESCE preserva 1X2/O/U/AH (Pinnacle presente -> usa Pinnacle). Consenso carrega a margem das casas -> rotular como estimativa no front. ✅ Confirmado 2026-06-24 (S3): no AH a API-Football traz line_value na ÓTICA DO MANDANTE, IGUAL p/ Home e Away — logo "Home -1.5"/"Away -1.5" são o par complementar e já caem na MESMA partição (fixture, market, line_key), de-vig soma ~1.03 com pin_n_outcomes=2 (sem pareamento extra). ✅ Double Chance(12) RESOLVIDO (S5, 2026-06-26): a Pinnacle não precifica DC, mas as 3 saídas (1X/12/X2) NÃO são exaustivas (somam ~2) — logo o consenso quebraria. Em vez disso a prob_justa da DC é DERIVADA do de-vig 1X2 da Pinnacle (P(1X)=P(Home)+P(Draw), P(12)=P(Home)+P(Away), P(X2)=P(Draw)+P(Away)) via dc_devig; valor_fonte=pinnacle (âncora sharp), n_outcomes_valor=3 (gate = conjunto 1X2 completo). TANTO o consenso QUANTO o de-vig da Pinnacle excluem o market 12 (a DC cai sempre no dc_devig derivado do 1X2, mesmo se a Pinnacle passar a precificá-lo). NOTA: a coluna booksum_fechamento é a SOMA Σ(1/odd) (=1+margem), NÃO a margem (margem = booksum_fechamento − 1). ⚠️ REGRA DE EMISSÃO (spec #22, 2026-08-05): o de-vig só emite valor quando o CONJUNTO DE SAÍDAS usado bate EXATAMENTE com o declarado em futebol_conjunto_saidas() (1:3, 4:2, 5:2, 6:2, 8:2, 12:3 — a entrada 12 é o conjunto 1X2 DE ORIGEM, não as 3 saídas da DC). Conjunto incompleto não gera estimativa pior, gera AUSÊNCIA de estimativa: prob_justa/booksum/edge/pts_valor/valor_fonte viram NULL e a linha sai da base de valor; n_outcomes_valor PERMANECE REAL (diagnóstico + tração da guarda). Antes disso, 403 linhas normalizavam sobre UMA saída e devolviam prob=1,0 e edge=odd−1 (odd 150 -> +14.900%), com 2 vitórias em 172 no recorte liquidado. A regra é escrita UMA VEZ na projeção final, sobre a coluna já consolidada -> cobre Pinnacle, DC derivada e consenso de uma vez (a Pinnacle nunca teve essa guarda). Mercado não declarado NÃO emite (fail-closed); o ponto cego disso é coberto por assert_devig_conjunto_declarado. Ver docs/adr/0002-conjunto-de-saidas-declarado-por-mercado.md.'
 ) }}
 
 WITH odds AS (
@@ -16,29 +16,18 @@ WITH odds AS (
         bookmaker_id,
         bookmaker_name,
         collection_window,
-        odd_decimal,
-        CASE collection_window
-            WHEN 't15m' THEN 3   -- fechamento (preferido)
-            WHEN 't1h'  THEN 2
-            WHEN 't24h' THEN 1
-            ELSE 0
-        END AS window_priority
+        odd_decimal
     FROM {{ ref('fact_odds_snapshot') }}
     -- descarta Exact Score (10) e labels sem lado pareável
     WHERE outcome_side IS NOT NULL
 ),
 
--- Janela de avaliação por (fixture, market, linha): a mais recente disponível.
--- Tudo abaixo (best_odd, n_casas, devig) é calculado NESSA mesma janela.
-eval_odds AS (
-    SELECT *
-    FROM odds
-    QUALIFY window_priority = MAX(window_priority) OVER (
-        PARTITION BY fixture_id, market_id, line_key
-    )
-),
-
--- Agregados por outcome (todas as casas na janela de avaliação).
+-- Agregados por outcome DENTRO DE CADA JANELA (todas as casas daquela janela).
+-- A janela entra no GROUP BY, então nenhum agregado mistura janelas (ADR 0004).
+-- Antes da #37 havia aqui um `eval_odds` que resolvia a linha para a janela mais
+-- recente via QUALIFY e descartava as outras — depois do jogo, a avaliação que
+-- existiu em t24h não existia em lugar nenhum. Quem escolhe a janela agora é o
+-- CONSUMIDOR, pelo macro futebol_devig_janela_corrente(); aqui só se emite.
 per_outcome AS (
     SELECT
         fixture_id,
@@ -48,7 +37,7 @@ per_outcome AS (
         outcome_side,
         line_value,
         line_key,
-        ANY_VALUE(collection_window)  AS janela_usada,
+        collection_window             AS janela_usada,
         MAX(odd_decimal)              AS best_odd,
         AVG(odd_decimal)              AS avg_odd,
         -- média DEIXANDO DE FORA a própria best_odd (leave-one-out): referência honesta p/ a
@@ -58,15 +47,17 @@ per_outcome AS (
         APPROX_QUANTILES(odd_decimal, 2)[OFFSET(1)] AS med_odd,
         COUNT(DISTINCT bookmaker_id)  AS n_casas,
         ARRAY_AGG(bookmaker_name ORDER BY odd_decimal DESC LIMIT 1)[OFFSET(0)] AS best_book
-    FROM eval_odds
-    GROUP BY fixture_id, market_id, outcome_side, line_value, line_key
+    FROM odds
+    GROUP BY fixture_id, market_id, outcome_side, line_value, line_key, collection_window
 ),
 
 -- De-vig market-aware da Pinnacle: prob_justa = (1/odd) / Σ(1/odd) sobre todos os
--- outcomes do (fixture, market, linha) na janela de avaliação (normalização multiplicativa).
+-- outcomes do (fixture, market, linha) DENTRO DA MESMA JANELA (normalização
+-- multiplicativa). A janela entra na partição: normalizar sobre odds de janelas
+-- diferentes somaria preços de momentos diferentes e o booksum perderia sentido.
 pinnacle_eval AS (
-    SELECT fixture_id, market_id, outcome_side, line_key, odd_decimal AS pin_odd
-    FROM eval_odds
+    SELECT fixture_id, market_id, outcome_side, line_key, collection_window, odd_decimal AS pin_odd
+    FROM odds
     WHERE bookmaker_id = 4
       -- EXCLUI a Dupla Chance(12) — espelha o consensus_devig: suas 3 saídas NÃO são exaustivas
       -- (somam ~2), normalizar p/ 1 daria prob ~metade da real. A DC é DERIVADA do de-vig 1X2 da
@@ -77,19 +68,19 @@ pinnacle_eval AS (
     -- contagem/fan-out caso dois labels distintos colapsem na mesma (lado, linha) ao parsear
     -- (ex.: '-1.5' vs '-1.50'). Mantém a melhor odd do lado (não muda nada hoje: 1 linha/lado).
     QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY fixture_id, market_id, outcome_side, line_key
+        PARTITION BY fixture_id, market_id, outcome_side, line_key, collection_window
         ORDER BY odd_decimal DESC
     ) = 1
 ),
 pinnacle_devig AS (
     SELECT
-        fixture_id, market_id, outcome_side, line_key,
+        fixture_id, market_id, outcome_side, line_key, collection_window,
         (1.0 / pin_odd) / SUM(1.0 / pin_odd) OVER (
-            PARTITION BY fixture_id, market_id, line_key
+            PARTITION BY fixture_id, market_id, line_key, collection_window
         )                                                         AS prob_justa_fechamento,
         -- booksum = Σ(1/odd) = normalizador = 1 + margem (NÃO é a margem; margem = booksum − 1).
-        SUM(1.0 / pin_odd)  OVER (PARTITION BY fixture_id, market_id, line_key) AS booksum_fechamento,
-        COUNT(*)            OVER (PARTITION BY fixture_id, market_id, line_key) AS pin_n_outcomes
+        SUM(1.0 / pin_odd)  OVER (PARTITION BY fixture_id, market_id, line_key, collection_window) AS booksum_fechamento,
+        COUNT(*)            OVER (PARTITION BY fixture_id, market_id, line_key, collection_window) AS pin_n_outcomes
     FROM pinnacle_eval
 ),
 
@@ -116,12 +107,12 @@ pinnacle_move AS (
 -- ramo BTTS usa n_outcomes_valor (consenso).
 consensus_devig AS (
     SELECT
-        fixture_id, market_id, outcome_side, line_key,
+        fixture_id, market_id, outcome_side, line_key, janela_usada,
         (1.0 / med_odd) / SUM(1.0 / med_odd) OVER (
-            PARTITION BY fixture_id, market_id, line_key
+            PARTITION BY fixture_id, market_id, line_key, janela_usada
         )                                                         AS cons_prob_justa,
-        SUM(1.0 / med_odd) OVER (PARTITION BY fixture_id, market_id, line_key) AS cons_booksum,
-        COUNT(*)           OVER (PARTITION BY fixture_id, market_id, line_key) AS cons_n_outcomes
+        SUM(1.0 / med_odd) OVER (PARTITION BY fixture_id, market_id, line_key, janela_usada) AS cons_booksum,
+        COUNT(*)           OVER (PARTITION BY fixture_id, market_id, line_key, janela_usada) AS cons_n_outcomes
     FROM per_outcome
     WHERE med_odd IS NOT NULL AND med_odd > 0
       AND market_id <> 12
@@ -132,20 +123,27 @@ consensus_devig AS (
 -- P(X2)=P(Draw)+P(Away). Âncora sharp (a Pinnacle precifica o 1X2) — melhor que o consenso, que
 -- nem se aplica aqui (saídas não-exaustivas). Exige o conjunto 1X2 inteiro (p_home/draw/away
 -- não-NULL); senão a DC fica sem prob_justa e é barrada no gate do mart.
+-- A JANELA entra na chave desta derivação (#37): a DC de uma janela deriva do 1X2
+-- DAQUELA janela, nunca de outra. Antes, com uma janela por linha, o join era só por
+-- fixture — e como o QUALIFY escolhia a janela POR MERCADO, a DC podia estar derivando
+-- de um 1X2 de janela diferente. Medido em 2026-08-10 antes de mudar: 265 fixtures têm
+-- 1X2 e DC e em ZERO deles a janela divergia (a chamada /odds traz todos os mercados
+-- juntos), então amarrar a janela não move nenhum valor de hoje — só fecha a porta.
 x2_pinnacle AS (
     SELECT
         fixture_id,
+        collection_window,
         MAX(IF(outcome_side = 'Home', prob_justa_fechamento, NULL)) AS p_home,
         MAX(IF(outcome_side = 'Draw', prob_justa_fechamento, NULL)) AS p_draw,
         MAX(IF(outcome_side = 'Away', prob_justa_fechamento, NULL)) AS p_away,
         ANY_VALUE(pin_n_outcomes)                                  AS n_1x2
     FROM pinnacle_devig
     WHERE market_id = 1
-    GROUP BY fixture_id
+    GROUP BY fixture_id, collection_window
 ),
 dc_devig AS (
     SELECT
-        po.fixture_id, po.market_id, po.outcome_side, po.line_key,
+        po.fixture_id, po.market_id, po.outcome_side, po.line_key, po.janela_usada,
         CASE po.outcome_side
             WHEN '1X' THEN x.p_home + x.p_draw
             WHEN '12' THEN x.p_home + x.p_away
@@ -153,7 +151,9 @@ dc_devig AS (
         END                                                       AS dc_prob_justa,
         x.n_1x2                                                   AS dc_n_1x2
     FROM per_outcome po
-    JOIN x2_pinnacle x ON po.fixture_id = x.fixture_id
+    JOIN x2_pinnacle x
+        ON  po.fixture_id   = x.fixture_id
+        AND po.janela_usada = x.collection_window
     WHERE po.market_id = 12
       AND x.p_home IS NOT NULL AND x.p_draw IS NOT NULL AND x.p_away IS NOT NULL
 ),
@@ -192,11 +192,19 @@ consolidado AS (
         END                                                                      AS conjunto_esperado,
         COALESCE(pm.pin_t15m < pm.pin_t24h, FALSE)                               AS linha_sharp_confirma
     FROM per_outcome po
+    -- As três fontes de valor casam PELA JANELA também: cada janela consome só o
+    -- de-vig dela. Sem isso o join abriria uma linha por janela da fonte × janela
+    -- do per_outcome, e o valor de uma janela vazaria para as outras.
     LEFT JOIN pinnacle_devig pd
         ON  po.fixture_id   = pd.fixture_id
         AND po.market_id    = pd.market_id
         AND po.outcome_side = pd.outcome_side
         AND po.line_key     = pd.line_key
+        AND po.janela_usada = pd.collection_window
+    -- EXCEÇÃO DELIBERADA: pinnacle_move NÃO entra pela janela. O movimento de linha
+    -- sharp é medido sobre o conjunto completo de janelas (t24h -> t15m), então é
+    -- propriedade da LINHA e a mesma linha carrega o mesmo sinal em todas as suas
+    -- janelas. Amarrar a janela aqui zeraria o sinal em toda janela que não a t15m.
     LEFT JOIN pinnacle_move pm
         ON  po.fixture_id   = pm.fixture_id
         AND po.market_id    = pm.market_id
@@ -207,11 +215,13 @@ consolidado AS (
         AND po.market_id    = dd.market_id
         AND po.outcome_side = dd.outcome_side
         AND po.line_key     = dd.line_key
+        AND po.janela_usada = dd.janela_usada
     LEFT JOIN consensus_devig cd
         ON  po.fixture_id   = cd.fixture_id
         AND po.market_id    = cd.market_id
         AND po.outcome_side = cd.outcome_side
         AND po.line_key     = cd.line_key
+        AND po.janela_usada = cd.janela_usada
 ),
 
 -- REGRA DE EMISSÃO (spec #22): o conjunto de saídas usado p/ o valor tem que bater EXATAMENTE

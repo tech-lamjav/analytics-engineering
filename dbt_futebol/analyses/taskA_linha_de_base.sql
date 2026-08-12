@@ -43,9 +43,14 @@ board AS (
     SELECT fixture_id, escopo FROM fixtures WHERE escopo IS NOT NULL
 ),
 
+{#- REDUZIDO À JANELA CORRENTE (#37): sem isso o funil conta a mesma candidata uma vez
+    por janela e infla em até 4×. É a armadilha que a própria A7 nomeia como a mais
+    importante do seu aceite — "fixar uma janela por candidato ANTES de contar qualquer
+    coisa". Reduzindo aqui, esta linha de base segue comparável com a que produziu o
+    dimensionamento de 50 -> 689 linhas. -#}
 devig AS (
     SELECT *, COALESCE(CAST(line_value AS STRING), 'NONE') AS line_key
-    FROM {{ ref('int_futebol_odds_devig') }}
+    FROM ({{ futebol_devig_janela_corrente() }})
 ),
 corro AS (
     SELECT *, COALESCE(CAST(line_value AS STRING), 'NONE') AS line_key

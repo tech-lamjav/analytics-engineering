@@ -4,9 +4,13 @@ models:
   - name: int_futebol_odds_devig
     description: >
       Fase 0 do Motor de Score — núcleo de VALOR (agnóstico de mercado). De-vig market-aware
-      da Pinnacle (bookmaker_id=4) na janela de fechamento (t15m>t1h>t24h) + edge + PTS_VALOR
-      (0-30) + best/avg/n_casas + penalidades globais + linha_sharp. 1 linha por (fixture_id,
-      market_id, outcome_side, line_value). DUPLA CHANCE (S5, market 12): a Pinnacle não precifica
+      da Pinnacle (bookmaker_id=4) + edge + PTS_VALOR (0-30) + best/avg/n_casas + penalidades
+      globais + linha_sharp. 1 linha por (fixture_id, market_id, outcome_side, line_value,
+      JANELA) desde a #37: cada janela coletada (daily/t24h/t1h/t15m) recebe a sua própria
+      avaliação, calculada só com as odds daquela janela, e o modelo NÃO escolhe janela —
+      quem escolhe é o consumidor, pelo macro futebol_devig_janela_corrente(). Exceção:
+      linha_sharp_confirma é medido sobre o conjunto completo de janelas (t24h->t15m), então
+      é propriedade da linha e vem igual em todas as janelas dela. Ver ADR 0004. DUPLA CHANCE (S5, market 12): a Pinnacle não precifica
       DC e as 3 saídas (1X/12/X2) NÃO são exaustivas (somam ~2) -> a prob_justa é DERIVADA do
       de-vig 1X2 da Pinnacle (dc_devig: P(1X)=P(Home)+P(Draw) etc.), valor_fonte=pinnacle,
       n_outcomes_valor=3. pinnacle_eval E consensus_devig EXCLUEM o market 12 (cai sempre no
@@ -36,8 +40,27 @@ models:
         description: "Casas distintas na janela (COUNT DISTINCT bookmaker_id)."
         tests: [not_null]
       - name: janela_usada
-        description: "Janela de avaliação efetiva (t15m>t1h>t24h, a mais recente disponível)."
-        tests: [not_null]
+        description: >
+          Janela de coleta desta avaliação, e parte do GRÃO desde a #37. O modelo emite uma
+          linha por janela coletada e NÃO escolhe nenhuma; quem escolhe é o consumidor, pelo
+          macro futebol_devig_janela_corrente(). São QUATRO janelas: daily (até 7 dias do
+          apito, em produção desde 07/08) < t24h < t1h < t15m.
+        tests:
+          - not_null
+          # A ordem das janelas vive no macro futebol_janela_prioridade, e janela fora da
+          # lista cai no ELSE 0 dele. Uma só desconhecida é inofensiva (fica abaixo das
+          # conhecidas); DUAS empatariam no MAX e abririam fan-out no consumidor, com a
+          # oportunidade publicada em duplicidade.
+          # ⚠️ Esta guarda REPORTA o empate, não o previne: no agendado o `dbt run` é a
+          # fase 2 e o `dbt test --select tag:guarda` é a 4, sem gate — a linha duplicada
+          # chega ao board e ao sync antes de qualquer teste rodar. Prevenção de verdade
+          # está no accepted_values de fact_odds_snapshot.collection_window, a montante.
+          - accepted_values:
+              arguments:
+                values: ['daily', 't24h', 't1h', 't15m']
+              config:
+                severity: error
+                tags: ['guarda']
       - name: valor_fonte
         description: "Fonte do de-vig: 'pinnacle' (1X2/O/U/AH + DC derivada) | 'consenso' (BTTS/HT-FT) | NULL (sem de-vig)."
         tests:
@@ -94,13 +117,26 @@ models:
       - name: pts_valor
         description: "0-30; NULL quando não há de-vig (Pinnacle ausente/incompleto)."
     tests:
+      # GRÃO NOVO (#37, ADR 0004): a janela entra na chave. Sem `janela_usada` aqui, o
+      # próprio efeito pretendido da mudança (N linhas por linha coletada) deixaria esta
+      # guarda permanentemente vermelha, e guarda sempre vermelha morre ignorada.
+      #
+      # TAG `guarda` de propósito: a versão anterior não tinha tag nenhuma, então nunca
+      # rodou no agendado — só no laptop de quem lembrasse. Fan-out acidental de grão é
+      # exatamente o modo de falha que infla número em silêncio, e o que faz este teste
+      # valer alguma coisa é ele rodar em produção.
       - dbt_utils.unique_combination_of_columns:
+          name: assert_devig_grao_por_janela
           arguments:
             combination_of_columns:
               - fixture_id
               - market_id
               - outcome_side
               - line_value
+              - janela_usada
+          config:
+            severity: error
+            tags: ['guarda']
 
   - name: int_futebol_corroboracao
     description: >
@@ -514,3 +550,83 @@ unit_tests:
         - {fixture_id: 6, market_id: 4,  outcome_side: 'Home',  n_outcomes_valor: 1, valor_fonte: null,       prob_justa_fechamento: null, edge: null}
         - {fixture_id: 7, market_id: 4,  outcome_side: 'Home',  n_outcomes_valor: 2, valor_fonte: 'pinnacle', prob_justa_fechamento: 0.5,  edge: 0.0}
         - {fixture_id: 7, market_id: 4,  outcome_side: 'Away',  n_outcomes_valor: 2, valor_fonte: 'pinnacle', prob_justa_fechamento: 0.5,  edge: 0.0}
+
+  # ==========================================================================
+  # UNIT TESTS — a JANELA entra no grão (issue #37, ADR 0004)
+  #
+  # Por que unit test e não data test: em produção o de-vig emitia UMA janela por
+  # linha, então "cada janela tem os seus agregados" não tinha nenhuma linha onde
+  # ser falsificado. Data test sobre produção ficaria verde por vacuidade — o
+  # mesmo motivo registrado no unit test da #22, acima.
+  #
+  # As odds são simétricas e potências de 2 (2/4/8/16) de propósito: a prob justa
+  # sai exatamente 0,5 em todas as janelas, então a única coisa que varia entre
+  # elas é o PREÇO — e é isso que a asserção precisa isolar. Odd assimétrica daria
+  # 1/3 e a asserção passaria a depender de arredondamento.
+  # ==========================================================================
+  - name: a_janela_entra_no_grao_e_os_agregados_nao_vazam
+    model: int_futebol_odds_devig
+    description: >
+      Linha com N janelas coletadas produz N linhas, cada uma com os agregados e o
+      valor calculados só com as odds daquela janela. O fixture 1 usa QUATRO janelas
+      (inclusive a `daily`, que entrou em produção em 07/08) — o número de janelas não
+      é 3 e o modelo não pode assumir que seja. O fixture 2 cobre a convivência entre
+      uma janela de conjunto incompleto, que não emite valor, e uma completa, que segue
+      emitindo normalmente.
+    given:
+      - input: ref('fact_odds_snapshot')
+        rows:
+          # (1) Mesma linha, quatro janelas, preço subindo. prob = 0,5 em todas;
+          #     best_odd / edge / pts_valor / pen_odd_longshot mudam por janela.
+          #     A t15m tem 2 casas -> n_casas também é por janela.
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 'daily', odd_decimal: 16.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Under', line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 'daily', odd_decimal: 16.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't24h',  odd_decimal: 2.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Under', line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't24h',  odd_decimal: 2.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't1h',   odd_decimal: 4.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Under', line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't1h',   odd_decimal: 4.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't15m',  odd_decimal: 8.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 8, bookmaker_name: 'Bet365', collection_window: 't15m',  odd_decimal: 8.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Under', line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't15m',  odd_decimal: 8.0}
+          - {fixture_id: 1, market_id: 5, outcome_side: 'Under', line_value: 2.5, bookmaker_id: 8, bookmaker_name: 'Bet365', collection_window: 't15m',  odd_decimal: 8.0}
+
+          # (2) t24h com o par completo, t15m com só o Over. Antes desta mudança a
+          #     t15m ganhava o QUALIFY e a avaliação completa da t24h desaparecia:
+          #     a linha inteira virava "não emite". Agora as duas coexistem.
+          - {fixture_id: 2, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't24h',  odd_decimal: 2.0}
+          - {fixture_id: 2, market_id: 5, outcome_side: 'Under', line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't24h',  odd_decimal: 2.0}
+          - {fixture_id: 2, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 6, bookmaker_name: 'Bwin',   collection_window: 't15m',  odd_decimal: 2.0}
+    expect:
+      rows:
+        - {fixture_id: 1, outcome_side: 'Over',  janela_usada: 'daily', best_odd: 16.0, n_casas: 1, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 7.0, pts_valor: 30, pen_odd_longshot: true}
+        - {fixture_id: 1, outcome_side: 'Under', janela_usada: 'daily', best_odd: 16.0, n_casas: 1, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 7.0, pts_valor: 30, pen_odd_longshot: true}
+        - {fixture_id: 1, outcome_side: 'Over',  janela_usada: 't24h',  best_odd: 2.0,  n_casas: 1, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 0.0, pts_valor: 0,  pen_odd_longshot: false}
+        - {fixture_id: 1, outcome_side: 'Under', janela_usada: 't24h',  best_odd: 2.0,  n_casas: 1, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 0.0, pts_valor: 0,  pen_odd_longshot: false}
+        - {fixture_id: 1, outcome_side: 'Over',  janela_usada: 't1h',   best_odd: 4.0,  n_casas: 1, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 1.0, pts_valor: 30, pen_odd_longshot: false}
+        - {fixture_id: 1, outcome_side: 'Under', janela_usada: 't1h',   best_odd: 4.0,  n_casas: 1, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 1.0, pts_valor: 30, pen_odd_longshot: false}
+        - {fixture_id: 1, outcome_side: 'Over',  janela_usada: 't15m',  best_odd: 8.0,  n_casas: 2, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 3.0, pts_valor: 30, pen_odd_longshot: true}
+        - {fixture_id: 1, outcome_side: 'Under', janela_usada: 't15m',  best_odd: 8.0,  n_casas: 2, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 3.0, pts_valor: 30, pen_odd_longshot: true}
+        - {fixture_id: 2, outcome_side: 'Over',  janela_usada: 't24h',  best_odd: 2.0,  n_casas: 1, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 0.0, pts_valor: 0,  pen_odd_longshot: false}
+        - {fixture_id: 2, outcome_side: 'Under', janela_usada: 't24h',  best_odd: 2.0,  n_casas: 1, n_outcomes_valor: 2, valor_fonte: 'consenso', prob_justa_fechamento: 0.5, edge: 0.0, pts_valor: 0,  pen_odd_longshot: false}
+        - {fixture_id: 2, outcome_side: 'Over',  janela_usada: 't15m',  best_odd: 2.0,  n_casas: 1, n_outcomes_valor: 1, valor_fonte: null,       prob_justa_fechamento: null, edge: null, pts_valor: null, pen_odd_longshot: false}
+
+  - name: o_sinal_sharp_e_invariante_entre_janelas
+    model: int_futebol_odds_devig
+    description: >
+      linha_sharp_confirma é propriedade da LINHA (movimento da Pinnacle t24h->t15m),
+      não da janela: a mesma linha carrega o mesmo sinal em todas as suas janelas. O
+      Over cai de 2,0 para 1,5 (sinal verdadeiro nas duas janelas) e o Under sobe de
+      2,0 para 3,0 (falso nas duas) — o sinal separa por LADO, nunca por janela.
+    given:
+      - input: ref('fact_odds_snapshot')
+        rows:
+          - {fixture_id: 3, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 4, bookmaker_name: 'Pinnacle', collection_window: 't24h', odd_decimal: 2.0}
+          - {fixture_id: 3, market_id: 5, outcome_side: 'Under', line_value: 2.5, bookmaker_id: 4, bookmaker_name: 'Pinnacle', collection_window: 't24h', odd_decimal: 2.0}
+          - {fixture_id: 3, market_id: 5, outcome_side: 'Over',  line_value: 2.5, bookmaker_id: 4, bookmaker_name: 'Pinnacle', collection_window: 't15m', odd_decimal: 1.5}
+          - {fixture_id: 3, market_id: 5, outcome_side: 'Under', line_value: 2.5, bookmaker_id: 4, bookmaker_name: 'Pinnacle', collection_window: 't15m', odd_decimal: 3.0}
+    expect:
+      rows:
+        - {fixture_id: 3, outcome_side: 'Over',  janela_usada: 't24h', linha_sharp_confirma: true}
+        - {fixture_id: 3, outcome_side: 'Over',  janela_usada: 't15m', linha_sharp_confirma: true}
+        - {fixture_id: 3, outcome_side: 'Under', janela_usada: 't24h', linha_sharp_confirma: false}
+        - {fixture_id: 3, outcome_side: 'Under', janela_usada: 't15m', linha_sharp_confirma: false}

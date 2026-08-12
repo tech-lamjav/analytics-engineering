@@ -229,7 +229,18 @@ odds AS (
         -- Mantido também para que a próxima análise VEJA que esta exclusão existe, em vez
         -- de herdá-la em silêncio.
         COALESCE(n_outcomes_valor < 2, TRUE) AS conjunto_incompleto
-    FROM {{ ref('int_futebol_odds_devig') }}
+    {#- ⚠️ REDUZIDO À JANELA CORRENTE (#37). O de-vig passou a emitir uma avaliação por
+        janela coletada; ler sem reduzir faria cada aposta entrar no backtest até 4 vezes,
+        uma por preço, todas liquidadas pelo mesmo placar. É EXATAMENTE o erro que a ADR
+        0001 e a ADR 0004 existem para impedir: o ROI esperado não se move e o intervalo de
+        confiança encolhe por √n sem entrar informação nenhuma — amostra falsa.
+
+        A redução reproduz byte-a-byte a base de antes da #37, porque a janela que ela
+        escolhe é a mesma que o de-vig escolhia sozinho. Quem quiser a base por janela —
+        a pergunta de CLV que a #37 destrava, "o edge de abertura prevê melhor que o de
+        fechamento?" — tem que optar por ela DELIBERADAMENTE, lendo o modelo direto e
+        declarando o que faz com a dependência entre as janelas da mesma aposta. -#}
+    FROM ({{ futebol_devig_janela_corrente() }})
 ),
 
 {#- Premissas em formato longo: uma linha por (aposta, premissa).
