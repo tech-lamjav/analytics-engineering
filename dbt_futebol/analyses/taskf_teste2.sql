@@ -237,8 +237,9 @@ apostas_congeladas AS (
     SELECT
         a.*,
         {#- O `min_jogos` que vem do task01_base() é o USADO: ele sai do played_total do PIT, que
-            sob recorte de contagem já vem saturado. Renomeado aqui para a tabela não ter uma
-            coluna cujo sentido depende da célula em que se está lendo. -#}
+            sob recorte de contagem já vem saturado. Ganha aqui um nome que diz isso — o `a.*`
+            acima mantém o original, então as duas formas convivem no CTE e só a nomeada chega à
+            tabela, que assim não tem coluna cujo sentido depende da célula que se está lendo. -#}
         a.min_jogos                            AS min_jogos_usado,
         COALESCE(d.min_jogos_disponivel, 0)    AS min_jogos_disponivel
     FROM apostas AS a

@@ -653,6 +653,14 @@ Os 15.150 e 16.435 pares saturados são também a guarda de **não-vacuidade**: 
 célula rotulada `ultimos_10` não significaria "ninguém tinha mais de 10 partidas", significaria
 que o carimbo rodou fora de ordem e o dado é de outra célula.
 
+⚠️ **As duas linhas de cima da tabela não são evidência sobre o dado, e o OK delas não deve ser
+lido como se fosse.** O modelo não emite `played_total_disponivel` no default, então o carimbo
+projeta o próprio `played_total` na coluna do disponível — nas células de recorte `temporada`,
+`usado = disponível` é verdade por construção. O que essas duas linhas ainda checam de verdade é o
+**rótulo**: uma célula de `temporada` gravada como `ultimos_10` passaria a ser cobrada pela
+identidade com teto e cairia, porque o disponível dela chega a 37 e 60. A medição propriamente
+dita são as duas linhas de baixo, onde as duas colunas vêm de contas diferentes do modelo.
+
 ⚠️ **O usado médio CAI de 11,29 (base) para 8,25 (recorte) e isso não é perda de histórico.** O
 teto corta em 10 quem tinha mais, e a média de `LEAST(base, 10)` é naturalmente menor que a de
 `base`. A monotonicidade — soltar uma dimensão só acrescenta — vale sobre o **disponível**, e é
@@ -790,6 +798,33 @@ contrário de todas as outras, e a diferença no piso 5 cai (+7,4 → +6,2 e +7,
 subir em `ambos` (+8,5 e +7,9). Quem comparar o delta delas com o das demais premissas sem saber
 disso lê o sinal ao contrário. O aviso está no cabeçalho do `taskf_delta_celulas.sql`, no do
 `int_futebol_premissas_ah.sql` e na ADR 0007.
+
+### ⚠️ O teto de contagem gasta vaga com partida sem xG — o mecanismo existe, e não mordeu aqui
+
+Sob recorte de contagem, o spine de xG e o de ritmo ranqueiam as partidas **por data** e ficam com
+as 10 mais recentes; a média sai do que houver de não-nulo dentro delas. Onde o xG é esparso, uma
+partida sem xG ocupa vaga e a média sai de menos valores — coisa que a célula de `temporada`, que
+não tem teto, não sofre. E o xG **é** esparso em três das cinco competições do universo:
+
+| competição | linhas de stats | sem xG | % |
+|---|---|---|---|
+| copa_do_brasil | 562 | 484 | **86,1%** |
+| sudamericana | 888 | 586 | **66,0%** |
+| serie_b | 1.938 | 964 | **49,7%** |
+| brasileirao | 1.946 | 0 | 0% |
+| copa_mundo | 208 | 0 | 0% |
+
+É consequência de desenho, não defeito: o eixo diz "as 10 partidas anteriores", e a alternativa —
+"as 10 partidas anteriores **com xG**" — alcançaria mais fundo no tempo sem avisar, que é outra
+definição. **Medido, ele não custou cobertura nesta janela**: as três premissas de xG e a de ritmo
+acendem em MAIS linhas em `recorte` e em `ambos` do que em `base` (`superioridade_xg` 109 → 117 →
+129; `xg_combinado_alto` 320 → 324 → 361; `ritmo_alto` 465 → 503 → 511). As duas únicas quedas
+estão em `escopo` → `ambos` (`xg_baixo_combinado` 328 → 319, `ritmo_alto` 541 → 511) — que é onde
+o mecanismo apareceria, mas atribuí-las a ele exigiria uma medição de cobertura que este ticket
+não fez.
+
+Fica anotado para a #59: se a tabela final mostrar premissa de xG perdendo linha numa célula com
+teto, este é o primeiro lugar a olhar.
 
 ### A quebra por família continua degenerada, como a #53 já sabia
 

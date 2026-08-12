@@ -21,6 +21,16 @@
       que o dado gravado sob esse rótulo é de outra célula, porque o carimbo rodou fora de ordem.
       É o mesmo modo de falha que o `MESMO_CONTEUDO_NAS_DUAS` da análise de escopo pega.
 
+      ⚠️ NAS DUAS CÉLULAS DE RECORTE `temporada` ESTE BLOCO NÃO É EVIDÊNCIA SOBRE O DADO, e o OK
+      delas não deve ser lido como se fosse. O modelo não emite `played_total_disponivel` no
+      default (emiti-la mudaria o SQL compilado do caminho que produção usa), então o carimbo
+      projeta o próprio `played_total` na coluna do disponível — e `usado = disponível` ali é
+      verdade por construção, não medição. O que essas duas linhas ainda checam de verdade é o
+      RÓTULO: uma célula de `temporada` gravada com o rótulo `ultimos_10` passaria a ser cobrada
+      pela identidade com teto e cairia, já que o disponível dela chega a 37 e 60. A medição
+      propriamente dita são as duas células com teto, onde as duas colunas vêm de contas
+      diferentes do modelo.
+
     `piso` — uma linha por célula, sobre os jogos AVALIADOS do universo congelado (os 169, e não
       todos os fixtures da janela — ver o CTE `fixtures_do_universo`). Cortar no disponível e
       cortar no usado dão o MESMO conjunto de jogos, em todos os pisos varridos. É consequência da identidade acima (para piso <= N,
@@ -76,6 +86,17 @@
 {%- set carimbos = source('futebol_taskF', 'taskf_pit_por_celula') -%}
 {%- set n        = taskf_eixos().tamanho_do_recorte -%}
 {%- set pisos    = taskf_pisos() -%}
+{#- Qual piso vai na coluna genérica `n_dir` do bloco `piso` — os outros seguem no JSON. É o 5
+    porque é o piso que a [0.1] e a spec #49 usam como referência. Validado contra a lista em vez
+    de digitado direto no SELECT: um `jogos_disp_p5` solto lá embaixo é exatamente a deriva que a
+    macros/taskf_pisos.sql existe para impedir — se a varredura perder o 5, isto falha na
+    compilação em vez de gerar coluna inexistente. -#}
+{%- set piso_destaque = 5 -%}
+{%- if piso_destaque not in pisos -%}
+    {{ exceptions.raise_compiler_error(
+        "piso_destaque " ~ piso_destaque ~ " não está na varredura " ~ pisos ~
+        " — escolha um piso que a taskf_pisos() emita.") }}
+{%- endif -%}
 {#- Os pares em que soltar uma dimensão só pode acrescentar. Escritos como (menor, maior). -#}
 {%- set comparacoes = [
     ('base',    'recorte'),
@@ -225,7 +246,7 @@ UNION ALL
 
 SELECT 2, 'piso', celula,
     IF(pisos_divergentes = 0, 'OK', 'PISO_CORTA_DIFERENTE'),
-    jogos, jogos_disp_p5, pisos_divergentes,
+    jogos, jogos_disp_p{{ piso_destaque }}, pisos_divergentes,
     TO_JSON_STRING(STRUCT(
         {%- for p in pisos %}
         jogos_disp_p{{ p }}, jogos_usado_p{{ p }}{{ "," if not loop.last }}
