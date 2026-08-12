@@ -503,3 +503,55 @@ sources:
               STRUCT com 7 métricas de comparação home vs away {form, att, def,
               poisson_distribution, h2h, goals, total}, cada uma STRUCT<home STRING, away STRING>
               (percentuais "45%"). Cast em stg. (def é keyword SQL — crases no stg.)
+
+  # Artefatos CONGELADOS da medição da task [F] (issue #49, ADR 0007). Não são modelos e nenhum
+  # `dbt run` os reconstrói: foram criados uma vez pelo analyses/taskf_congela_baseline.sql, ANTES
+  # de as vars pit_escopo/pit_recorte entrarem no int_futebol_team_form_pit, e é essa anterioridade
+  # que dá valor a eles. O schema é fixo em `futebol_taskF` de propósito — o baseline não segue o
+  # target, senão a Costura A compararia produção contra ela mesma rodada com --target dev/prod.
+  # Exceção consciente ao "só modelo de staging lê source": o consumidor é o teste singular da
+  # Costura A, e `source()` é o único handle do dbt para uma tabela congelada que não é modelo.
+  - name: futebol_taskF
+    description: >
+      Dataset de medição da task [F] (ADR 0007). Guarda o baseline de equivalência da Costura A.
+    database: smartbetting-dados
+    schema: futebol_taskF
+    tables:
+      - name: baseline_int_futebol_team_form_pit
+        description: >
+          A saída do int_futebol_team_form_pit no código anterior às vars de escopo/recorte,
+          sem dbt_loaded_at (que muda a cada build por construção e não é comportamento).
+          Lado esquerdo da igualdade de assert_taskf_pit_default_igual_baseline.
+
+      - name: baseline_pit_fingerprint
+        description: >
+          Impressão digital do INSUMO do modelo por (competition_id, season) no instante do
+          congelamento — contagem e BIT_XOR(FARM_FINGERPRINT) dos fixtures e do team_group já
+          resolvido. É o que deixa a Costura A ser exata sem ser frágil: fixture novo, resultado
+          que entra e jogo remarcado mudam legitimamente a saída de uma competição, e a guarda
+          compara só as partições cujo insumo é idêntico ao congelado. Produzida pela macro
+          taskf_fingerprint_insumo_pit(), a MESMA que o teste usa — se as duas divergirem, nenhuma
+          partição casa.
+        columns:
+          - name: competition_id
+            description: "ID da competição (a mesma chave de escopo do join do modelo)"
+          - name: season
+            description: "Rótulo de temporada"
+          - name: n_fixtures
+            description: "Quantos fixtures a partição tinha no congelamento"
+          - name: fp_fixtures
+            description: >
+              BIT_XOR(FARM_FINGERPRINT(...)) sobre os campos de fixture que o modelo lê
+              (fixture_id, competition, times, kickoff, status, gols). Independente de ordem.
+          - name: n_grupos
+            description: "Quantos times tinham grupo resolvido na partição"
+          - name: fp_standings
+            description: >
+              BIT_XOR(FARM_FINGERPRINT(...)) sobre (team_id, group_name) do team_group JÁ
+              RESOLVIDO — não do snapshot cru, que ganha uma linha por dia e jogaria todas as
+              competições fora da comparação.
+
+      - name: baseline_pit_meta
+        description: >
+          Quando o baseline foi congelado, de qual commit, e com quantas linhas/partições.
+          Uma linha só.
