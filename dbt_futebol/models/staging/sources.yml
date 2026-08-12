@@ -592,3 +592,24 @@ sources:
               derivada p/ Dupla Chance; consenso p/ BTTS). As de consenso do Handicap e do Gols
               vêm FALSE: não pesam, mas ficam visíveis porque o ROI muito pior delas é informação
               sobre quais jogos a Pinnacle escolhe precificar.
+
+      - name: taskf_pit_por_celula
+        description: >
+          A contagem de partidas anteriores do int_futebol_team_form_pit, uma linha por (célula,
+          fixture, time). Acumulativa como o taskf_teste2: cada execução de
+          analyses/taskf_pit_por_celula.sql substitui SÓ a sua célula. Existe porque o PIT é uma
+          tabela só no dataset de medição — cada célula sobrescreve a anterior —, e a invariante
+          de monotonicidade da #53 ("escopo >= base em todo par") é uma comparação ENTRE células.
+          Guarda o PIT inteiro, sem recorte de universo: fan-out e perda de linha são defeitos do
+          mecanismo e não se limitam à janela medida.
+        columns:
+          - name: celula
+            description: >
+              base | escopo | recorte | ambos. DERIVADA dos eixos por taskf_celula() em tempo de
+              compilação. ⚠️ O rótulo vem das vars e o DADO vem do que está materializado: o
+              carimbo tem de rodar DEPOIS do build da mesma célula. Rodar fora de ordem é pego
+              pelo veredito de não-vacuidade da analyses/taskf_monotonicidade_escopo.sql.
+          - name: played_total
+            description: >
+              Partidas anteriores do time no escopo/recorte da célula, no instante do kickoff.
+              É o insumo do `min_jogos` do jogo, que é o MENOR played_total entre os dois times.
