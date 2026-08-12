@@ -1,15 +1,17 @@
 {#
-    A JANELA CONGELADA da medição da task [F] (issue #49), escrita UMA vez.
+    O UNIVERSO CONGELADO da medição da task [F] (issue #49), escrito UMA vez.
 
-    ⚠️ `janela` aqui é o recorte de tempo do UNIVERSO DE MEDIÇÃO — as datas de kickoff que entram
-    na conta. Não confundir com a janela de COLETA DE ODDS (daily/t24h/t1h/t15m), que é o outro
-    sentido da palavra no glossário do CONTEXT.md, nem com o eixo `recorte` do PIT. São três
-    coisas distintas e só esta decide quais jogos são medidos.
+    ⚠️ Isto é o recorte de tempo do UNIVERSO DE MEDIÇÃO — os kickoffs que entram na conta. NÃO é
+    a janela de COLETA DE ODDS (daily/t24h/t1h/t15m) nem o eixo `recorte` do PIT: são três coisas
+    distintas e só esta decide quais jogos são medidos. O glossário do CONTEXT.md pede que a
+    palavra `janela` fique reservada à coleta de odds, e por isso ela não é usada aqui — a exceção
+    são as colunas `janela_ini`/`janela_fim`, que são os nomes da própria [0.1] e ficam como
+    estão para a saída medida bater campo a campo com a tabela publicada.
 
-    O corte NÃO é escolha do implementador: é a janela publicada no doc de resultados da Task
+    O corte NÃO é escolha do implementador: é o recorte publicado no doc de resultados da Task
     [0.1] — 16/06/2026 a 04/08/2026, 169 jogos (`docs/TASK01_RESULTADOS.md`, ticket #5). A
     terceira invariante da Costura B pede que a célula `base` reproduza aquele Teste 2, e a
-    reconciliação só fecha contra a mesma janela. Um corte diferente faria a comparação falhar
+    reconciliação só fecha contra o mesmo corte. Um corte diferente faria a comparação falhar
     sem motivo aparente.
 
     ⚠️ O TETO É UM INSTANTE, NÃO UM DIA — e isto foi medido, não escolhido. A [0.1] rodou SEM
@@ -28,11 +30,11 @@
 
     O piso de 16/06 é no-op e fica explícito de propósito: a coleta de odds é forward-only e
     começou nesse dia, então o universo já nasce cortado ali. Medido — `A_sem_corte` e
-    `B_ate_0408` devolvem `janela_ini = 2026-06-16` sozinhos. Declarar o piso custa nada e tira a
-    janela da dependência de um efeito colateral da coleta.
+    `B_ate_0408` devolvem `janela_ini = 2026-06-16` sozinhos. Declarar o piso custa nada e tira o
+    corte da dependência de um efeito colateral da coleta.
 
     Por que existe como macro, e não como duas datas digitadas em cada análise: as quatro células
-    são comparadas entre si, e duas análises com janelas que derivaram uma da outra comparam
+    são comparadas entre si, e duas análises com cortes que derivaram um do outro comparam
     universos diferentes sem ninguém perceber. Aqui a divergência é impossível por construção.
 
     O `jogos_esperados` fica junto de propósito. Ele é o número publicado, e serve de gabarito:
@@ -57,7 +59,7 @@
 
 
 {#-
-    Predicado da janela congelada, para não haver duas escritas do mesmo BETWEEN. `alias` inclui
+    Predicado do universo congelado, para não haver duas escritas do mesmo intervalo. `alias` inclui
     o ponto: taskf_universo_filtro('a.')
 
     Recortar em cima de `apostas` equivale a recortar `jogos_encerrados`: no task01_base() todo o

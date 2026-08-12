@@ -20,6 +20,12 @@ Confere os tres recortes que o doc publica, e so eles:
 Campo que o doc nao publica fica NULL no macro e nao e conferido aqui — e a distincao entre
 "bateu" e "nao havia o que comparar" e mantida de proposito.
 
+⚠️ Os nomes dos campos sao LIDOS DO PROPRIO STRUCT<> do macro, nao digitados aqui. Duas razoes:
+os nomes das mensagens de divergencia passam a ser os nomes reais das colunas do artefato
+conferido, e reordenar os campos dentro do STRUCT deixa de passar despercebido — com uma lista
+digitada e ligacao posicional, trocar duas colunas de lugar mantem a contagem e compara os campos
+errados, calado, exatamente no script cujo proposito e pegar troca de digito.
+
 Rodar da raiz do repo:
 
     .venv/bin/python3 scripts/confere_taskf_publicado_01.py
@@ -34,8 +40,10 @@ RAIZ = pathlib.Path(__file__).resolve().parent.parent
 DOC = RAIZ / "docs" / "TASK01_RESULTADOS.md"
 MACRO = RAIZ / "dbt_futebol" / "macros" / "taskf_publicado_01.sql"
 
-CAMPOS = ("n_p0 a_odd_dava_p0 aconteceu_p0 diferenca_p0 jogos_medios pct_curta "
-          "peso_p0 peso_p0_k0 n_p5 dif_p5 dif_p10").split()
+# Ordem das colunas da tabela "Peso medido" do doc, DEPOIS de mercado e premissa. Explicita e por
+# nome: a ligacao com os valores do macro e feita pelos nomes lidos do STRUCT, nao por posicao.
+COLUNAS_TABELA1 = ["n_p0", "a_odd_dava_p0", "aconteceu_p0", "diferenca_p0",
+                   "jogos_medios", "pct_amostra_curta", "peso_p0", "peso_p0_k0"]
 
 doc = DOC.read_text(encoding="utf-8")
 macro = MACRO.read_text(encoding="utf-8")
@@ -47,15 +55,30 @@ def num(s):
     return None if s in ("", "-") else float(s)
 
 
-# ------------------------------------------------------------------- lado do MACRO
+# ------------------------------------------------- os nomes dos campos, lidos do STRUCT do macro
+struct = re.search(r"STRUCT<(.+?)>\s*$", macro, re.S | re.M)
+if not struct:
+    sys.exit("nao achei a declaracao STRUCT<> em " + str(MACRO))
+campos = [c.strip().split()[0] for c in struct.group(1).split(",")]
+if campos[:2] != ["mercado", "premissa"]:
+    sys.exit(f"o STRUCT deveria comecar com mercado, premissa — comeca com {campos[:2]}")
+campos = campos[2:]
+
+erros = []
+faltando = [c for c in COLUNAS_TABELA1 if c not in campos]
+if faltando:
+    erros.append(f"campos da tabela 1 ausentes do STRUCT do macro: {faltando}")
+
+# ------------------------------------------------------------------- lado do MACRO, por nome
 linhas_macro = {}
 for m in re.finditer(r"^\s*\('([^']+)',\s*'([^']+)',(.*)\),?\s*$", macro, re.M):
     mercado, premissa, resto = m.group(1), m.group(2), m.group(3)
     vals = [None if v.strip() == "NULL" else float(v) for v in resto.split(",")]
-    assert len(vals) == len(CAMPOS), f"{mercado}/{premissa}: {len(vals)} valores"
-    linhas_macro[(mercado, premissa)] = dict(zip(CAMPOS, vals))
+    if len(vals) != len(campos):
+        erros.append(f"{mercado}/{premissa}: {len(vals)} valores para {len(campos)} campos")
+        continue
+    linhas_macro[(mercado, premissa)] = dict(zip(campos, vals))
 
-erros = []
 if len(linhas_macro) != 39:
     erros.append(f"o macro tem {len(linhas_macro)} linhas, e o catalogo tem 39 premissas")
 
@@ -71,9 +94,9 @@ for mercado, resto in re.findall(
     if got is None:
         erros.append(f"FALTA no macro: {mercado}/{premissa}")
         continue
-    for campo, cel in zip(CAMPOS[:8], cels[1:9]):
-        if got[campo] != num(cel):
-            erros.append(f"{mercado}/{premissa}.{campo}: doc={num(cel)} macro={got[campo]}")
+    for campo, cel in zip(COLUNAS_TABELA1, cels[1:1 + len(COLUNAS_TABELA1)]):
+        if got.get(campo) != num(cel):
+            erros.append(f"{mercado}/{premissa}.{campo}: doc={num(cel)} macro={got.get(campo)}")
 
 # ------------------------------------------------------- doc: as 19 de peso zero
 sec19 = doc.split("As 19 com peso zero")[1].split("### O piso de amostra")[0]
@@ -106,14 +129,17 @@ for premissa, mercado_doc, resto in re.findall(
         erros.append(f"piso {premissa}: nenhuma linha do macro com diferenca_p0={d0}")
         continue
     got = linhas_macro[cands[0]]
-    for campo, v in (("dif_p5", num(cels[1])), ("dif_p10", num(cels[2])), ("n_p5", n5)):
-        if got[campo] != v:
-            erros.append(f"{cands[0]}.{campo}: doc={v} macro={got[campo]}")
+    for campo, v in (("diferenca_p5", num(cels[1])),
+                     ("diferenca_p10", num(cels[2])),
+                     ("n_p5", n5)):
+        if got.get(campo) != v:
+            erros.append(f"{cands[0]}.{campo}: doc={v} macro={got.get(campo)}")
 
-print(f"macro                          {len(linhas_macro)} linhas")
-print(f"doc, as 20 positivas           {n_t1} linhas x 8 campos")
-print(f"doc, as 19 de peso zero        {len(pares)} premissas")
-print(f"doc, a varredura de piso       {n_piso} linhas x 3 campos")
+print(f"campos lidos do STRUCT       {len(campos)} ({', '.join(campos)})")
+print(f"macro                        {len(linhas_macro)} linhas")
+print(f"doc, as 20 positivas         {n_t1} linhas x {len(COLUNAS_TABELA1)} campos")
+print(f"doc, as 19 de peso zero      {len(pares)} premissas")
+print(f"doc, a varredura de piso     {n_piso} linhas x 3 campos")
 print()
 
 if erros:

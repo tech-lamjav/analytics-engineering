@@ -509,8 +509,10 @@ sources:
   # de as vars pit_escopo/pit_recorte entrarem no int_futebol_team_form_pit, e é essa anterioridade
   # que dá valor a eles. O schema é fixo em `futebol_taskF` de propósito — o baseline não segue o
   # target, senão a Costura A compararia produção contra ela mesma rodada com --target dev/prod.
-  # Exceção consciente ao "só modelo de staging lê source": o consumidor é o teste singular da
-  # Costura A, e `source()` é o único handle do dbt para uma tabela congelada que não é modelo.
+  # Exceção consciente ao "só modelo de staging lê source": os consumidores são o teste singular da
+  # Costura A (sobre os baselines) e a análise de reconciliação da #51 (sobre o taskf_teste2), e
+  # `source()` é o único handle do dbt para uma tabela que não é modelo. Nenhum MODELO lê daqui —
+  # se um dia ler, a medição terá vazado para o caminho que o board serve.
   - name: futebol_taskF
     description: >
       Dataset de medição da task [F] (ADR 0007). Guarda o baseline de equivalência da Costura A.
@@ -582,8 +584,8 @@ sources:
             description: "Commit de onde a célula foi medida (var taskf_git_sha)"
           - name: jogos_no_universo
             description: >
-              Jogos distintos da janela congelada. Idêntico nas quatro células por construção —
-              é a primeira invariante da Costura B.
+              Jogos distintos do universo congelado (169). Idêntico nas quatro células por
+              construção — é a primeira invariante da Costura B.
           - name: usado_para_peso
             description: >
               A linha está no benchmark PREFERIDO do mercado (sharp p/ 1X2, Handicap e Gols;

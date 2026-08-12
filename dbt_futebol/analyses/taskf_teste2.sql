@@ -1,4 +1,4 @@
-{#
+/*
     [F-2] O TESTE 2 da task [F] — o mesmo do [0.1], sobre o universo congelado, com coluna de
     célula. É a saída que a Costura B (#55) vai testar e de onde saem as 39 linhas do entregável.
 
@@ -99,7 +99,7 @@
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
-#}
+*/
 
 {%- set c      = taskf_celula() -%}
 {%- set j      = taskf_universo() -%}
@@ -145,10 +145,8 @@ INSERT INTO `{{ tabela }}` ({{ nomes_colunas | join(', ') }})
 
 WITH {{ task01_base() }},
 
-{#- O UNIVERSO CONGELADO. Recortar aqui equivale a recortar `jogos_encerrados`: no task01_base()
-    todo o resto pende do universo de jogos por JOIN, e o `pit` é LEFT JOIN a partir dele. Fica
-    aqui, e não num parâmetro novo do macro compartilhado, para a definição que produziu os
-    números publicados da [0.1] não ser tocada por esta medição. -#}
+{#- O UNIVERSO CONGELADO. Por que o recorte cai aqui, em cima de `apostas`, e não num parâmetro
+    novo do task01_base(): está no cabeçalho de macros/taskf_universo.sql, junto do predicado. -#}
 apostas_congeladas AS (
     SELECT * FROM apostas
     WHERE {{ taskf_universo_filtro() }}

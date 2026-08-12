@@ -2,7 +2,7 @@
     [F-2] O universo congelado da medição, conferido contra o número publicado.
 
     A [F] compara quatro células entre si. Isso só significa alguma coisa se as quatro medirem os
-    MESMOS jogos, e a âncora desse "mesmos" é a janela publicada no doc de resultados da Task
+    MESMOS jogos, e a âncora desse "mesmos" é o recorte publicado no doc de resultados da Task
     [0.1]: 16/06/2026 a 04/08/2026, 169 jogos. Esta análise é a conferência dessa âncora — roda
     ANTES de materializar célula nenhuma, porque descobrir que o universo se mexeu depois de
     construir a camada de premissas é caro e tarde.
@@ -27,11 +27,11 @@
 
     E o piso: A e B devolvem `janela_ini = 2026-06-16` sem que ninguém peça, porque a coleta de
     odds é forward-only e começou nesse dia. O piso declarado é no-op — e fica declarado assim
-    mesmo, para a janela não depender de um efeito colateral da coleta.
+    mesmo, para o corte não depender de um efeito colateral da coleta.
 
     `jogos` sai de `apostas`, e não de `fact_fixtures`: o universo do Teste 2 é o de jogos
     liquidados COM preço nos 5 mercados do Motor, já com o filtro de meia-linha. Contar jogo
-    encerrado na janela daria outro número, maior, que não é o publicado.
+    encerrado no período daria outro número, maior, que não é o publicado.
 
     Rodar com (o target escolhe contra qual dataset se confere — `dev` lê produção, que é onde os
     169 foram publicados; `taskF` confere a célula já materializada):

@@ -23,7 +23,11 @@ que mudam alguma coisa terem o direito de significar algo.
 
 **38 das 39 premissas reproduzem o publicado EXATAMENTE**, em todos os campos comparáveis — até
 11 campos por premissa nas 15 de varredura completa. A única divergência é `linha_descendo`, com
-2 linhas de 405 e ≤ 0,2 pp.
+2 linhas de 405 e ≤ 0,2 pp, e ela sai marcada `INVESTIGAR`, não acomodada pela tolerância.
+
+`EXATO` aqui exige que **todos** os campos publicados tenham batido, e não só os que a régua em pp
+olha: contagem, prob justa média, acerto médio, jogos médios, % de amostra curta e os dois pesos
+entram na mesma conta (`campos_divergentes_fora_da_regua`).
 
 O caminho está certo. As células `escopo`, `recorte` e `ambos` podem ser medidas.
 
@@ -97,10 +101,14 @@ capturas com data posterior a 04/08** em qualquer das três janelas de fechament
 | t1h | 37.135 | 168 | 02/08 | **0** |
 | t24h | 34.854 | 162 | 03/08 | **0** |
 
-O insumo de `linha_caiu` é imóvel. Logo a tolerância continua valendo como **régua declarada** —
-foi anunciada antes da medição e a única linha que a usou passou nela —, mas ela **não explica**
-a divergência que encontrou. Passar na régua e ter causa conhecida são coisas diferentes, e a
-diferença está registrada aqui em vez de fechada por conveniência.
+O insumo de `linha_caiu` é imóvel. A consequência foi levada até o fim, e não só anotada: a
+reconciliação **mede** o mecanismo antes de invocá-lo (`capturas_apos_o_teto`), e como ele é zero,
+**nenhuma linha se classifica como `deriva_de_odds`**. `linha_descendo` sai como `INVESTIGAR`, que
+é o veredito honesto — a régua não é usada para acomodar uma divergência cuja causa a régua não
+cobre, que é exatamente o que o critério do ticket proíbe.
+
+A régua de 0,5 pp continua declarada e continua valendo. Ela volta a ter mordida no **universo
+estendido** da spec, que alcança o presente e onde `capturas_apos_o_teto` deixa de ser zero.
 
 ### A correção da spec #22 tem footprint ZERO — medido, não suposto
 
@@ -127,6 +135,12 @@ linhas comparadas.
 O teste do "nenhuma tem Pinnacle" foi **falsificado contra um controle**, porque um join quebrado
 daria zero do mesmo jeito: nas linhas *não* degeneradas o mesmo join casa 3.370 de 6.566 no
 Handicap e 3.054 de 6.692 no Gols. O zero é real.
+
+Esta conta **mora dentro da reconciliação**, na coluna `linhas_da_22_no_preferido`, e não numa
+query de rascunho: a regra de alcance é por mercado (no BTTS o preferido é o consenso, então
+qualquer linha nulada o alcança; nos outros quatro o preferido é ancorado na Pinnacle, então só
+alcança linha que a Pinnacle precificava). Os cinco mercados dão **0**. Se um dia der diferente —
+no universo estendido, ou numa janela nova —, o rótulo aparece sozinho e com o número ao lado.
 
 Isto confirma empiricamente a afirmação "TODAS consenso" que o cabeçalho do `task01_base()` faz
 sobre as 172 linhas, e a estende: a correção é **invisível ao benchmark preferido**, em todos os

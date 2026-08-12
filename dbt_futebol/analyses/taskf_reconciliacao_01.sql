@@ -54,10 +54,15 @@
       entre builds" é verdade no board vivo e FALSA num universo congelado do passado — e essa
       distinção não estava escrita em lugar nenhum antes desta medição.
 
-    Consequência: `DENTRO_DA_TOLERANCIA` aqui significa "passou na régua declarada", e NÃO
-    "explicado". A régua foi declarada antes de medir, e continua valendo como bar; o que a
-    medição acrescenta é que a única linha que a usou não tem a causa que a justificaria. O
-    resíduo está documentado em `docs/TASKF_RESULTADOS.md`, aberto e delimitado.
+    Consequência: nesta janela NENHUMA linha se classifica como `deriva_de_odds`, porque o
+    mecanismo não existe — `linha_descendo` cai em `INVESTIGAR`, que é o veredito honesto, e o
+    resíduo está documentado em `docs/TASKF_RESULTADOS.md`, aberto e delimitado. A régua de 0,5 pp
+    continua declarada e continua valendo: ela volta a ter mordida no universo estendido da spec,
+    que alcança o presente e onde `capturas_apos_o_teto` deixa de ser zero.
+
+    É por isso que os dois mecanismos são MEDIDOS e vão na saída (`capturas_apos_o_teto`,
+    `linhas_da_22_no_preferido`): quem lê não precisa acreditar no rótulo, ele vem com o número
+    que o produziu.
 
     ────────────────────────────────────────────────────────────────────────────────
     O QUE É COMPARÁVEL, POR LINHA
@@ -85,6 +90,7 @@
 #}
 
 {%- set tol = var('taskf_tolerancia_pp', 0.5) -%}
+{%- set j   = taskf_universo() -%}
 
 {#- As duas premissas que leem odds ao vivo. Não é uma lista de exceções conveniente: é o
     conjunto exato das que comparam preço com preço, e ele sai do catálogo do Motor. Qualquer
@@ -93,6 +99,81 @@
 {%- set premissas_de_odds = ['linha_subindo', 'linha_descendo'] -%}
 
 WITH {{ taskf_publicado_01() }},
+
+jogos_congelados AS (
+    SELECT fixture_id
+    FROM {{ ref('fact_fixtures') }}
+    WHERE status_short = 'FT'
+      AND goals_home IS NOT NULL
+      AND {{ taskf_universo_filtro() }}
+),
+
+{#- ─────────────────────────────────────────────────────────────────────────────────────
+    OS DOIS MECANISMOS SÃO MEDIDOS, NÃO SUPOSTOS.
+
+    A primeira versão desta análise rotulava a origem por dedução de mesa: "é premissa de odds,
+    logo é deriva" e "é BTTS, logo é a #22". Rótulo deduzido vira desculpa automática — um BTTS
+    que divergisse por qualquer motivo sairia carimbado como explicado, sem ninguém olhar, e a
+    #55 consumiria esse veredito como predicado. Os dois viraram medição.
+    ───────────────────────────────────────────────────────────────────────────────────── -#}
+
+{#- MECANISMO 1 — a deriva de odds é possível NESTA janela? Só é se tiver chegado captura depois
+    do teto do universo. A coleta é forward-only e para no apito, então para uma janela do passado
+    isto é zero, e "as odds viraram sozinhas" deixa de ser explicação disponível. Numa janela que
+    alcance o presente (o universo estendido da spec) deixa de ser zero, e aí o rótulo volta a
+    valer sozinho. -#}
+deriva AS (
+    SELECT COUNTIF(o.collection_date > DATE('{{ j.teto_utc }}')) AS capturas_apos_o_teto
+    FROM {{ ref('fact_odds_snapshot') }} AS o
+    JOIN jogos_congelados USING (fixture_id)
+),
+
+{#- MECANISMO 2 — a correção da spec #22 alcança o benchmark PREFERIDO de qual mercado?
+
+    Uma linha que o de-vig deixou de emitir só move um número comparado se ela estivesse no
+    benchmark preferido daquele mercado. E isso depende do mercado:
+
+      BTTS (8)                    preferido = consenso  -> QUALQUER linha nulada o alcança.
+      1X2 (1), Handicap (4),      preferido = sharp     -> só alcança se a Pinnacle precificava
+      Gols (5)                                             aquela linha; sem Pinnacle a linha
+                                                           nulada era de consenso e o consenso
+                                                           não pesa nesses mercados.
+      Dupla Chance (12)           preferido = derivada do de-vig 1X2 da Pinnacle -> mesma regra. -#}
+pinnacle_nas_linhas AS (
+    SELECT DISTINCT
+        fixture_id,
+        market_id,
+        COALESCE(CAST(line_value AS STRING), 'NONE') AS line_key
+    FROM {{ ref('fact_odds_snapshot') }}
+    WHERE bookmaker_id = 4
+),
+
+nuladas_pela_22 AS (
+    SELECT
+        d.market_id,
+        p.fixture_id IS NOT NULL AS tinha_pinnacle
+    FROM {{ ref('int_futebol_odds_devig') }} AS d
+    JOIN jogos_congelados USING (fixture_id)
+    LEFT JOIN pinnacle_nas_linhas AS p
+           ON  p.fixture_id = d.fixture_id
+           AND p.market_id  = d.market_id
+           AND p.line_key   = COALESCE(CAST(d.line_value AS STRING), 'NONE')
+    WHERE d.market_id IN ({{ task01_markets().keys() | join(', ') }})
+      AND COALESCE(d.n_outcomes_valor < 2, TRUE)
+),
+
+alcance_22 AS (
+    SELECT
+        CASE market_id
+            {%- for mid, m in task01_markets().items() %}
+            WHEN {{ mid }} THEN '{{ m.nome }}'
+            {%- endfor %}
+        END AS mercado,
+        COUNT(*)                                        AS linhas_nuladas,
+        IF(market_id = 8, COUNT(*), COUNTIF(tinha_pinnacle)) AS alcanca_o_preferido
+    FROM nuladas_pela_22
+    GROUP BY market_id
+),
 
 medido AS (
     SELECT
@@ -136,8 +217,10 @@ juntado AS (
 ),
 
 classificado AS (
+    {#- `jt.*` e não `*`: os dois CTEs de mecanismo entram por CROSS/LEFT JOIN e um `*` traria as
+        colunas deles duas vezes (a projeção abaixo já as nomeia). -#}
     SELECT
-        *,
+        jt.*,
         {#- A maior divergência entre os pisos publicados é o que decide o veredito da linha: uma
             premissa que bate no piso 0 e erra 9 pp no piso 5 não "bateu". -#}
         GREATEST(
@@ -162,22 +245,30 @@ classificado AS (
             peso) não entram no `maior_delta_pp`, que é uma régua em pp. Entram aqui, como
             contagem de campos que bateram — divergência neles é achado do mesmo jeito, só não
             é comparável com a régua. -#}
-        (IF(jogos_medios_pub IS NOT NULL AND jogos_medios_medido IS DISTINCT FROM jogos_medios_pub, 1, 0)
-       + IF(pct_curta_pub    IS NOT NULL AND pct_curta_medido    IS DISTINCT FROM pct_curta_pub,    1, 0)
-       + IF(peso_p0_pub      IS NOT NULL AND peso_p0_medido      IS DISTINCT FROM peso_p0_pub,      1, 0)
-       + IF(peso_p0_k0_pub   IS NOT NULL AND peso_p0_k0_medido   IS DISTINCT FROM peso_p0_k0_pub,   1, 0)
-       + IF(n_p0_pub         IS NOT NULL AND n_p0_medido         IS DISTINCT FROM n_p0_pub,         1, 0)
-       + IF(n_p5_pub         IS NOT NULL AND n_p5_medido         IS DISTINCT FROM n_p5_pub,         1, 0)) AS campos_divergentes_nao_pp,
+        (IF(jogos_medios_pub  IS NOT NULL AND jogos_medios_medido  IS DISTINCT FROM jogos_medios_pub,  1, 0)
+       + IF(pct_curta_pub     IS NOT NULL AND pct_curta_medido     IS DISTINCT FROM pct_curta_pub,     1, 0)
+       + IF(peso_p0_pub       IS NOT NULL AND peso_p0_medido       IS DISTINCT FROM peso_p0_pub,       1, 0)
+       + IF(peso_p0_k0_pub    IS NOT NULL AND peso_p0_k0_medido    IS DISTINCT FROM peso_p0_k0_pub,    1, 0)
+       + IF(n_p0_pub          IS NOT NULL AND n_p0_medido          IS DISTINCT FROM n_p0_pub,          1, 0)
+       + IF(n_p5_pub          IS NOT NULL AND n_p5_medido          IS DISTINCT FROM n_p5_pub,          1, 0)
+       + IF(a_odd_dava_p0_pub IS NOT NULL AND a_odd_dava_p0_medido IS DISTINCT FROM a_odd_dava_p0_pub, 1, 0)
+       + IF(aconteceu_p0_pub  IS NOT NULL AND aconteceu_p0_medido  IS DISTINCT FROM aconteceu_p0_pub,  1, 0))
+                                                                        AS campos_divergentes_fora_da_regua,
 
+        d.capturas_apos_o_teto,
+        COALESCE(a.alcanca_o_preferido, 0) AS linhas_da_22_no_preferido,
+
+        {#- A ordem importa: uma premissa de odds num mercado que a #22 alcança é classificada
+            como deriva, que é a origem mais específica dela. -#}
         CASE
             WHEN premissa IN ({{ premissas_de_odds | map('tojson') | join(', ') }})
-                THEN 'deriva_de_odds'
-            {#- O consenso é o benchmark preferido do BTTS, e é onde as 172 linhas degeneradas da
-                spec #22 viviam. Toda linha de BTTS carrega essa origem por construção. -#}
-            WHEN mercado = 'BTTS' THEN 'correcao_22'
+                 AND d.capturas_apos_o_teto > 0            THEN 'deriva_de_odds'
+            WHEN COALESCE(a.alcanca_o_preferido, 0) > 0    THEN 'correcao_22'
             ELSE 'investigar'
         END AS origem
-    FROM juntado
+    FROM juntado AS jt
+    CROSS JOIN deriva AS d
+    LEFT JOIN alcance_22 AS a ON a.mercado = jt.mercado
 )
 
 SELECT
@@ -198,18 +289,26 @@ SELECT
     pct_curta_pub,     pct_curta_medido,
     peso_p0_pub,       peso_p0_medido,
     peso_p0_k0_pub,    peso_p0_k0_medido,
-    campos_divergentes_nao_pp,
+    campos_divergentes_fora_da_regua,
+    capturas_apos_o_teto,
+    linhas_da_22_no_preferido,
     ROUND(maior_delta_pp, 1) AS maior_delta_pp,
     {{ tol }} AS tolerancia_pp,
+    {#- A régua é em pp e cobre a DIFERENÇA. `EXATO` exige também que os campos publicados fora
+        dela (n, jogos médios, % amostra curta, prob justa, acerto, pesos) tenham batido — senão
+        "exato" significaria "exato no que a régua olha", que não é o que a palavra diz.
+        `DENTRO_DA_TOLERANCIA` NÃO promete isso: leia `campos_divergentes_fora_da_regua` ao lado.
+        E `CORRECAO_22_ALCANCA` não é veredito de aprovação — é o aviso de que aquele mercado tem
+        linha nulada no benchmark preferido e, portanto, que a comparação ali não é limpa. -#}
     CASE
         WHEN so_no_medido OR so_no_publicado    THEN 'SEM_CONTRAPARTE'
         WHEN campos_comparados = 0              THEN 'NADA_A_COMPARAR'
         WHEN maior_delta_pp = 0
-             AND campos_divergentes_nao_pp = 0  THEN 'EXATO'
+             AND campos_divergentes_fora_da_regua = 0 THEN 'EXATO'
         WHEN origem = 'deriva_de_odds'
              AND maior_delta_pp <= {{ tol }}    THEN 'DENTRO_DA_TOLERANCIA'
         WHEN origem = 'deriva_de_odds'          THEN 'DERIVA_ACIMA_DA_TOLERANCIA'
-        WHEN origem = 'correcao_22'             THEN 'EXPLICADA_PELA_CORRECAO_22'
+        WHEN origem = 'correcao_22'             THEN 'CORRECAO_22_ALCANCA'
         ELSE                                         'INVESTIGAR'
     END AS veredito,
     jogos_no_universo,
