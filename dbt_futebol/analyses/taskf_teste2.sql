@@ -29,8 +29,8 @@
     ────────────────────────────────────────────────────────────────────────────────
     O QUE MUDA EM RELAÇÃO AO ORIGINAL — três coisas, e só três:
 
-    1. UNIVERSO CONGELADO. `apostas` é recortada por taskf_janela_filtro(). O original rodou sem
-       corte (a janela dele é o instante da execução). Ver macros/taskf_janela.sql: o teto é um
+    1. UNIVERSO CONGELADO. `apostas` é recortada por taskf_universo_filtro(). O original rodou sem
+       corte (a janela dele é o instante da execução). Ver macros/taskf_universo.sql: o teto é um
        INSTANTE, não um dia, e é isso que devolve os 169 publicados em vez de 178.
     2. COLUNA DE CÉLULA, mais os dois eixos ao lado dela e o carimbo de quando/de-qual-commit.
        O rótulo é DERIVADO dos eixos por taskf_celula() — nunca digitado. Uma célula não tem como
@@ -75,7 +75,7 @@
 #}
 
 {%- set c      = taskf_celula() -%}
-{%- set j      = taskf_janela() -%}
+{%- set j      = taskf_universo() -%}
 {%- set pisos  = [0, 3, 5, 10] -%}
 {%- set tabela = 'smartbetting-dados.futebol_taskF.taskf_teste2' -%}
 
@@ -124,7 +124,7 @@ WITH {{ task01_base() }},
     números publicados da [0.1] não ser tocada por esta medição. -#}
 apostas_congeladas AS (
     SELECT * FROM apostas
-    WHERE {{ taskf_janela_filtro() }}
+    WHERE {{ taskf_universo_filtro() }}
 ),
 
 {#- Uma passada, grão (mercado, premissa, benchmark). Só as linhas em que a premissa ACENDEU

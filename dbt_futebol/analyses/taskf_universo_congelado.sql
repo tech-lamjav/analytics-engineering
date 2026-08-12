@@ -17,7 +17,7 @@
                            [0.1] é um INSTANTE e não um dia: os 9 excedentes são os jogos de
                            04/08 com kickoff a partir das 16:00 UTC, que ainda não tinham sido
                            disputados quando a [0.1] executou.
-      C_janela_congelada   o corte da medição, que é o que taskf_janela() emite.
+      C_universo_congelado   o corte da medição, que é o que taskf_universo() emite.
       D_teto_alternativo   o MESMO corte com o teto na outra ponta do vão vazio (06:00 UTC em vez
                            de 12:00). Existe para mostrar que o teto não foi calibrado até o
                            número bater: entre ~02:00 e 16:00 UTC de 04/08 não há jogo nenhum na
@@ -43,7 +43,7 @@
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 #}
 
-{%- set j = taskf_janela() %}
+{%- set j = taskf_universo() %}
 
 WITH {{ task01_base() }},
 
@@ -59,9 +59,9 @@ variantes AS (
 
     UNION ALL
 
-    SELECT 'C_janela_congelada', fixture_id, kickoff_utc, competition, benchmark
+    SELECT 'C_universo_congelado', fixture_id, kickoff_utc, competition, benchmark
     FROM apostas
-    WHERE {{ taskf_janela_filtro() }}
+    WHERE {{ taskf_universo_filtro() }}
 
     UNION ALL
 

@@ -287,6 +287,15 @@ and remeasured. Two cells are comparable only if computed in the same run over t
 universe. The four are `base`, `escopo`, `recorte` and `ambos`, named for the axis each releases.
 _Avoid_: C1–C4 (C1, C2 and C3 already name subtasks of the [C] Coleta task)
 
+**Universo congelado**:
+The fixed set of fixtures every célula is measured over — the [0.1]'s published window, 169
+fixtures. Its ceiling is an **instant**, not a date: the [0.1] ran mid-day with no frozen cutoff,
+so `DATE(kickoff) <= '2026-08-04'` returns 178 and only `kickoff < 04/08 12:00 UTC` returns the
+published 169. Written once in `taskf_janela()`; see `docs/TASKF_RESULTADOS.md`.
+_Avoid_: janela — that word already names the odds collection window and its two derivatives, and
+this is a third unrelated thing. Say "universo congelado", or "o corte", never "a janela da
+medição".
+
 **min_jogos**:
 The smaller of the two teams' prior-fixture counts for a rated fixture, under the escopo and
 recorte in force. It is the number the piso de amostra cuts on, and what makes a fixture an

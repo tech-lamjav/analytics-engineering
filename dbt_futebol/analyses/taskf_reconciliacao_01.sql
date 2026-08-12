@@ -37,6 +37,28 @@
     A régua está em `taskf_tolerancia_pp` (default 0,5 pp), aplicada só sobre a origem 1. O valor
     é declarado e justificado por escrito em `docs/TASKF_RESULTADOS.md` — aqui ele é só o número.
 
+    ⚠️ O QUE A PRIMEIRA EXECUÇÃO MOSTROU, e que muda como esta saída deve ser lida (12/08/2026):
+
+    - A origem 2 tem footprint ZERO nas 39 linhas publicadas, e isso foi medido, não suposto. Na
+      janela congelada, 1X2, BTTS e Dupla Chance não têm NENHUMA linha de conjunto incompleto; as
+      237 que existem estão em Handicap (58) e Gols (179) e são TODAS de consenso puro — nenhuma
+      delas tem preço da Pinnacle em nenhuma janela, conferido contra um controle que casa 3.370
+      de 6.566 linhas normais, então o join não é vácuo. Como o benchmark preferido de Handicap e
+      Gols é o sharp, a correção não alcança nenhuma linha comparada. O `correcao_22` continua na
+      classificação porque a próxima janela de medição pode não ter essa sorte.
+
+    - A origem 1 NÃO TEM MECANISMO NESTA JANELA. A coleta de odds é forward-only e para no
+      apito: para os 169 jogos congelados, ZERO capturas com data posterior a 04/08 em qualquer
+      das três janelas de fechamento. O insumo de `linha_caiu` (média das probabilidades
+      implícitas de todas as casas, t24h → t15m) é, portanto, imóvel. "As odds viram sozinhas
+      entre builds" é verdade no board vivo e FALSA num universo congelado do passado — e essa
+      distinção não estava escrita em lugar nenhum antes desta medição.
+
+    Consequência: `DENTRO_DA_TOLERANCIA` aqui significa "passou na régua declarada", e NÃO
+    "explicado". A régua foi declarada antes de medir, e continua valendo como bar; o que a
+    medição acrescenta é que a única linha que a usou não tem a causa que a justificaria. O
+    resíduo está documentado em `docs/TASKF_RESULTADOS.md`, aberto e delimitado.
+
     ────────────────────────────────────────────────────────────────────────────────
     O QUE É COMPARÁVEL, POR LINHA
 
@@ -96,13 +118,17 @@ juntado AS (
         m.mercado  IS NULL AS so_no_publicado,
         p.mercado  IS NULL AS so_no_medido,
 
-        m.n_p0          AS n_p0_medido,          p.n_p0          AS n_p0_pub,
-        m.diferenca_p0  AS dif_p0_medido,        p.diferenca_p0  AS dif_p0_pub,
-        m.a_odd_dava_p0 AS a_odd_dava_p0_medido, p.a_odd_dava_p0 AS a_odd_dava_p0_pub,
-        m.aconteceu_p0  AS aconteceu_p0_medido,  p.aconteceu_p0  AS aconteceu_p0_pub,
-        m.n_p5          AS n_p5_medido,          p.n_p5          AS n_p5_pub,
-        m.diferenca_p5  AS dif_p5_medido,        p.diferenca_p5  AS dif_p5_pub,
-        m.diferenca_p10 AS dif_p10_medido,       p.diferenca_p10 AS dif_p10_pub
+        m.n_p0              AS n_p0_medido,          p.n_p0              AS n_p0_pub,
+        m.diferenca_p0      AS dif_p0_medido,        p.diferenca_p0      AS dif_p0_pub,
+        m.a_odd_dava_p0     AS a_odd_dava_p0_medido, p.a_odd_dava_p0     AS a_odd_dava_p0_pub,
+        m.aconteceu_p0      AS aconteceu_p0_medido,  p.aconteceu_p0      AS aconteceu_p0_pub,
+        m.jogos_medios      AS jogos_medios_medido,  p.jogos_medios      AS jogos_medios_pub,
+        m.pct_amostra_curta AS pct_curta_medido,     p.pct_amostra_curta AS pct_curta_pub,
+        m.peso_p0           AS peso_p0_medido,       p.peso_p0           AS peso_p0_pub,
+        m.peso_p0_k0        AS peso_p0_k0_medido,    p.peso_p0_k0        AS peso_p0_k0_pub,
+        m.n_p5              AS n_p5_medido,          p.n_p5              AS n_p5_pub,
+        m.diferenca_p5      AS dif_p5_medido,        p.diferenca_p5      AS dif_p5_pub,
+        m.diferenca_p10     AS dif_p10_medido,       p.diferenca_p10     AS dif_p10_pub
     FROM medido AS m
     FULL OUTER JOIN publicado_01 AS p
       ON  p.mercado  = m.mercado
@@ -126,7 +152,22 @@ classificado AS (
        + IF(n_p0_pub          IS NOT NULL, 1, 0)
        + IF(n_p5_pub          IS NOT NULL, 1, 0)
        + IF(a_odd_dava_p0_pub IS NOT NULL, 1, 0)
-       + IF(aconteceu_p0_pub  IS NOT NULL, 1, 0)) AS campos_comparados,
+       + IF(aconteceu_p0_pub  IS NOT NULL, 1, 0)
+       + IF(jogos_medios_pub  IS NOT NULL, 1, 0)
+       + IF(pct_curta_pub     IS NOT NULL, 1, 0)
+       + IF(peso_p0_pub       IS NOT NULL, 1, 0)
+       + IF(peso_p0_k0_pub    IS NOT NULL, 1, 0)) AS campos_comparados,
+
+        {#- Campos publicados que NÃO estão em pontos percentuais (contagem de jogos, fração,
+            peso) não entram no `maior_delta_pp`, que é uma régua em pp. Entram aqui, como
+            contagem de campos que bateram — divergência neles é achado do mesmo jeito, só não
+            é comparável com a régua. -#}
+        (IF(jogos_medios_pub IS NOT NULL AND jogos_medios_medido IS DISTINCT FROM jogos_medios_pub, 1, 0)
+       + IF(pct_curta_pub    IS NOT NULL AND pct_curta_medido    IS DISTINCT FROM pct_curta_pub,    1, 0)
+       + IF(peso_p0_pub      IS NOT NULL AND peso_p0_medido      IS DISTINCT FROM peso_p0_pub,      1, 0)
+       + IF(peso_p0_k0_pub   IS NOT NULL AND peso_p0_k0_medido   IS DISTINCT FROM peso_p0_k0_pub,   1, 0)
+       + IF(n_p0_pub         IS NOT NULL AND n_p0_medido         IS DISTINCT FROM n_p0_pub,         1, 0)
+       + IF(n_p5_pub         IS NOT NULL AND n_p5_medido         IS DISTINCT FROM n_p5_pub,         1, 0)) AS campos_divergentes_nao_pp,
 
         CASE
             WHEN premissa IN ({{ premissas_de_odds | map('tojson') | join(', ') }})
@@ -153,12 +194,18 @@ SELECT
     n_p5_pub, n_p5_medido, n_p5_medido - n_p5_pub AS delta_n_p5,
     a_odd_dava_p0_pub, a_odd_dava_p0_medido,
     aconteceu_p0_pub,  aconteceu_p0_medido,
+    jogos_medios_pub,  jogos_medios_medido,
+    pct_curta_pub,     pct_curta_medido,
+    peso_p0_pub,       peso_p0_medido,
+    peso_p0_k0_pub,    peso_p0_k0_medido,
+    campos_divergentes_nao_pp,
     ROUND(maior_delta_pp, 1) AS maior_delta_pp,
     {{ tol }} AS tolerancia_pp,
     CASE
         WHEN so_no_medido OR so_no_publicado    THEN 'SEM_CONTRAPARTE'
         WHEN campos_comparados = 0              THEN 'NADA_A_COMPARAR'
-        WHEN maior_delta_pp = 0                 THEN 'EXATO'
+        WHEN maior_delta_pp = 0
+             AND campos_divergentes_nao_pp = 0  THEN 'EXATO'
         WHEN origem = 'deriva_de_odds'
              AND maior_delta_pp <= {{ tol }}    THEN 'DENTRO_DA_TOLERANCIA'
         WHEN origem = 'deriva_de_odds'          THEN 'DERIVA_ACIMA_DA_TOLERANCIA'

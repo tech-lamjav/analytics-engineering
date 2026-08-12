@@ -42,11 +42,11 @@
 
     Uso:
 
-        {%- set j = taskf_janela() %}
-        WHERE {{ taskf_janela_filtro('a.') }}
+        {%- set j = taskf_universo() %}
+        WHERE {{ taskf_universo_filtro('a.') }}
 #}
 
-{% macro taskf_janela() %}
+{% macro taskf_universo() %}
     {{ return({
         'ini':             '2026-06-16',
         'fim':             '2026-08-04',
@@ -58,15 +58,15 @@
 
 {#-
     Predicado da janela congelada, para não haver duas escritas do mesmo BETWEEN. `alias` inclui
-    o ponto: taskf_janela_filtro('a.')
+    o ponto: taskf_universo_filtro('a.')
 
     Recortar em cima de `apostas` equivale a recortar `jogos_encerrados`: no task01_base() todo o
     resto pende do universo de jogos por JOIN, e o `pit` é LEFT JOIN a partir dele. O recorte fica
     aqui, e não num parâmetro novo do macro compartilhado, para que a definição que produziu os
     números publicados da [0.1] não seja tocada por esta medição.
 -#}
-{% macro taskf_janela_filtro(alias='') %}
-    {%- set j = taskf_janela() -%}
+{% macro taskf_universo_filtro(alias='') %}
+    {%- set j = taskf_universo() -%}
     ({{ alias }}kickoff_utc >= TIMESTAMP('{{ j.ini }}')
      AND {{ alias }}kickoff_utc < TIMESTAMP('{{ j.teto_utc }}'))
 {%- endmacro %}
