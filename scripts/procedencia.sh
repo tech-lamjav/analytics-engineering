@@ -23,6 +23,16 @@
 # a imagem sem mudar o comportamento. Nos 30 dias anteriores a 2026-08-07 houve 116 toques
 # em `models` mas também 28 nessas três — hashear a pasta inteira produziria ~28 alarmes
 # falsos por mês, e um detector que grita por CONTEXT.md é ignorado em duas semanas.
+#
+# POR QUE O `profiles.yml` ENTRA PELO BLOCO DO PROJETO, e não como arquivo inteiro (issue #65):
+# ele é o único path COMPARTILHADO pelos dois alvos. Hasheado inteiro, um target acrescentado
+# para um projeto derruba o carimbo do outro — foi o que aconteceu em 12/08, quando o target
+# `taskF` (medição do futebol, PR #61) pôs o dbt_nba em deriva sem que uma linha de NBA tivesse
+# mudado desde 26/06. É a mesma classe de alarme falso do parágrafo acima, com o agravante de
+# que o remédio sugerido seria um deploy num projeto dormente para calar um alarme que não
+# descreve risco nenhum. Hasheando só o bloco `dbt_nba:`/`dbt_futebol:`, mudar o `dev`/`prod`
+# de um projeto continua sendo deriva DELE — que é a propriedade que a decisão 2 da ADR 0001
+# quis garantir — e o target do vizinho deixa de contar.
 
 set -euo pipefail
 
@@ -98,6 +108,39 @@ for p in "${PATHS[@]}"; do
     fi
 done
 
+# O `profiles.yml` sai da varredura por arquivo e entra pelo bloco do projeto (ver cabeçalho).
+# Ele continua declarado em PATHS para que `--paths` o liste e a checagem de existência acima
+# o cubra — o que muda é só COMO ele contribui para o hash.
+PATHS_VARRIDAS=()
+for p in "${PATHS[@]}"; do
+    [ "$p" = "profiles.yml" ] || PATHS_VARRIDAS+=("$p")
+done
+
+# Extração puramente textual: do `<projeto>:` na coluna 0 até a próxima chave (ou comentário) na
+# coluna 0. Sem PyYAML de propósito — o detector roda num ubuntu-latest pelado, e uma dependência
+# a mais é uma forma nova de o detector morrer sem falar do que devia falar.
+# Fail-closed: bloco ausente (chave renomeada) aborta. Hash de bloco vazio seria um detector
+# calado, que é o defeito que a ADR 0001 existe para corrigir.
+BLOCO_HASH=$(python3 -c '
+import sys
+
+projeto = sys.argv[1]
+dentro, bloco = False, []
+with open("profiles.yml", encoding="utf-8") as fh:
+    for linha in fh:
+        if linha.startswith(projeto + ":"):
+            dentro = True
+        elif dentro and linha[:1] not in (" ", "\t", "\n", "\r"):
+            break
+        if dentro:
+            bloco.append(linha)
+
+if not bloco:
+    sys.exit("ERROR: bloco `%s:` nao encontrado em profiles.yml" % projeto)
+
+sys.stdout.write("".join(bloco))
+' "$PROJECT_NAME" | git hash-object --stdin)
+
 # `-c` (rastreados) + `-o --exclude-standard` (não rastreados que o .gitignore não cobre):
 # juntos, é exatamente o conjunto que o `docker build` copiaria. Um arquivo de modelo novo
 # ainda não adicionado ao git entra na imagem e precisa entrar no hash.
@@ -106,10 +149,13 @@ done
 # o nome do modelo vem do nome do arquivo. Renomear `int_x.sql` para `int_y.sql` sem mudar
 # uma linha muda a tabela materializada, e uma lista de hashes soltos não veria isso.
 {
-    git ls-files -co --exclude-standard -- "${PATHS[@]}" | while IFS= read -r f; do
+    git ls-files -co --exclude-standard -- "${PATHS_VARRIDAS[@]}" | while IFS= read -r f; do
         # Arquivo rastreado mas apagado do disco: o `docker build` também não o copiaria.
         # Omiti-lo faz o hash refletir o disco, que é o invariante deste script.
         [ -f "$f" ] || continue
         printf '%s %s\n' "$f" "$(git hash-object "$f")"
     done
+    # O sufixo `:<projeto>` deixa explícito, para quem depurar o hash, que a entrada é o BLOCO
+    # e não o arquivo — os dois nunca dariam o mesmo valor, e a confusão custaria uma hora.
+    printf '%s %s\n' "profiles.yml:${PROJECT_NAME}" "$BLOCO_HASH"
 } | sort | git hash-object --stdin
