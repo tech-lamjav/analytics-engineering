@@ -558,6 +558,21 @@ sources:
           Quando o baseline foi congelado, de qual commit, e com quantas linhas/partições.
           Uma linha só.
 
+      - name: taskf_teste2_54
+        description: >
+          As quatro células como a #54 as mediu (execução de 12/08 18:29–18:32, commit d40634d),
+          copiadas ANTES de a #55 dropar a acumulativa para acrescentar `odds_loaded_at`. Não tem
+          essa coluna, e é a única diferença de schema.
+
+          Existe porque a #54 aprendeu a lição do jeito caro: ela fez a mesma comparação com uma
+          cópia tratada como rascunho, removida em seguida, e os números daquele parágrafo do doc
+          de resultados não são re-deriváveis de `analyses/` até hoje. Declarada aqui, a
+          comparação da re-medição (analyses/taskf_remedicao.sql) continua rodando amanhã.
+
+          ⚠️ É um registro histórico, como os baselines acima: não se escreve nela. Quando uma
+          mudança de schema futura exigir outra re-medição, o caminho é copiar a acumulativa para
+          uma tabela nova com o número do ticket, não sobrescrever esta.
+
       - name: taskf_teste2
         description: >
           A saída do Teste 2 da medição, uma linha por (célula, mercado, premissa, benchmark).

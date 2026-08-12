@@ -229,7 +229,12 @@ odds AS (
         -- Mantido também para que a próxima análise VEJA que esta exclusão existe, em vez
         -- de herdá-la em silêncio.
         COALESCE(n_outcomes_valor < 2, TRUE) AS conjunto_incompleto
-    {#- ⚠️ REDUZIDO À JANELA CORRENTE (#37). O de-vig passou a emitir uma avaliação por
+    {# ⚠️ O `{#` ABRE SEM TRAÇO DE PROPÓSITO. Com `{#-`, o Jinja come a quebra de linha
+        acima e o SQL compilado sai `... AS conjunto_incompletoFROM (`, que não é SQL. Foi o
+        que aconteceu entre a #37 e a #55: as análises que chamam este macro pararam de
+        compilar e ninguém viu, porque nenhuma delas roda no agendado.
+
+        ⚠️ REDUZIDO À JANELA CORRENTE (#37). O de-vig passou a emitir uma avaliação por
         janela coletada; ler sem reduzir faria cada aposta entrar no backtest até 4 vezes,
         uma por preço, todas liquidadas pelo mesmo placar. É EXATAMENTE o erro que a ADR
         0001 e a ADR 0004 existem para impedir: o ROI esperado não se move e o intervalo de
