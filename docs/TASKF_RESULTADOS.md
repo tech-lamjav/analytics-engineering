@@ -1414,3 +1414,398 @@ análise da fronteira sai com **uma** linha.
 
 ⚠️ `bq query` com o SQL como argumento trava nesta máquina; por redirecionamento ou heredoc,
 funciona.
+
+---
+
+## Ticket #57 — Os dois confundidores, medidos
+
+`analyses/taskf_forca_do_adversario.sql` + `analyses/taskf_rodizio_de_elenco.sql` · execução
+2026-08-13 14:55–14:57 UTC · commit `d6ad236` · dataset `futebol_taskF`
+
+Os dois confundidores que podem inverter a recomendação da task: se o ganho de amostra do merge
+vier com viés de nível, ou descrever um elenco que não entra em campo, juntar deixa de ser
+gratuito. O ticket de origem registrou o segundo como ressalva sem número e não mencionou o
+primeiro; a spec #49 pediu os dois com número.
+
+### Veredito
+
+**Força do adversário — efeito PEQUENO no que dá para medir, e o achado é o que não dá.** Na
+única régua comparável entre competições — o `ppg` de liga do adversário — a partida emprestada
+vale **1,387** contra **1,341** da nativa: 0,046 de diferença, nada. A mistura de nível que a
+spec teme existe e é fina: 27 das 1.364 partidas do histórico fundido de um time de Brasileirão
+são contra Série B (2,0%), e 40 das 1.542 de um time de Série B são contra Série A (2,6%). O que é
+grande é o buraco: **40,7% das partidas emprestadas são contra adversário que a coleta não
+alcança**, contra 3,5% das nativas — e é justamente nelas que o perfil de gols é outro.
+
+**Rodízio de elenco — efeito REAL e MODERADO, 1,46 titular de 11.** Entre dois jogos consecutivos
+de liga o mesmo time repete **8,34** dos 11 titulares; entre um jogo de liga e um de copa, apenas
+**6,88**. A diferença sobrevive ao controle de calendário, então não é congestionamento. Mas não é
+elenco reserva: entre dois jogos de liga o XI já troca 2,66 titulares sozinho, e a copa acrescenta
+1,46 a isso — uma troca e meia a mais, não outro time.
+
+Nenhum dos dois inverte a recomendação. Os dois entram na [B] como ressalva com tamanho: o merge
+não é gratuito, mas o que ele cobra é 1,5 titular de elenco e uma fração de 2% a 3% de histórico
+de nível diferente — e não o viés estrutural que o desenho temia.
+
+### A conferência vem antes de tudo
+
+A análise de força **reconstrói** o join de histórico do `int_futebol_team_form_pit`, porque
+precisa da partida individual e o carimbo guarda só a contagem. Reconstrução é cópia, e cópia
+deriva do original em silêncio — bastaria esquecer o `l.season = a.season` para o número sair
+maior e com cara de certo.
+
+Por isso a primeira linha da saída não é resultado, é conferência, par a par contra o carimbo das
+células (#53):
+
+| pares | batem a `base` | batem o `escopo` | veredito |
+|---|---|---|---|
+| 338 | **338** | **338** | `EXATA` |
+
+As partidas classificadas como `nativa` são exatamente o `played_total` que a célula `base`
+gravou, e o total (nativa + emprestada) exatamente o da `escopo`. O universo sai com **169** jogos,
+o gabarito da macro. Sem essa linha verde, nada abaixo dela significa o que diz.
+
+### O histórico, e de onde vem a parte emprestada
+
+4.021 partidas alimentam as 338 âncoras do universo congelado. O merge acrescenta 1.159 delas
+(28,8%) — e a composição não é a mesma nas duas metades:
+
+| origem | partidas | adversário com `ppg` | fora da base | seleção |
+|---|---|---|---|---|
+| nativa | 2.862 | 2.306 | 101 (**3,5%**) | 313 (10,9%) |
+| emprestada | 1.159 | 598 | 472 (**40,7%**) | 0 |
+
+Por competição-âncora, só a parte emprestada:
+
+| âncora | partidas emprestadas | fora da base | de onde vêm |
+|---|---|---|---|
+| brasileirao | 322 | **71,7%** | libertadores 121, copa_do_brasil 107, sudamericana 94 |
+| serie_b | 174 | 54,6% | copa_do_brasil 174 |
+| sudamericana | 275 | 31,3% | brasileirao 156, libertadores 103, copa_do_brasil 16 |
+| copa_do_brasil | 388 | 15,5% | brasileirao 288, serie_b 40, libertadores 30, sudamericana 30 |
+| copa_mundo | **0** | — | — |
+
+⚠️ **O merge corta nos dois sentidos, e isso ninguém tinha escrito.** Para âncora de LIGA ele
+piora a visibilidade do adversário: o histórico nativo de um time de Brasileirão é 100% contra
+adversário que enxergamos, e o emprestado é 71,7% contra adversário que não. Para âncora de COPA
+ele **melhora**: o histórico nativo da Copa do Brasil tem 31,4% de adversário fora da base e o
+emprestado tem 15,5%, porque o que ele empresta é jogo de campeonato nacional. Para a Copa do
+Mundo não há o que emprestar — zero partidas, o que reproduz por outro caminho o que a #53 já
+sabia.
+
+E o peso importa: para âncora de copa o histórico emprestado é a MAIOR PARTE do fundido — 388 de
+423 na Copa do Brasil (91,7%) e 275 de 379 na Sudamericana (72,6%). O merge não complementa o
+passado dessas âncoras, ele praticamente o constitui.
+
+⚠️ **A spec supôs que o buraco era Série C e D. É maior.** O adversário invisível de um time de
+Brasileirão não vem da Copa do Brasil (só 16 das 235 partidas dele contra time fora da base): vem
+da **Libertadores e da Sudamericana**, 121 e 94 partidas, 100% contra clube sul-americano cuja
+liga nacional não coletamos. A Série C e D existem e são o caso da Série B (95 partidas), mas no
+agregado o continente pesa mais que a divisão de acesso.
+
+### ⚠️ `ppg` de copa de mata-mata é sobrevivência, não força
+
+A leitura ingênua do `ppg` PIT diz que a partida emprestada foi contra adversário **mais forte**:
+1,622 contra 1,366 da nativa. É artefato, e a régua que o denuncia está na própria saída
+(`nivel = 'ppg_referencia'` — a média de `ppg` sobre todas as linhas do PIT de cada competição):
+
+| competição | média de `ppg` |
+|---|---|
+| Copa do Brasil | **2,609** |
+| Champions (qualifs) | 1,750 |
+| Copa do Mundo | 1,661 |
+| Sudamericana | 1,565 |
+| Libertadores | 1,438 |
+| Brasileirão | 1,364 |
+| Série B | 1,333 |
+
+Numa liga de pontos corridos a média é quase constante por construção, e medido é isso: 1,364 e
+1,333. Numa copa de mata-mata quem perde é eliminado e para de jogar, então quem chega à rodada
+seguinte é quem venceu — e a média sobe para 2,609. A Libertadores, que tem fase de grupos, volta
+para 1,438 e confirma o mecanismo.
+
+Consequência prática: **o `ppg` que o modelo calcula não serve para comparar adversários entre
+competições.** O `ppg_liga_medio` corrige a sobrevivência — é sempre calculado sobre jogos de
+pontos corridos — e é ele que dá o 1,387 contra 1,341 do veredito. Mas nem ele mede NÍVEL: continua
+relativo à liga do adversário, e um time de Série B com 1,40 não vale o mesmo que um de Série A
+com 1,40. Nível só sai da liga a que o adversário pertence, que é o nível `liga_do_adversario`.
+
+⚠️ E a régua corrigida **cobre pouco justamente onde importa**: só 632 das 1.159 partidas
+emprestadas (54,5%) têm `ppg` de liga, contra 2.312 das 2.862 nativas (80,8%). O 1,387 descreve a
+metade visível da amostra emprestada e é silencioso sobre a outra.
+
+### O canal por onde o viés chega: os gols
+
+As premissas leem médias de gols, não `ppg`. É ali que o efeito aparece:
+
+| âncora | origem | gols pró | gols contra |
+|---|---|---|---|
+| brasileirao | nativa | 1,333 | 1,321 |
+| | emprestada | 1,457 | 0,826 |
+| | **fundida** | **1,362** | **1,205** |
+| serie_b | nativa | 1,149 | 1,139 |
+| | emprestada | 1,649 | 0,615 |
+| | **fundida** | **1,206** | **1,080** |
+
+O merge move a média de gols sofridos em **−0,116** no Brasileirão (−8,8%) e **−0,059** na Série B
+(−5,2%), e a de gols marcados em +0,029 e +0,057. É pouco em valor absoluto, e é sempre no mesmo
+sentido: o time fundido parece marcar um pouco mais e sofrer bem menos.
+
+O extremo mostra por quê. As 95 partidas em que um time de Série B enfrentou adversário fora da
+base — Copa do Brasil, fases iniciais — têm **2,221 gols pró e 0,168 contra**. Nenhum jogo de
+campeonato se parece com isso. São 6,2% do histórico fundido da Série B, e é essa fração que puxa.
+As premissas que leem defesa (`defesa_forte`, `clean_sheets_altos`, `defesas_firmes`) são as
+expostas.
+
+### Rodízio: é o controle que dá sentido ao número
+
+"6,88 dos 11 titulares se repetem entre a liga e a copa" não quer dizer nada sozinho — lesão,
+suspensão e desgaste mexem no XI o tempo todo. O que responde é a comparação com o par liga↔liga
+dos mesmos times, medida na mesma execução:
+
+| estrato | pares | sobreposição média | % dos 11 | mediana | dias entre |
+|---|---|---|---|---|---|
+| liga ↔ liga (**controle**) | 635 | **8,34** | 75,8% | 9 | 7,7 |
+| liga ↔ copa (**tratamento**) | 300 | **6,88** | 62,5% | 7 | 3,2 |
+| copa ↔ copa | 243 | 8,32 | 75,6% | 9 | 9,1 |
+
+Duas leituras. A primeira: o rodízio é da TRANSIÇÃO entre competições, não da copa — dois jogos de
+copa seguidos repetem tanto quanto dois de liga (8,32 contra 8,34). A segunda: a diferença é
+**−1,46 titular**, ou 13,3 pp.
+
+### O rodízio não é calendário — e isso foi medido, não suposto
+
+Par liga↔copa tem 3,2 dias no meio e par liga↔liga tem 7,7. Rodízio por congestionamento e rodízio
+por prioridade de competição são coisas diferentes, e só a segunda é a pergunta do ticket.
+Cortando os dois estratos pela mesma distância entre jogos:
+
+| dias entre os jogos | liga ↔ liga | liga ↔ copa | diferença |
+|---|---|---|---|
+| até 3 | 8,17 (n=127) | 6,81 (n=215) | **−1,36** |
+| 4 a 5 | 8,58 (n=119) | 6,96 (n=77) | **−1,62** |
+| 6 a 7 | 8,61 (n=211) | 8,00 (n=3) | −0,61 |
+| 8 ou mais | 7,98 (n=178) | 7,80 (n=5) | −0,18 |
+
+Nas duas faixas com amostra dos dois lados a diferença sobrevive inteira. As duas de baixo têm 3 e
+5 pares no tratamento e não sustentam leitura — ficam na tabela porque escondê-las faria o corte
+parecer mais limpo do que é.
+
+### Por time: 24 dos 33 caem, e o topo é quem joga continental
+
+| time | liga ↔ copa | liga ↔ liga | delta |
+|---|---|---|---|
+| Vasco da Gama | 4,58 (n=19) | 9,20 (n=10) | **−4,62** |
+| São Bernardo | 6,00 (n=1) | 8,89 (n=19) | −2,89 |
+| Mirassol | 5,59 (n=17) | 8,09 (n=11) | −2,50 |
+| Flamengo | 5,21 (n=14) | 7,67 (n=12) | −2,46 |
+| Athletic Club | 6,80 (n=5) | 8,71 (n=17) | −1,91 |
+| Atletico-MG | 6,60 (n=15) | 8,50 (n=12) | −1,90 |
+| … 18 times entre −1,68 e −0,01 … | | | |
+| Santos | 7,68 (n=19) | 7,00 (n=10) | +0,68 |
+| Vitoria | 9,20 (n=5) | 8,17 (n=18) | +1,03 |
+| Londrina | 10,00 (n=1) | 8,84 (n=19) | +1,16 |
+| Corinthians | 7,00 (n=17) | 5,83 (n=12) | **+1,17** |
+
+Os 33 times com par liga↔copa têm todos os dois estratos: **24 caem e 9 sobem**. O rodízio não é
+regra de campeonato, é escolha de clube — e os que mais poupam são os que disputam Libertadores e
+Sudamericana.
+
+Os outros **67** não têm nenhum par liga↔copa, e "não jogam as duas coisas" só explica a maioria
+deles. O nível `times_do_universo` mede quem são, porque a leitura preguiçosa dessa linha é
+exatamente o tipo de coisa que a [B] herdaria como verdade:
+
+| categoria | times | jogos no pool | com par liga↔copa |
+|---|---|---|---|
+| seleção (Copa do Mundo) | 48 | 190 | 0 |
+| clube cuja liga nacional não coletamos | 12 | 102 | 0 |
+| clube de liga sem jogo de copa dentro do teto | 6 | 120 | 0 |
+| joga os dois | 34 | 878 | **33** |
+
+São **100 times no universo**, e 100 − 33 = 67 fecha. Os 6 da terceira linha não são time que não
+joga copa: são time de liga que, dentro do teto congelado, não teve jogo de copa — outro caso, e
+não pertence a nenhum dos dois primeiros. E um dos 34 que jogam os dois nunca teve dois jogos
+consecutivos de tipos diferentes, então não produziu par.
+
+⚠️ O `times_sem_par_liga_copa` é contado sobre quem tem PELO MENOS UM par de qualquer tipo, então
+time com um único jogo no pool escaparia dele. Hoje não escapa ninguém — `times_sem_par_nenhum` é
+**0** nas quatro categorias —, e é por isso que a conta fecha em 100. A coluna existe para que o
+dia em que deixar de fechar seja visível em vez de calado.
+
+### ⚠️ A cobertura de lineups NÃO é de 100% em todas as competições
+
+O critério de aceite do ticket parte dessa afirmação. Ela é falsa, e falha exatamente onde o
+próprio ticket manda olhar:
+
+| competição | lados encerrados na temporada | com XI utilizável | % |
+|---|---|---|---|
+| Copa do Brasil | 202 | 141 | **69,8%** |
+| Libertadores | 236 | 231 | 97,9% |
+| Sudamericana | 242 | 240 | 99,2% |
+| Brasileirão | 410 | 410 | 100,0% |
+| Série B | 400 | 400 | 100,0% |
+| Copa do Mundo | 190 | 190 | 100,0% |
+| Champions | 102 | 102 | 100,0% |
+
+Os 61 lados de Copa do Brasil sem XI utilizável — 46 sem escalação nenhuma e 15 com escalação
+incompleta — estão nas fases iniciais, as mesmas em que o adversário está fora da base. **Os dois
+confundidores têm o mesmo ponto cego**, e ele é estrutural: nas primeiras rodadas o adversário é
+de Série C ou D, e a API não traz nem a classificação dele nem a escalação do jogo.
+
+Dentro do pool que esta medição usa o estrago é menor — 94,8% a 100% —, porque o pool só tem times
+do universo e o time de Série C não está lá. Nenhum lado sem XI utilizável entrou num par: foram
+contados e descartados — **11 pares no `copa_copa`, 1 no `liga_copa`, 0 no `liga_liga`** —, nunca
+completados. A conta fecha nos três estratos (254 = 243 + 11, 301 = 300 + 1, 635 = 635 + 0), e o
+fechamento não é decorativo: ver o quarto achado de percurso.
+
+### O que a fase `real` da escalação evitou
+
+`fact_fixture_lineups_players` dedupa por (fixture_id, player_id) com latest-wins, e não por
+(fixture_id, team_id, fase). Quando a escalação `confirmed` (~T-30min) e a `real` (pós-jogo)
+discordam sobre um jogador, as duas sobrevivem — uma por jogador — e o time aparece com 12 ou 13
+"titulares". O escopo `temporada_sem_filtro_de_fase` do nível `cobertura` repete a contagem sem o
+filtro, e a diferença é o tamanho do artefato:
+
+| competição | sem filtro de fase | com filtro `real` | lados que o artefato criaria |
+|---|---|---|---|
+| Série B | 383 de 400 | 400 de 400 | 17 |
+| Copa do Mundo | 178 de 190 | 190 de 190 | 12 |
+| Sudamericana | 238 de 242 | 240 de 242 | 2 |
+| Brasileirão | 409 de 410 | 410 de 410 | 1 |
+| Copa do Brasil | 140 de 202 | 141 de 202 | 1 |
+
+Sem o filtro, 33 lados entrariam na medição com XI de tamanho errado — e "sobreposição de 11"
+estaria comparando conjuntos de tamanhos diferentes, inflando o número sem ninguém ver. O que
+sobra depois do filtro é falha de coleta, não dedup, e é o que a tabela anterior mostra.
+
+### ⚠️ Quatro achados de percurso, os quatro sobre a própria maquinaria
+
+Corrigidos antes de qualquer número desta seção ser publicado. Ficam registrados porque nenhum
+deles é específico da #57 — os quatro voltam a morder na próxima análise que alguém escrever neste
+repositório.
+
+1. **`APPROX_QUANTILES` é um sketch.** Duas execuções seguidas, dado idêntico e query idêntica,
+   devolveram **1,313 e depois 1,294** para a mediana de `ppg` do histórico nativo do Brasileirão,
+   e **1,333 e depois 1,0** para a da Copa do Mundo. `macros/taskf_mediana.sql` ordena o grupo e
+   indexa — exata e determinística.
+
+2. **`AVG` sobre inteiro empata no arredondamento.** O estrato `copa_copa` na faixa de 4 a 5 dias
+   saiu **8,43 e depois 8,42**: a média verdadeira é 8,425, cai em cima do desempate do `ROUND`, e
+   o `AVG` do BigQuery combina médias parciais em ponto flutuante. Onde o somando é INT64
+   (sobreposição, dias entre jogos, gols) a média passou a sair de `SUM/COUNT`. Os dois `ppg_*`
+   seguem em `AVG`, porque o somando já é FLOAT64 e não há soma exata a recuperar — está declarado
+   no comentário da análise, não escondido.
+
+3. **`bq query` trunca em 100 linhas por padrão, calado.** A análise de rodízio tem 121 linhas: o
+   nível `time` perdia os últimos times em ordem alfabética, e a contagem saiu **29 times quando
+   são 33** — com Vasco da Gama, que é o maior efeito de rodízio da tabela, entre os cortados. A
+   saída sai com cara de completa. `--max_rows` está agora nos dois cabeçalhos, ao lado da
+   armadilha que já se conhecia (SQL como argumento trava a máquina).
+
+4. **`NULL AND TRUE` é NULL, e o contador de descarte pulava esses pares.** O critério de par
+   utilizável era `xa.n_titulares = 11 AND xb.n_titulares = 11`, e lado SEM escalação nenhuma sai
+   do LEFT JOIN com `n_titulares` NULL — logo o critério dava NULL, não FALSE, e o
+   `COUNTIF(NOT utilizavel)` o pulava. Esses pares ficavam em `pares_no_estrato` e em NENHUMA das
+   duas colunas, quebrando `pares_no_estrato = pares + pares_descartados` em silêncio e
+   **exatamente onde a cobertura é pior** — que é a única coisa que `pares_descartados` existe para
+   mostrar. Os descartes iam de 7 para os 12 reais. As médias não se mexeram (o `IF(NULL, x, 0)` já
+   dava 0 e o `COUNTIF` já não contava), mas a frase "foram contados e descartados" estava errada
+   sobre 5 pares antes desta correção.
+
+### O que ficou de fora, e por quê
+
+- **O rótulo `fora_da_base` do nível `liga_do_adversario` não bate exatamente com a coluna
+  `adv_fora_da_base`**: 583 partidas contra 573, 10 em 4.021. A coluna é por base inteira (o time
+  tem liga em ALGUMA temporada?) e o rótulo é por temporada (tem liga NAQUELA?). São 40 times nessa
+  situação, quase todos rebaixados ou promovidos entre o backfill de 24/25 e agora — Amazonas,
+  Brusque, Ferroviária, Burnley, Empoli. Fica declarado em vez de reconciliado: as duas perguntas
+  são legítimas e a diferença entre elas é informação.
+- **Nenhuma medida ABSOLUTA de nível foi construída.** Um rating cross-liga responderia "Série B
+  vale quanto de Série A?", não existe na base e não cabe numa task de medição. O que existe é a
+  liga a que o adversário pertence, que é observável, e é com ela que o veredito é dado.
+- **`dim_leagues`, `dim_teams` e `fact_fixture_lineups_players` entraram no dataset de medição.** A
+  ancestria das quatro células não passava por eles. Nenhum dos seis nós de premissas os
+  referencia, então materializá-los no `futebol_taskF` não toca célula nenhuma — mas quem
+  reproduzir precisa rodá-los antes, e o comando está na Reprodução.
+
+### Por que esta seção não vira guarda
+
+Mesmo argumento da #56: guarda que fica vermelha por trabalho alheio deixa de ser sinal.
+
+- A cobertura de escalação **melhora sozinha** quando a API preenche um jogo antigo, e piora quando
+  uma liga nova entra sem lineups. Nos dois casos o vermelho não seria da [F].
+- O conjunto de partidas do histórico **não tem limite inferior de tempo dentro da temporada**, e
+  backfill de temporada corrente move as contagens legitimamente.
+- A conferência que de fato precisa ser cobrada — reconstrução contra carimbo — **já está dentro da
+  análise**, como primeira linha e com veredito próprio. Quem rodar vê `EXATA` ou vê o número
+  divergente, sem conferir de olho e sem deixar nada vermelho para quem não pediu.
+
+### Reprodução
+
+```bash
+cd dbt_futebol
+
+# uma vez: os três nós que faltavam no dataset de medição (não tocam célula nenhuma)
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt run --target taskF \
+  --select dim_leagues stg_futebol_leagues dim_teams stg_futebol_teams \
+           fact_fixture_lineups_players stg_futebol_fixture_lineups_players
+
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
+  --select taskf_forca_do_adversario taskf_rodizio_de_elenco
+
+bq query --use_legacy_sql=false --max_rows=100000 --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_forca_do_adversario.sql
+bq query --use_legacy_sql=false --max_rows=100000 --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_rodizio_de_elenco.sql
+
+# os dois números de passagem desta seção que não saem das análises
+bq query --use_legacy_sql=false --project_id=smartbetting-dados <<'SQL'
+-- (a) o `ppg` é invariante de célula? (ADR 0008) — a produção contra a última célula
+--     materializada no dataset de medição, que é a `ambos`
+WITH p AS (
+  SELECT fixture_id, team_id, ppg FROM `smartbetting-dados.futebol.int_futebol_team_form_pit`
+  WHERE season = 2026 AND kickoff_utc < TIMESTAMP('2026-08-04 12:00:00')
+),
+t AS (
+  SELECT fixture_id, team_id, ppg FROM `smartbetting-dados.futebol_taskF.int_futebol_team_form_pit`
+  WHERE season = 2026 AND kickoff_utc < TIMESTAMP('2026-08-04 12:00:00')
+)
+SELECT COUNT(*) AS pares, COUNTIF(COALESCE(p.ppg,-1) = COALESCE(t.ppg,-1)) AS ppg_igual
+FROM p JOIN t USING (fixture_id, team_id)
+SQL
+
+bq query --use_legacy_sql=false --project_id=smartbetting-dados <<'SQL'
+-- (b) quem tem liga na base mas NÃO em 2026 — explica o descasamento de 583 contra 573
+WITH tipos AS (
+  SELECT DISTINCT league_id AS competition_id, league_type
+  FROM `smartbetting-dados.futebol_taskF.dim_leagues`
+),
+lados AS (
+  SELECT home_team_id AS team_id, competition_id, season FROM `smartbetting-dados.futebol.fact_fixtures`
+  UNION ALL
+  SELECT away_team_id, competition_id, season FROM `smartbetting-dados.futebol.fact_fixtures`
+),
+liga_por_time_season AS (
+  SELECT DISTINCT l.team_id, l.season
+  FROM lados l JOIN tipos t USING (competition_id)
+  WHERE t.league_type = 'League'
+)
+SELECT
+  COUNT(DISTINCT team_id) AS times_na_base,
+  COUNT(DISTINCT IF(team_id NOT IN (SELECT team_id FROM liga_por_time_season WHERE season = 2026),
+                    team_id, NULL)) AS na_base_mas_sem_liga_em_2026
+FROM liga_por_time_season
+SQL
+```
+
+A análise de força sai com **55 linhas** (1 de conferência, 3 de total, 14 de competição, 11 de
+fonte, 19 de liga do adversário e 7 de referência de `ppg`) e a de rodízio com **121** (20 de
+cobertura, 3 de total, 12 de estrato × dias, 82 de time e 4 de times do universo). As duas leem o
+carimbo das células `base` e `escopo`, que precisa estar gravado — já estava, da #53. A consulta
+(a) devolve **1.916 de 1.916** e a (b), **40 de 194**.
+
+Rodadas duas vezes seguidas no commit carimbado, as duas devolvem CSV **idêntico linha a linha** —
+é assim que o segundo e o terceiro achados de percurso ficam fechados por medição e não por
+argumento.
+
+⚠️ `bq query` com o SQL como argumento trava nesta máquina; por redirecionamento ou heredoc,
+funciona. E sem `--max_rows` ele corta em 100 linhas sem avisar.
