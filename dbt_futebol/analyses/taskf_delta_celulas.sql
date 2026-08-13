@@ -116,9 +116,11 @@
 {#- As premissas de tabela do catálogo medido (ADR 0008). O veredito delas é o piso 0; ver o
     cabeçalho. -#}
 {%- set premissas_de_tabela = ['superioridade_tabela', 'supremacia', 'sem_rodizio'] -%}
-{#- Campos que, mudando, contam como "a premissa se mexeu". `n_p0` entra porque mudança no
-    conjunto de linhas em que a premissa acende é efeito, não ruído. -#}
-{%- set campos_piso0 = ['n_p0', 'a_odd_dava_p0', 'aconteceu_p0', 'dif_p0'] -%}
+{#- Campos que, mudando, contam como "a premissa se mexeu" — declarados em taskf_campos_do_piso0()
+    porque o entregável da #59 emite o MESMO veredito sobre a MESMA linha, e duas listas fariam as
+    duas análises discordarem em silêncio. A macro devolve os nomes de coluna da tabela gravada; o
+    `juntado` daqui renomeia `diferenca_p0` para `dif_p0`, e a tradução é feita aqui, uma vez. -#}
+{%- set campos_piso0 = taskf_campos_do_piso0() | map('replace', 'diferenca_', 'dif_') | list -%}
 
 WITH a AS (
     SELECT * FROM {{ source('futebol_taskF', 'taskf_teste2') }}

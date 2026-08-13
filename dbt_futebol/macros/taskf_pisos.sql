@@ -25,3 +25,35 @@
 {% macro taskf_pisos() %}
     {{ return([0, 3, 5, 10]) }}
 {% endmacro %}
+
+
+{#
+    O QUE CONTA COMO "A PREMISSA SE MEXEU" NO PISO 0 — os quatro campos, escritos UMA vez.
+
+        n_p0            em quantas linhas de aposta a premissa acendeu
+        a_odd_dava_p0   o que o preço prometia nelas
+        aconteceu_p0    o que aconteceu de fato
+        diferenca_p0    a diferença entre os dois — o número do Teste 2
+
+    São os NOMES DE COLUNA da tabela acumulativa (`futebol_taskF.taskf_teste2`), e não os aliases
+    que cada análise cria depois de juntar duas células. Quem alia (a comparação entre células
+    chama `diferenca_p0` de `dif_p0`) traduz na hora de usar, e a tradução fica visível.
+
+    Por que num lugar só: "mexeu" é o veredito que a comparação entre células
+    (analyses/taskf_delta_celulas.sql) e o entregável (analyses/taskf_entregavel.sql) emitem sobre
+    a MESMA linha. Duas listas fariam as duas análises discordarem sobre a mesma premissa — e a
+    discordância seria muda, porque cada uma continuaria internamente coerente. É o mesmo
+    argumento do taskf_pisos() acima e da lista de valores aceitos do taskf_eixos().
+
+    ⚠️ `n_p0` entra de propósito: mudança no CONJUNTO de linhas em que a premissa acende é efeito,
+    não ruído. E o veredito é do piso 0 e só dele — nos pisos maiores até as premissas de tabela
+    mudam, porque o `min_jogos` segue a célula (ADR 0008, seção *Consequences*).
+
+    Uso:
+
+        {%- for campo in taskf_campos_do_piso0() %} ... {%- endfor %}
+#}
+
+{% macro taskf_campos_do_piso0() %}
+    {{ return(['n_p0', 'a_odd_dava_p0', 'aconteceu_p0', 'diferenca_p0']) }}
+{% endmacro %}
