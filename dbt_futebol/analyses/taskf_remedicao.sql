@@ -3,8 +3,8 @@
     execução passada, campo a campo.
 
     Por que existe. Mudar o schema da tabela acumulativa obriga a dropá-la e re-medir as quatro
-    células (ver o cabeçalho de analyses/taskf_teste2.sql, FASE 0). Isso já aconteceu duas vezes —
-    na #54 e na #55 — e vai acontecer de novo. Toda vez, a mesma pergunta: a re-medição devolveu
+    células (ver o cabeçalho de analyses/taskf_teste2.sql, FASE 0). Isso já aconteceu três vezes —
+    na #54, na #55 e na #58 — e vai acontecer de novo. Toda vez, a mesma pergunta: a re-medição devolveu
     os mesmos números, ou alguma coisa andou junto?
 
     A #54 respondeu essa pergunta com uma cópia tratada como RASCUNHO — copiou as células da #53
@@ -31,6 +31,16 @@
                                              causada justamente pela criação dessa coluna. Ele é
                                              cobrado pela primeira invariante da Costura B, que é
                                              onde a pergunta dele mora.
+      universo                               idem, desde a #58: o lado de hoje é recortado no
+                                             `completo` e comparado contra a cópia inteira, que só
+                                             tinha esse universo. Ver abaixo.
+
+    ⚠️ A COMPARAÇÃO É SÓ DO UNIVERSO `completo`, E É A ÚNICA COMPARAÇÃO QUE EXISTE (#58). Os três
+    universos novos não têm lado esquerdo: eles nasceram nesta execução, e re-medição é uma
+    pergunta sobre repetir. Comparar 240 linhas de hoje contra 60 de ontem produziria 180
+    `SEM_CONTRAPARTE` que não significam nada — ruído que esconderia a divergência real, que é o
+    único motivo de esta análise existir. Na próxima mudança de schema, a cópia já terá os quatro
+    universos e este recorte deve cair junto com a var que o sustenta.
 
     A comparação passa por TO_JSON_STRING campo a campo: DATE, BOOL, INT64 e FLOAT64 convivem no
     mesmo formato longo, e NULL vira o texto `null` em vez de sumir da comparação — que é o modo
@@ -46,7 +56,7 @@
     COMO RODAR (do dbt_futebol/), depois das quatro células:
 
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_remedicao \
-        --vars '{taskf_remedicao_anterior: taskf_teste2_54}'
+        --vars '{taskf_remedicao_anterior: taskf_teste2_55}'
       bq query --use_legacy_sql=false --project_id=smartbetting-dados \
         < target/compiled/dbt_futebol/analyses/taskf_remedicao.sql
 
@@ -69,10 +79,11 @@
 
 {#- Qual execução anterior. É var e não nome fixo porque a próxima mudança de schema vai comparar
     contra uma cópia nova — o padrão é `taskf_teste2_<ticket>`, declarada em sources.yml. -#}
-{%- set anterior = var('taskf_remedicao_anterior', 'taskf_teste2_54') -%}
+{%- set anterior = var('taskf_remedicao_anterior', 'taskf_teste2_55') -%}
 
 WITH agora AS (
     SELECT * FROM {{ source('futebol_taskF', 'taskf_teste2') }}
+    WHERE universo = 'completo'
 ),
 
 antes AS (

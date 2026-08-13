@@ -8,6 +8,12 @@
 -- células não têm como significar coisa alguma. É a única das três invariantes que compara a
 -- medição contra algo de FORA dela.
 --
+-- ⚠️ E É `base` NO UNIVERSO `completo` (#58). Esta é a única das quatro guardas que NÃO se
+-- generaliza para os outros universos, e a razão não é economia: o lado esquerdo da comparação são
+-- os números PUBLICADOS da [0.1], que existem para um recorte só — os 169 jogos de 16/06 a 04/08.
+-- Não há [0.1] "sem Copa do Mundo" nem [0.1] estendida contra a qual reproduzir. Cobrar os outros
+-- universos aqui seria compará-los com o gabarito errado.
+--
 -- ⚠️ ESTA GUARDA NÃO SUBSTITUI A `analyses/taskf_reconciliacao_01.sql`, e as duas não são cópia
 -- uma da outra. A reconciliação EXPLICA a divergência: mede se o mecanismo de deriva de odds
 -- existe na janela (`capturas_apos_o_teto`), se a correção da spec #22 alcança o benchmark
@@ -124,6 +130,7 @@ medido AS (
         {%- endfor %}
     FROM {{ source('futebol_taskF', 'taskf_teste2') }}
     WHERE celula = 'base'
+      AND universo = 'completo'
       AND usado_para_peso
 ),
 

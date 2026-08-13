@@ -12,6 +12,12 @@
 -- Falha = ou o eixo de escopo alcançou uma premissa que a ADR diz que ele não alcança, ou a
 -- célula foi gravada com o rótulo de outra. As duas são graves e nenhuma se vê no número.
 --
+-- ⚠️ A COBRANÇA É DENTRO DE CADA UNIVERSO (#58). A identidade que a ADR 0008 promete é entre
+-- CÉLULAS — o histórico que cada jogo carrega. Entre UNIVERSOS as três mudam de propósito, porque
+-- são outros jogos sendo medidos, e cobrar identidade lá daria vermelho em cima justamente do
+-- efeito que a #58 existe para medir. Generalizada assim, a guarda ficou mais forte e não mais
+-- fraca: são quatro vezes mais comparações, uma por universo.
+--
 -- ────────────────────────────────────────────────────────────────────────────────
 -- SÃO TRÊS PREMISSAS, E A IDENTIDADE É NO PISO 0. As duas coisas divergem do enunciado literal
 -- do critério de aceite da #55, que fala em quatro premissas sem qualificar o piso — e as duas
@@ -70,7 +76,7 @@
 
 WITH medido AS (
     SELECT
-        celula, mercado, premissa, benchmark, usado_para_peso,
+        universo, celula, mercado, premissa, benchmark, usado_para_peso,
         {{ campos | join(', ') }}
     FROM {{ source('futebol_taskF', 'taskf_teste2') }}
     WHERE premissa IN ({{ premissas_de_tabela | map('tojson') | join(', ') }})
@@ -79,6 +85,11 @@ WITH medido AS (
 -- A referência é a célula base do 2×2 quando ela existe (é a que não muda nada); na falta dela, a
 -- primeira em ordem alfabética, para a guarda não passar em branco por causa da ausência. O nome
 -- vem de taskf_nomes_de_celula(), como em toda parte: rótulo de célula não se digita.
+--
+-- ⚠️ UMA REFERÊNCIA POR UNIVERSO (#58). A identidade que a ADR 0008 promete é entre CÉLULAS, e ela
+-- vale dentro de cada universo pela mesma construção: as premissas de tabela leem o agregado
+-- competição-scoped do PIT, que não segue os eixos. Entre universos elas MUDAM de propósito — são
+-- outros jogos —, então uma referência global daria vermelho em cima do efeito que a #58 mede.
 referencia AS (
     SELECT * FROM medido
     -- `WHERE TRUE` não é enfeite: o BigQuery só aceita QUALIFY quando há WHERE, GROUP BY ou
@@ -86,7 +97,7 @@ referencia AS (
     -- várias linhas adiante.
     WHERE TRUE
     QUALIFY ROW_NUMBER() OVER (
-        PARTITION BY mercado, premissa, benchmark
+        PARTITION BY universo, mercado, premissa, benchmark
         ORDER BY IF(celula = '{{ taskf_nomes_de_celula()['da_competicao|temporada'] }}', 0, 1), celula
     ) = 1
 ),
@@ -95,6 +106,7 @@ divergencias AS (
     SELECT
         'numero_divergente' AS motivo,
         TO_JSON_STRING(STRUCT(
+            m.universo,
             m.mercado, m.premissa, m.benchmark, m.usado_para_peso,
             m.celula, r.celula AS referencia,
             {%- for campo in campos %}
@@ -103,7 +115,8 @@ divergencias AS (
         )) AS linha
     FROM medido AS m
     JOIN referencia AS r
-      ON  r.mercado   = m.mercado
+      ON  r.universo  = m.universo
+      AND r.mercado   = m.mercado
       AND r.premissa  = m.premissa
       AND r.benchmark = m.benchmark
     WHERE {% for campo in campos -%}
@@ -125,9 +138,12 @@ ausentes AS (
     WHERE NOT EXISTS (SELECT 1 FROM medido WHERE premissa = p)
 ),
 
--- NÃO-VACUIDADE 2: cada linha de grão existe nas quatro células. Compara-se contra a contagem de
--- células que a tabela de fato tem (que a invariante 1 cobra ser 4), e não contra um 4 digitado:
--- as duas guardas ficam com um dono cada, e esta não repete a cobrança da outra com número solto.
+-- NÃO-VACUIDADE 2: cada linha de grão existe nas quatro células DO SEU UNIVERSO. Compara-se contra
+-- a contagem de células que a tabela de fato tem (que a invariante 1 cobra ser 4), e não contra um
+-- 4 digitado: as duas guardas ficam com um dono cada, e esta não repete a cobrança da outra com
+-- número solto. Uma premissa que não acenda nenhuma vez num universo simplesmente não tem grão
+-- ali, e isso não é cobrado aqui — o `HAVING COUNTIF(acesa) > 0` do Teste 2 é resultado, não
+-- defeito; o que este bloco pega é a premissa existir em UMAS células do universo e não em todas.
 celulas_na_tabela AS (
     SELECT COUNT(DISTINCT celula) AS n FROM {{ source('futebol_taskF', 'taskf_teste2') }}
 ),
@@ -136,17 +152,17 @@ grao_incompleto AS (
     SELECT
         'grao_incompleto' AS motivo,
         TO_JSON_STRING(STRUCT(
-            g.mercado, g.premissa, g.benchmark,
+            g.universo, g.mercado, g.premissa, g.benchmark,
             g.celulas_com_a_linha, t.n AS celulas_na_tabela,
             g.quais_celulas
         )) AS linha
     FROM (
         SELECT
-            mercado, premissa, benchmark,
+            universo, mercado, premissa, benchmark,
             COUNT(DISTINCT celula) AS celulas_com_a_linha,
             STRING_AGG(DISTINCT celula, ', ' ORDER BY celula) AS quais_celulas
         FROM medido
-        GROUP BY mercado, premissa, benchmark
+        GROUP BY universo, mercado, premissa, benchmark
     ) AS g
     CROSS JOIN celulas_na_tabela AS t
     WHERE g.celulas_com_a_linha <> t.n

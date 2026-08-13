@@ -67,6 +67,14 @@
     errado devolveria zero linha ou uma coluna inteira de `SEM_CONTRAPARTE`, e as duas coisas se
     parecem demais com um resultado.
 
+    ⚠️ O UNIVERSO TAMBÉM É VAR, e o default é o primário (`completo`). Desde a #58 a tabela tem
+    quatro universos dentro dela; sem o recorte, esta análise juntaria a linha `completo` da célula
+    A com as quatro da célula B e devolveria quatro linhas por premissa — cada uma parecendo um
+    delta. O recorte é aplicado nos DOIS lados com o MESMO valor de propósito: comparar célula A no
+    universo X com célula B no universo Y misturaria os dois eixos numa diferença só, que é
+    exatamente o erro que o 2×2 desta task existe para não cometer. Quem quer o efeito de EXCLUIR
+    jogos — o mesmo par de células, dois universos — usa analyses/taskf_exclusao.sql.
+
     COMO RODAR (do dbt_futebol/), depois de as duas células terem sido medidas pelo taskf_teste2:
 
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_delta_celulas
@@ -76,6 +84,9 @@
       # outro par de células:
       ... --select taskf_delta_celulas --vars '{taskf_celula_a: base, taskf_celula_b: ambos}'
 
+      # o mesmo par noutro universo:
+      ... --vars '{taskf_celula_a: base, taskf_celula_b: ambos, taskf_universo: estendido}'
+
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
@@ -83,6 +94,17 @@
 
 {%- set cel_a = var('taskf_celula_a', 'base') -%}
 {%- set cel_b = var('taskf_celula_b', 'escopo') -%}
+{#- O universo é validado pelo mesmo caminho das células — taskf_universo_predicado() levanta erro
+    de compilação em nome desconhecido —, mas aqui o valor é usado como FILTRO da tabela já medida,
+    e não como predicado sobre apostas. A validação vem da lista da macro, não de uma segunda
+    cópia digitada. -#}
+{%- set universo = var('taskf_universo', 'completo') -%}
+{%- set universos_validos = [] -%}
+{%- for u in taskf_universos() -%}{%- set _ = universos_validos.append(u.nome) -%}{%- endfor -%}
+{%- if universo not in universos_validos -%}
+    {{ exceptions.raise_compiler_error(
+        "universo inválido: '" ~ universo ~ "'. Valores aceitos: " ~ universos_validos | join(' | ')) }}
+{%- endif -%}
 {#- Os quatro nomes vêm da macro que os define, nunca de uma segunda lista digitada aqui: uma
     cópia que precisa ficar igual para sempre não fica, e a divergência seria muda. -#}
 {%- set celulas_validas = taskf_nomes_de_celula().values() | list -%}
@@ -106,10 +128,12 @@
 {%- set campos_piso0 = ['n_p0', 'a_odd_dava_p0', 'aconteceu_p0', 'dif_p0'] -%}
 
 WITH a AS (
-    SELECT * FROM {{ source('futebol_taskF', 'taskf_teste2') }} WHERE celula = '{{ cel_a }}'
+    SELECT * FROM {{ source('futebol_taskF', 'taskf_teste2') }}
+    WHERE celula = '{{ cel_a }}' AND universo = '{{ universo }}'
 ),
 b AS (
-    SELECT * FROM {{ source('futebol_taskF', 'taskf_teste2') }} WHERE celula = '{{ cel_b }}'
+    SELECT * FROM {{ source('futebol_taskF', 'taskf_teste2') }}
+    WHERE celula = '{{ cel_b }}' AND universo = '{{ universo }}'
 ),
 
 juntado AS (
