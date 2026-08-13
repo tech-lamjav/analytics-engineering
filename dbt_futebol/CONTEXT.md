@@ -348,3 +348,29 @@ Sudamericana, Copa do Mundo and Champions. Reproduced from `fact_fixtures` in
 whole history in that competition, every season, unbounded; column 2 is every competition but only
 180 days back. That is why the Champions row reads 4,0 against 1,0, which no common window could
 produce — and why the two columns must never be compared to each other.
+
+**Adversário fora da base**:
+An opponent no collected points-corridos league reaches, so nothing in our data says how good it
+is. It is a **category, never an imputation** — no competition average, no percentile stands in
+for the missing `ppg`. Two distinct populations fall in it: the Série C/D club a Copa do Brasil
+early round throws up, and the South American club of the Libertadores and the Sudamericana whose
+national league we do not collect. The second is the larger of the two. A **seleção** is counted
+apart: it has no league to collect, which is the shape of international football and not a limit
+of ours.
+_Avoid_: adversário desconhecido (suggests a gap to fill; the absence is the finding)
+
+**Rodízio de elenco (medido)**:
+How much of a team's starting eleven carries over between two consecutive fixtures — distinct from
+the `sem_rodizio` premissa, which reads the standings and never looks at a lineup. It only means
+something against its control: 8,34 of 11 repeat between two league fixtures, and 6,88 between a
+league and a cup fixture, so the cup costs 1,46 starters *beyond* ordinary week-to-week churn. Read
+without the control, the 6,88 alone says nothing.
+
+**ppg de liga**:
+An opponent's points per game restricted to points-corridos fixtures, computed point-in-time. It
+exists because the PIT `ppg` is not comparable across competitions: in a knockout cup the losers
+stop playing, so the survivors' average climbs — 2,609 in the Copa do Brasil against 1,364 in the
+Brasileirão. The ppg de liga removes that survivorship, but it still measures position **within**
+the opponent's own league and so never measures level between leagues. Level is only observable as
+the league the opponent belongs to.
+_Avoid_: força do adversário as if it were one number (no single number in this base carries it)
