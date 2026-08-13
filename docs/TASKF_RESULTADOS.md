@@ -1815,8 +1815,19 @@ funciona. E sem `--max_rows` ele corta em 100 linhas sem avisar.
 ## Ticket #58 — As três respostas fechadas, e a Champions medida onde ela existe
 
 `analyses/taskf_exclusao.sql` + `taskf_sobrevivencia.sql` + `taskf_saturacao_recorte.sql` +
-`taskf_universo_congelado.sql` · execução 2026-08-13 17:49–18:13 UTC · **células** do commit
-`7fdd1a3`, **análises** do `f293962` · dataset `futebol_taskF`
+`taskf_universo_congelado.sql` · execução 2026-08-13 17:49–18:31 UTC · dataset `futebol_taskF`
+
+O carimbo é de **três** commits, e a distinção não é burocracia — é a lição da #56, que teve de
+corrigir um carimbo apontando para um sha que não continha o código que produziu a saída:
+
+| o que | commit | quando |
+|---|---|---|
+| as quatro **células** (a medição propriamente dita) | `7fdd1a3` | 17:49–17:56 |
+| ordenação, sobrevivência, piso e composição do universo | `f293962` | 18:03–18:13 |
+| os blocos `topo` e `fora_do_universo`, acrescentados pela revisão | `d1fe3a2` | 18:25–18:31 |
+
+As células **não** foram re-medidas para os blocos novos: eles só leem, e os números de ordenação
+foram conferidos idênticos antes e depois de eles existirem.
 
 As três perguntas que a spec #49 cobra fechadas, mais a extensão que o grilling acrescentou. Duas
 delas — a da Copa do Mundo e a da Champions — são perguntas sobre **quais jogos entram na conta**,
