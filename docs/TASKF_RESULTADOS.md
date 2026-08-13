@@ -1355,9 +1355,15 @@ corridos não produz prorrogação; as copas produzem.
 
 No agregado é 1,8% e ninguém veria; nas copas de mata-mata é uma partida em sete. Sob a contagem
 `E`, a média da Copa do Brasil na própria competição vai de 10,2 para **11,4**. Não é para mexer
-aqui — a #56 e a #49 proíbem mudar pipeline —, e a decisão de incluir ou não tem lado defensável
-nos dois sentidos (o placar de um jogo decidido nos pênaltis é empate, e é assim que ele entraria
-nas médias de gols). Fica como candidato a ticket próprio.
+aqui — a #56 e a #49 proíbem mudar pipeline. **Virou a issue #71** (`needs-triage`), com a medição
+junto e a decisão de desenho explicitada: ligar AET/PEN exige trocar `goals_*` por
+`score_fulltime_*`, porque nos 21 jogos `AET` da base as duas colunas diferem em 21 de 21 e gol de
+prorrogação entraria em média que alimenta mercado precificado em 90 minutos. E `PEN` **não** é
+sinônimo de empate — só 83 dos 121 terminaram empatados no tempo normal, o resto é confronto de ida
+e volta decidido no agregado.
+
+⚠️ Mexer nisso **muda as quatro células da [F]**. Se for para fazer, é depois que a [F] fechar, ou
+as células deixam de compartilhar a base comum que as torna comparáveis.
 
 ### Por que esta seção não vira guarda
 
