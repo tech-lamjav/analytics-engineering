@@ -280,7 +280,14 @@ pares AS (
             ELSE                                                             'liga_copa'
         END                                                       AS estrato,
         TIMESTAMP_DIFF(s.kickoff_utc, s.kickoff_anterior, DAY)    AS dias_entre,
-        xa.n_titulares = 11 AND xb.n_titulares = 11               AS utilizavel,
+        {#- COALESCE, e não a comparação nua: lado SEM escalação nenhuma sai do LEFT JOIN com
+            `n_titulares` NULL, e `NULL AND TRUE` é NULL — não FALSE. O `COUNTIF(NOT utilizavel)`
+            que conta os descartes pula NULL, então esses pares somem das DUAS colunas e a
+            invariante `pares_no_estrato = pares + pares_descartados` quebra calada. E quebra
+            exatamente onde a cobertura é pior, que é a única coisa que `pares_descartados` existe
+            para mostrar. -#}
+        COALESCE(xa.n_titulares, 0) = 11
+            AND COALESCE(xb.n_titulares, 0) = 11                  AS utilizavel,
         (SELECT COUNT(*) FROM UNNEST(xa.jogadores) AS j
           WHERE j IN UNNEST(xb.jogadores))                        AS sobreposicao
     FROM sequencia AS s

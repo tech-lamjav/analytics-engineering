@@ -468,7 +468,15 @@ empilhado AS (
         CAST(NULL AS FLOAT64) AS gols_contra_medio,
         pares_batem_base,
         pares_batem_escopo,
-        IF(pares = pares_batem_base AND pares = pares_batem_escopo,
+        {#- A COBERTURA ENTRA NO VEREDITO, e não só a concordância. `pares` vem de um INNER JOIN
+            contra o carimbo: par que o carimbo não tem é descartado ANTES de ser contado, e
+            portanto nunca discorda. Sem a igualdade contra 2 x jogos_no_universo, um carimbo
+            incompleto — uma célula re-rodada sozinha, um resultado que entrou depois — sairia
+            `EXATA` tendo conferido um subconjunto. É a guarda em que toda a seção se apoia; ela
+            não pode ser verdadeira por omissão. -#}
+        IF(pares = pares_batem_base
+             AND pares = pares_batem_escopo
+             AND pares = 2 * jogos_no_universo,
            'EXATA',
            'DIVERGENTE — nada abaixo desta linha significa o que diz') AS veredito
     FROM conferencia
