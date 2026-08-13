@@ -6,6 +6,88 @@ acrescenta a sua seção aqui. O SQL que produz cada número está em `dbt_futeb
 Os resultados moram neste arquivo, e não no cabeçalho das análises, para que o SQL mude quando a
 lógica muda e não quando os números mudam. Mesmo padrão do `TASK01_RESULTADOS.md`.
 
+**As 39 linhas que o ticket de origem pediu estão na [seção do #59](#ticket-59--o-entregável-as-39-linhas-e-o-que-o-merge-não-conserta).**
+
+---
+
+# Veredito
+
+## A pergunta do ticket
+
+> **O histórico de cada premissa está contado dentro da competição do jogo — e juntar os
+> campeonatos muda os números o bastante para valer.**
+
+**As duas metades são verdadeiras, e a segunda entrega amostra, não sinal novo.**
+
+O escopo por competição existe, e é mais amplo do que o ticket supunha: não é a
+`fact_standings_snapshot` (substituída pela correção da Task 0), e não é um lugar só. São **nove
+predicados** em seis modelos — o `int_futebol_team_form_pit` e as fontes de histórico próprias de
+cada mercado (os `last5` de Gols, BTTS e Dupla Chance, o `margin_stats` do Handicap, os spines de
+xG e de ritmo). **32 das 39 premissas** mudam de número quando ele é solto; as outras 7 não mudam,
+e cada uma tem motivo declarado.
+
+O que o merge entrega é **amostra**: o universo que satisfaz `min_jogos >= 5` sobe de **69 para 92
+jogos** sem jogar nada fora, a amostra curta média cai de **45,5% para 34,5%** e os jogos médios
+por premissa vão de **10,5 para 12,9**. Nas linhas de aposta do piso 5, de 3.746 para 4.931
+(+31,6%). O ganho não vem só das competições resgatadas: **os jogos já medidos também mudam** —
+num jogo de Brasileirão cada time ganha em média **5,75** partidas de histórico, e num de Copa do
+Brasil, **24,25** (média sobre todos os pares (jogo, time), inclusive os que não ganham nada).
+
+E ele **não** infla o catálogo: o número de premissas com peso positivo no piso 5 **cai de 15 para
+11**. Duas das quatro premissas que a spec apontou como "muito sinal, pouca amostra" sobrevivem
+quando o histórico é real (`clean_sheets_altos` e `defesa_forte`); as outras duas continuam sem
+evidência (`superioridade_xg` e `tende_golear`).
+
+## O que o merge não conserta
+
+**Copa do Mundo e Champions somam 53,7% das partidas encerradas da janela — 145 de 270 — e seguem
+sem conserto.** Na Copa do Mundo o deserto é real e não artefato: **0% dos pares (jogo, time)
+ganham uma única partida** ao soltar a competição, porque seleção não joga mais nada na nossa base;
+dos 79 jogos dela no universo, 2 passam o piso 5, antes e depois. A Champions não tem **um** jogo
+no universo congelado — os 8 do período caem depois do teto —, e no universo estendido, onde ela
+existe, nenhum dos 18 passa o piso.
+
+⚠️ **E a quebra por família não tem o que dizer nesta janela.** O universo congelado é **100%
+ano-calendário**: as ligas split-year não tinham começado em 16/06–04/08. Célula vazia é *sem
+amostra*, nunca *efeito nulo* — não se pode concluir daqui nada sobre as europeias.
+
+## Recomendações
+
+**1. Juntar o escopo — sim, e é uma mudança de pipeline, não de peso.** A medição sustenta soltar
+`competition_id` nas nove fontes de histórico. O que ela entrega é amostra e a evidência que a [B]
+vai ler; o que ela **não** entrega é peso novo, e reescrever peso a partir destes números repetiria
+o erro que a [0.1] mediu (+10,0% in-sample virando −6,2% out-of-sample).
+
+**2. As quatro de tabela ficam fora do merge, e a alternativa é decisão da [B].** `rank`, `ppg` e
+`n_teams` não existem num histórico juntado (ADR 0008). Eleger uma "competição principal" por time
+é a alternativa séria — ela muda a definição da premissa, e por isso ficou adiada, não descartada.
+
+**3. Não excluir Copa do Mundo nem a fase classificatória da Champions.** Nenhuma das duas
+exclusões se sustenta na medição (#58): o piso de amostra já faz o trabalho que elas fariam, e o
+eixo de escopo move a ordenação muito mais (ρ = 0,648) do que a maior das exclusões (0,964).
+
+**4. O merge cobra, e o preço está medido (#57):** 1,46 titular a mais de rodízio entre liga e copa
+(6,88 de 11 repetidos, contra 8,34 entre dois jogos de liga) e **40,7% das partidas emprestadas
+contra adversário que a coleta não alcança**. Nenhum dos dois inverte a recomendação; os dois
+entram na [B] como ressalva com número.
+
+**5. "Escopo sozinho não ajuda a Europa" NÃO é regra geral.** Vale para esta janela, que cai
+inteira na virada de temporada — em janeiro, liga nacional e Champions estão sob o mesmo rótulo de
+`season` e o escopo junta os dois normalmente. Quem implementar precisa decidir o eixo de recorte
+com o calendário na mão, e não a partir deste número.
+
+---
+
+## Carimbo de execução
+
+**Toda tabela deste documento sai de um lote único de medição, e o #59 não o moveu.** As quatro
+células foram medidas na mesma execução da #58; este ticket compila e consulta, sem reconstruir
+nada — um rebuild produziria outro lote e o 2×2 deixaria de ser comparável.
+
+| Execução | Corte do universo | Origem dos números |
+|---|---|---|
+| células em 2026-08-13 17:49–17:56 UTC, commit `7fdd1a3` | `kickoff` em [16/06, 04/08 12:00 UTC) — **169 jogos** | `futebol_taskF.taskf_teste2` · `odds_loaded_at` 12/08 13:24:15 · 16 grupos célula × universo, todos com o mesmo sha |
+
 ---
 
 ## Ticket #51 — Célula `base` ponta a ponta
@@ -2276,3 +2358,300 @@ três), com `ERROR=0` e `SKIP=0` — iguais aos da #54 e da #55.
 
 ⚠️ **Sem `--max_rows` o `bq query` corta em 100 linhas sem avisar**, e o `taskf_exclusao` emite
 mais do que isso. É o mesmo corte silencioso que a #57 documentou.
+
+---
+
+## Ticket #59 — O entregável: as 39 linhas, e o que o merge não conserta
+
+`analyses/taskf_entregavel.sql` + `macros/taskf_fontes_de_historico.sql` · leitura do lote medido
+na #58 (células de 2026-08-13 17:49–17:56 UTC, commit `7fdd1a3`, `odds_loaded_at` 12/08 13:24:15)
+· dataset `futebol_taskF`
+
+**Este ticket não mede — ele junta.** Todas as células já existem na tabela acumulativa desde a
+#58, e reconstruir qualquer uma delas hoje produziria um lote novo, quebrando a mesma-execução que
+torna o 2×2 comparável. O que este ticket acrescenta é a metade do entregável que **não** sai de
+query nenhuma: de qual modelo cada premissa puxa o histórico, se aquilo é limitado à competição do
+jogo, e se dá para juntar. `dbt compile` + `bq query`, e nada de `dbt build`.
+
+### Veredito
+
+**As 39 linhas fecham, e a metade declarada delas está conferida contra a medição, não afirmada.**
+Das 39 premissas do catálogo, **32 se mexem** quando o histórico deixa de ser limitado à competição
+do jogo, **3** não se mexem por definição (as de tabela, ADR 0008), **1** já cruza campeonatos hoje
+(`h2h_favoravel`) e **3** não leem histórico nenhum (`desfalque_adversario` e as duas de movimento
+de linha). As 39 linhas da declaração batem uma a uma com o que a medição fez: **zero `DIVERGE`**.
+
+O ganho de amostra é o que a spec previu e maior do que ela estimou no piso: o universo que
+satisfaz `min_jogos >= 5` sobe de **69 para 92 jogos** sem jogar nada fora, e a soma dos `n` do
+piso 5 nas 39 vai de **3.746 para 4.931 linhas de aposta** (+31,6%).
+
+E o que ele **não** conserta continua sendo mais da metade da janela: Copa do Mundo e Champions
+somam **53,7% das partidas encerradas** no período (145 de 270) e seguem sem histórico para
+emprestar — a Copa do Mundo porque os times dela não jogam mais nada na nossa base (**0% dos pares
+ganham uma única partida** ao soltar a competição), a Champions porque não tem um jogo sequer no
+universo congelado.
+
+### As quatro colunas do ticket, e de onde cada uma sai
+
+| coluna do ticket | onde mora | como não apodrece |
+|---|---|---|
+| de onde puxa o histórico | `macros/taskf_fontes_de_historico.sql` (`fonte`, `predicado`) | erro de compilação se o conjunto declarado divergir de `futebol_insumos_premissa()` |
+| se a janela é limitada à competição | idem (`escopo_hoje`) | idem |
+| se dá para juntar, e o que impede | idem (`juntavel`, `impedimento`) | idem, **mais** a conferência contra a medição: quem é declarado imóvel tem de sair imóvel |
+| o que o número vira | `futebol_taskF.taskf_teste2`, células `base` → `escopo` | é medição, não declaração |
+
+A quarta coluna é o par que responde à pergunta literal do ticket: "juntar os campeonatos" é o eixo
+de **escopo**. O eixo de recorte e o 2×2 completo estão nas seções das #53 e #54, e não se repetem
+aqui.
+
+⚠️ **A declaração é confrontada com a medição, e é isso que a separa de uma opinião bem
+formatada.** Uma premissa declarada "não dá para juntar" cujo número muda entre `base` e `escopo`
+sai marcada `DIVERGE` na coluna `confere` da análise. Hoje são **60 de 60 `CONFERE`** — as 39 do
+benchmark preferido e as 21 do anexo.
+
+### As 39 linhas
+
+Uma por premissa, no benchmark preferido de cada mercado (sharp para 1X2, Handicap e Gols;
+derivada para Dupla Chance; consenso para BTTS). `piso 0` e `piso 5` são a **diferença** do Teste 2
+— quanto o resultado real superou o que a odd dava —, e o `n` do piso 5 é quantas linhas de aposta
+sobraram nele.
+
+| mercado | premissa | de onde puxa o histórico | limitada à competição? | dá para juntar? | piso 0: diferença | piso 5: diferença (n) | família |
+|---|---|---|---|---|---|---|---|
+| 1X2 | `desfalque_adversario` | desfalques · boletim do próprio jogo | não lê histórico | não se aplica — lê o boletim de desfalques do próprio jogo | **−24,9 → −24,9** ⁽ⁱ⁾ | −24,9 → −24,9 (7 → 7) | ano-calendário |
+| 1X2 | `forca_mismatch` | team_form_pit · gols pró/contra por venue | sim — competição + temporada | sim | −3,1 → +1,4 | −12,6 → −5,5 (18 → 24) | ano-calendário |
+| 1X2 | `forma` | team_form_pit · vitórias nos 5 jogos anteriores | sim — competição + temporada | sim | −1,4 → −0,8 | −5,9 → −5,3 (45 → 69) | ano-calendário |
+| 1X2 | `h2h_favoravel` | fact_h2h · confronto direto | não — já cruza tudo | já junto — o `fact_h2h` já cruza campeonatos hoje | **−10,7 → −10,7** ⁽ⁱ⁾ | −12,9 → −10,7 (41 → 52) | ano-calendário |
+| 1X2 | `mando` | team_form_pit · aproveitamento em casa e fora | sim — competição + temporada | sim | +2,4 → +3,9 | −6,4 → −2,6 (48 → 75) | ano-calendário |
+| 1X2 | `superioridade_tabela` | team_form_pit · CTE `tabela` (rank e ppg) | sim — competição + temporada | não — rank/ppg só existem dentro da competição (ADR 0008) | **+0,8 → +0,8** ⁽ⁱ⁾ | −8,2 → −6,1 (35 → 47) | ano-calendário |
+| 1X2 | `superioridade_xg` | premissas_1x2 · spine de xG sobre fact_fixture_stats | sim — competição + temporada | sim | +5,2 → +4,3 | −8,9 → −4,1 (31 → 44) | ano-calendário |
+| BTTS | `ambos_marcam` | team_form_pit · failed-to-score% dos dois times | sim — competição + temporada | sim | −2,5 → −1,8 | +1,7 → −1,9 (25 → 36) | ano-calendário |
+| BTTS | `ataque_dos_dois` | team_form_pit · gols feitos por venue | sim — competição + temporada | sim | +11,9 → +0,3 | +4,0 → −11,0 (20 → 26) | ano-calendário |
+| BTTS | `ataque_trava` | team_form_pit · failed-to-score% dos dois times | sim — competição + temporada | sim | −2,2 → −3,3 | −8,4 → −3,4 (36 → 36) | ano-calendário |
+| BTTS | `defesa_forte` | team_form_pit · clean sheet% dos dois times | sim — competição + temporada | sim | +2,8 → +1,9 | −3,3 → +10,3 (12 → 28) | ano-calendário |
+| BTTS | `defesas_vazaveis` | team_form_pit · clean sheet% dos dois times | sim — competição + temporada | sim | +2,2 → −2,3 | +8,7 → +1,6 (31 → 36) | ano-calendário |
+| BTTS | `historico_btts` | premissas_btts · últimos 5 jogos com os dois marcando | sim — competição + temporada | sim | +0,0 → −15,5 | +0,0 → −15,5 (16 → 15) | ano-calendário |
+| BTTS | `historico_seco` | premissas_btts · últimos 5 jogos sem os dois marcarem | sim — competição + temporada | sim | −0,9 → −1,8 | −8,6 → −3,1 (53 → 77) | ano-calendário |
+| Dupla Chance | `adversario_limitado` | team_form_pit · aproveitamento do adversário OU h2h reusado do 1X2 | misto — ver ressalva | sim | +0,7 → +1,2 | +0,6 → +1,8 (80 → 101) | ano-calendário |
+| Dupla Chance | `equilibrio_defensivo` | team_form_pit · gols sofridos + `team_hist` do DC (goleadas) | sim — competição + temporada | sim | +2,0 → −1,6 | +6,4 → +1,9 (66 → 86) | ano-calendário |
+| Dupla Chance | `invicto_recente` | premissas_dc · `team_hist` (derrotas nos últimos 5) | sim — competição + temporada | sim | −10,7 → −4,5 | −16,5 → −4,5 (17 → 23) | ano-calendário |
+| Dupla Chance | `lado_coberto_forte` | premissas_1x2 · reuso de forca_mismatch OU superioridade_tabela | misto — ver ressalva | sim | +2,8 → +1,0 | +0,9 → +0,0 (47 → 63) | ano-calendário |
+| Gols | `ambos_vazam` | team_form_pit · clean sheet% dos dois times | sim — competição + temporada | sim | −3,7 → −3,2 | −11,7 → −8,0 (156 → 176) | ano-calendário |
+| Gols | `ataque_combinado` | team_form_pit · gols feitos por venue dos dois times | sim — competição + temporada | sim | −3,6 → −2,9 | −6,0 → −7,3 (117 → 155) | ano-calendário |
+| Gols | `ataques_fracos` | team_form_pit · failed-to-score% dos dois times | sim — competição + temporada | sim | +2,1 → −0,4 | −1,1 → −2,5 (178 → 178) | ano-calendário |
+| Gols | `clean_sheets_altos` | team_form_pit · clean sheet% dos dois times | sim — competição + temporada | sim | +17,1 → +14,9 | −1,7 → +6,3 (24 → 35) | ano-calendário |
+| Gols | `defesas_firmes` | team_form_pit · gols sofridos por venue dos dois times | sim — competição + temporada | sim | +3,7 → +1,9 | +0,7 → +1,5 (146 → 212) | ano-calendário |
+| Gols | `defesas_vazaveis` | team_form_pit · gols sofridos por venue dos dois times | sim — competição + temporada | sim | −5,0 → −4,6 | −5,8 → −5,8 (158 → 201) | ano-calendário |
+| Gols | `historico_over` | premissas_ou · total de gols dos últimos 5 jogos | sim — competição + temporada | sim | −0,5 → −1,8 | −6,0 → −6,7 (104 → 122) | ano-calendário |
+| Gols | `historico_under` | premissas_ou · total de gols dos últimos 5 jogos | sim — competição + temporada | sim | +1,5 → +6,8 | +1,2 → +6,7 (139 → 183) | ano-calendário |
+| Gols | `linha_descendo` | fact_odds_snapshot · consenso das casas de t24h para t15m | não lê histórico | não se aplica — lê preço (consenso t24h→t15m) | **+3,2 → +3,2** ⁽ⁱ⁾ | +5,5 → +3,8 (213 → 296) | ano-calendário |
+| Gols | `linha_subindo` | fact_odds_snapshot · consenso das casas de t24h para t15m | não lê histórico | não se aplica — lê preço (consenso t24h→t15m) | **−1,5 → −1,5** ⁽ⁱ⁾ | +0,8 → −6,6 (96 → 116) | ano-calendário |
+| Gols | `ritmo_alto` | premissas_ou · ritmo dos dois times contra a mediana da liga | sim — competição + temporada | sim | −5,3 → −6,2 | −6,9 → −11,2 (162 → 288) | ano-calendário |
+| Gols | `xg_baixo_combinado` | premissas_ou · spine de xG sobre fact_fixture_stats | sim — competição + temporada | sim | +1,5 → +1,0 | +3,6 → +2,1 (133 → 178) | ano-calendário |
+| Gols | `xg_combinado_alto` | premissas_ou · spine de xG sobre fact_fixture_stats | sim — competição + temporada | sim | −2,6 → −1,9 | −3,4 → −4,9 (129 → 158) | ano-calendário |
+| Handicap | `adversario_fragil_fora` | team_form_pit · gols sofridos do adversário por venue | sim — competição + temporada | sim | −2,8 → −1,5 | −11,0 → −5,8 (113 → 138) | ano-calendário |
+| Handicap | `defesa_fora_solida` | team_form_pit · gols sofridos por venue | sim — competição + temporada | sim | +3,9 → +0,5 | +2,6 → −1,3 (134 → 190) | ano-calendário |
+| Handicap | `favorito_irregular` | premissas_ah · `margin_stats` sobre resultados anteriores | sim — só competição (já cruza temporada) | sim | +5,9 → +6,4 | +7,1 → +6,4 (374 → 493) | ano-calendário |
+| Handicap | `mando_forte` | team_form_pit · aproveitamento em casa | sim — competição + temporada | sim | −3,1 → −3,0 | −10,2 → −7,7 (89 → 168) | ano-calendário |
+| Handicap | `raramente_perde_por_2` | premissas_ah · `margin_stats` sobre resultados anteriores | sim — só competição (já cruza temporada) | sim | +6,3 → +7,8 | +7,4 → +8,0 (352 → 469) | ano-calendário |
+| Handicap | `sem_rodizio` | team_form_pit · CTE `tabela` (rank) e tamanho da liga | sim — competição + temporada | não — rank **e** `n_teams` não existem juntando (ADR 0008) | **−2,7 → −2,7** ⁽ⁱ⁾ | −2,7 → −2,7 (188 → 188) | ano-calendário |
+| Handicap | `supremacia` | team_form_pit · CTE `tabela` (rank e ppg) | sim — competição + temporada | não — rank/ppg só existem dentro da competição (ADR 0008) | **−1,9 → −1,9** ⁽ⁱ⁾ | −6,0 → −6,4 (95 → 121) | ano-calendário |
+| Handicap | `tende_golear` | team_form_pit · gols pró/contra por venue | sim — competição + temporada | sim | +3,9 → +5,7 | −18,5 → −22,7 (18 → 21) | ano-calendário |
+
+⁽ⁱ⁾ **imóvel no piso 0**: a premissa acende exatamente nas mesmas linhas nas duas células. Ela
+ainda muda nos pisos maiores, porque o `min_jogos` segue a célula — é a seção *Consequences* da
+ADR 0008, e não uma inconsistência.
+
+No agregado das 39: amostra curta média **45,5% → 34,5%**, jogos médios **10,5 → 12,9**, e o número
+de premissas com peso positivo no piso 5 cai de **15 para 11**. O merge não infla o catálogo: ele
+recompõe quem tem evidência.
+
+### As sete que não mudam, e por quê
+
+O critério de aceite pede que elas apareçam com o motivo. São **sete**, e o motivo é de três tipos
+diferentes:
+
+| premissa | mercado | por que não muda |
+|---|---|---|
+| `superioridade_tabela` | 1X2 | premissa de tabela: rank e ppg saem do agregado competição-scoped do PIT em qualquer célula (ADR 0008) |
+| `supremacia` | Handicap | idem |
+| `sem_rodizio` | Handicap | idem, e ainda compara o rank contra o `n_teams` da liga — número que não existe num histórico juntado |
+| `h2h_favoravel` | 1X2 | o `fact_h2h` já cruza campeonatos e temporadas hoje; restringi-lo seria mudar premissa |
+| `desfalque_adversario` | 1X2 | lê o boletim de desfalques do próprio jogo — não lê passado |
+| `linha_subindo` | Gols | lê preço: consenso das casas de t24h para t15m |
+| `linha_descendo` | Gols | idem |
+
+⚠️ **O ticket diz "as quatro de tabela"; no catálogo medido são três.** A quarta que a ADR 0008
+nomeia, `x_superioridade_tabela`, **não é premissa**: é coluna interna do
+`int_futebol_premissas_1x2` que a Dupla Chance reusa dentro do `lado_coberto_forte` — e este também
+lê `forca_mismatch`, que segue o eixo, então ele se mexe. A leitura corrigida já é a que a Costura
+B (#55) implementa; o enunciado da spec não foi editado porque ele é o registro do que se sabia
+antes de medir.
+
+⚠️ **Reusar fonte imune não dá imunidade.** `adversario_limitado` (DC) consome o `fact_h2h` de
+segunda mão e **se mexe** (`n_p0` 160 → 165), porque a outra metade da definição —
+`o_aproveitamento < 45` — sai do PIT. A regra, para a [B]: uma premissa só herda imunidade se
+**todos** os seus insumos forem imunes.
+
+### A quebra por família é degenerada — e é isso que ela tem a dizer
+
+`analyses/taskf_familia_e_mecanismo.sql`, re-executada neste ticket e idêntica à da #53:
+
+| família | jogos no universo | % | pares com ganho | ganho médio por par | piso 5: base → escopo |
+|---|---|---|---|---|---|
+| ano-calendário | **169** | 100,0% | 44,7% | 3,43 | 69 → 92 |
+| split-year | **0** | 0,0% | — | — | 0 → 0 |
+
+A coluna "família" das 39 linhas vale `ano-calendário` nas 39 porque **o universo congelado inteiro
+é ano-calendário**. A janela (16/06 a 04/08) cai na virada de temporada europeia: as cinco ligas
+split-year ainda não tinham começado, e os únicos jogos de Champions do período são os 8 de 04/08 à
+noite, que o teto do universo remove.
+
+⚠️ **Célula vazia é SEM AMOSTRA, nunca efeito nulo.** Não se pode concluir daqui que juntar
+campeonato não ajuda as europeias. O que se sabe sobre elas é mecânico, não medido: nesta janela o
+rótulo de `season` do time europeu vira no meio do ano, e como o eixo de escopo não toca o filtro
+de season, só a célula `ambos` alcançaria esse caso. Em janeiro, o mesmo time tem liga nacional e
+Champions sob o mesmo rótulo e `escopo` junta os dois normalmente.
+
+Por competição, o mecanismo é muito desigual — e é ele que explica de onde vêm os 23 jogos que
+cruzam o piso:
+
+| competição | jogos | pares com ganho | ganho médio | piso 5: base → escopo |
+|---|---|---|---|---|
+| copa_mundo | 79 | **0,0%** | 0,00 | 2 → 2 |
+| serie_b | 39 | 70,5% | 2,23 | 39 → 39 |
+| brasileirao | 28 | 100,0% | 5,75 | 28 → 28 |
+| sudamericana | 15 | 80,0% | 9,17 | **0 → 15** |
+| copa_do_brasil | 8 | 100,0% | 24,25 | **0 → 8** |
+
+### O que o merge NÃO conserta
+
+O critério de aceite pede que isto fique declarado, e a spec #49 o enuncia como "Copa do Mundo e
+Champions somam 139 encerrados — 53% da janela". **O percentual confere; a contagem não, e os dois
+números respondem a denominadores diferentes** — o mesmo cuidado que a #56 teve com as duas colunas
+do ticket original.
+
+| denominador | Copa do Mundo | Champions | soma | % |
+|---|---|---|---|---|
+| partidas **encerradas** na janela (`FT`+`AET`+`PEN`), 270 | 89 | 56 | **145** | **53,7%** |
+| o mesmo, só `FT`, 255 | 80 | 51 | 131 | 51,4% |
+| o **universo congelado** medido (169 jogos com linha de aposta) | 79 | **0** | 79 | 46,7% |
+
+A afirmação da spec é verdadeira sobre a **janela de jogos encerrados**, não sobre o universo em
+que as 39 linhas foram medidas — ali a Champions vale zero, porque o teto das 12:00 UTC de 04/08
+remove os 8 jogos dela e não sobra nenhum.
+
+E "seguem de amostra curta" é literal nas duas:
+
+- **Copa do Mundo** — 79 dos 169 jogos do universo, e **2** deles passam o piso 5. O merge não move
+  isso: **0% dos pares (jogo, time) ganham uma única partida** ao soltar a competição, porque
+  seleção não joga outra competição na nossa base. É deserto real, não artefato de escopo.
+- **Champions** — zero jogo no universo congelado. No estendido, onde ela existe (18 jogos), a #58
+  mediu que **nenhum** passa o piso 5, nem em `base` nem em `escopo`.
+
+Junte-se a isso o que a #58 já fechou: **nenhuma das duas exclusões se sustenta**, porque o piso de
+amostra já faz o trabalho que a exclusão faria. Não há o que remover — há o que **não** esperar do
+merge.
+
+### O anexo: as 21 linhas de benchmark não-preferido
+
+Marcadas `usado_para_peso = false` na medição e **não usadas para peso**. Elas existem porque a
+diferença de ROI entre benchmarks é informação sobre **quais jogos a Pinnacle escolhe precificar**,
+não sobre o benchmark — o achado da [0.1] que sobreviveu a tudo. São as linhas de consenso do
+Handicap e do Gols.
+
+| mercado | premissa | benchmark | de onde puxa o histórico | limitada à competição? | dá para juntar? | piso 0: diferença | piso 5: diferença (n) | família |
+|---|---|---|---|---|---|---|---|---|
+| Gols | `ambos_vazam` | consenso | team_form_pit · clean sheet% dos dois times | sim — competição + temporada | sim | −2,3 → −2,7 | −7,7 → −6,6 (173 → 206) | ano-calendário |
+| Gols | `ataque_combinado` | consenso | team_form_pit · gols feitos por venue dos dois times | sim — competição + temporada | sim | −5,9 → −5,6 | −4,4 → −7,7 (111 → 152) | ano-calendário |
+| Gols | `ataques_fracos` | consenso | team_form_pit · failed-to-score% dos dois times | sim — competição + temporada | sim | +1,9 → −0,4 | +0,0 → −0,5 (194 → 195) | ano-calendário |
+| Gols | `clean_sheets_altos` | consenso | team_form_pit · clean sheet% dos dois times | sim — competição + temporada | sim | +10,3 → +8,2 | +4,2 → +9,7 (26 → 33) | ano-calendário |
+| Gols | `defesas_firmes` | consenso | team_form_pit · gols sofridos por venue dos dois times | sim — competição + temporada | sim | +3,2 → +3,0 | +1,7 → +2,6 (258 → 355) | ano-calendário |
+| Gols | `defesas_vazaveis` | consenso | team_form_pit · gols sofridos por venue dos dois times | sim — competição + temporada | sim | −4,7 → −5,2 | −4,7 → −7,8 (117 → 157) | ano-calendário |
+| Gols | `historico_over` | consenso | premissas_ou · total de gols dos últimos 5 jogos | sim — competição + temporada | sim | −2,7 → −5,5 | −5,4 → −7,9 (98 → 131) | ano-calendário |
+| Gols | `historico_under` | consenso | premissas_ou · total de gols dos últimos 5 jogos | sim — competição + temporada | sim | +1,5 → +2,3 | +2,0 → +2,7 (257 → 349) | ano-calendário |
+| Gols | `linha_descendo` | consenso | fact_odds_snapshot · consenso das casas de t24h para t15m | não lê histórico | não se aplica — lê preço (consenso t24h→t15m) | **+1,9 → +1,9** ⁽ⁱ⁾ | +3,7 → +2,8 (193 → 261) | ano-calendário |
+| Gols | `linha_subindo` | consenso | fact_odds_snapshot · consenso das casas de t24h para t15m | não lê histórico | não se aplica — lê preço (consenso t24h→t15m) | **−3,7 → −3,7** ⁽ⁱ⁾ | −2,7 → −6,0 (104 → 138) | ano-calendário |
+| Gols | `ritmo_alto` | consenso | premissas_ou · ritmo dos dois times contra a mediana da liga | sim — competição + temporada | sim | −1,9 → −2,9 | −2,3 → −6,6 (194 → 337) | ano-calendário |
+| Gols | `xg_baixo_combinado` | consenso | premissas_ou · spine de xG sobre fact_fixture_stats | sim — competição + temporada | sim | +1,8 → +1,8 | +2,4 → +2,8 (266 → 358) | ano-calendário |
+| Gols | `xg_combinado_alto` | consenso | premissas_ou · spine de xG sobre fact_fixture_stats | sim — competição + temporada | sim | −3,7 → −4,1 | −3,6 → −6,9 (114 → 157) | ano-calendário |
+| Handicap | `adversario_fragil_fora` | consenso | team_form_pit · gols sofridos do adversário por venue | sim — competição + temporada | sim | −4,9 → −2,9 | −4,5 → −2,1 (91 → 101) | ano-calendário |
+| Handicap | `defesa_fora_solida` | consenso | team_form_pit · gols sofridos por venue | sim — competição + temporada | sim | +5,1 → +4,3 | +5,1 → +4,0 (136 → 207) | ano-calendário |
+| Handicap | `favorito_irregular` | consenso | premissas_ah · `margin_stats` sobre resultados anteriores | sim — só competição (já cruza temporada) | sim | +5,6 → +5,4 | +6,6 → +5,4 (346 → 464) | ano-calendário |
+| Handicap | `mando_forte` | consenso | team_form_pit · aproveitamento em casa | sim — competição + temporada | sim | −9,7 → −10,5 | −12,7 → −9,7 (63 → 119) | ano-calendário |
+| Handicap | `raramente_perde_por_2` | consenso | premissas_ah · `margin_stats` sobre resultados anteriores | sim — só competição (já cruza temporada) | sim | +6,4 → +6,1 | +7,1 → +6,0 (332 → 448) | ano-calendário |
+| Handicap | `sem_rodizio` | consenso | team_form_pit · CTE `tabela` (rank) e tamanho da liga | sim — competição + temporada | não — rank **e** `n_teams` não existem juntando (ADR 0008) | **−6,0 → −6,0** ⁽ⁱ⁾ | −6,0 → −6,0 (177 → 177) | ano-calendário |
+| Handicap | `supremacia` | consenso | team_form_pit · CTE `tabela` (rank e ppg) | sim — competição + temporada | não — rank/ppg só existem dentro da competição (ADR 0008) | **−1,3 → −1,3** ⁽ⁱ⁾ | −1,5 → −0,3 (68 → 98) | ano-calendário |
+| Handicap | `tende_golear` | consenso | team_form_pit · gols pró/contra por venue | sim — competição + temporada | sim | −7,6 → −7,0 | +2,1 → −1,0 (14 → 17) | ano-calendário |
+
+### As conferências que a tabela carrega
+
+Nenhuma delas é afirmação no texto: as quatro saem como coluna da própria análise.
+
+| conferência | o que cobra | resultado |
+|---|---|---|
+| `cobertura` | declaração e medição cobrem o mesmo conjunto | 60/60 `CONFERE` |
+| `confere` | declarado imóvel ⟺ medido imóvel no piso 0 | 60/60 `CONFERE`, zero `DIVERGE` |
+| `lote` | as 16 combinações célula × universo têm um `git_sha` e um `odds_loaded_at` só | `HOMOGENEO (16 grupos)` |
+| `confere_universo` | a camada materializada agora é a que produziu a medição | 169 = 169 |
+
+A quarta existe porque a quebra por família é a única parte desta análise que lê a camada
+**materializada** (para saber quais jogos entram no universo), enquanto o resto lê a tabela de
+medição. Se alguém rematerializar uma célula com outro recorte, os dois números se separam e a
+tabela denuncia em vez de misturar.
+
+### A falsificação: quatro quebras, quatro vermelhos
+
+A validação da declaração foi quebrada de propósito antes de ser publicada, para não ser guarda de
+enfeite:
+
+| quebra | o que aconteceu |
+|---|---|
+| premissa removida da declaração (`1X2 · mando`) | erro de compilação: `Sem declaração: [1X2 · mando]` |
+| `defesas_vazaveis` do BTTS declarada como Gols | erro de compilação — é o caso que uma chave por nome esconderia |
+| `1X2 · forma` declarada duas vezes | erro de compilação: `(mercado, premissa) repetido` |
+| `juntavel = 'nao'` com `impedimento` vazio | erro de compilação: meia resposta à terceira coluna do ticket |
+
+⚠️ **E uma quinta quebra apareceu sozinha, na primeira execução.** A análise lia o nome da célula
+com `taskf_nomes_de_celula()['da_competicao_temporada']` — chave com `_` onde a macro usa `|`. O
+Jinja resolve chave inexistente como `Undefined`, que é renderizado como **string vazia**: o SQL
+saiu com `WHERE celula = ''`, devolveu zero linha, e as 39 premissas apareceram como
+`SEM_MEDICAO` — que se parece com um achado. A análise passou a validar os dois nomes contra
+`taskf_nomes_de_celula().values()` e levanta erro de compilação. É o mesmo modo de falha que o
+fail-closed do `taskf_eixos()` existe para fechar, numa porta que ninguém tinha fechado.
+
+### Reprodução
+
+```bash
+cd dbt_futebol
+
+# NADA de `dbt build` aqui: as quatro células são as da #58 e um rebuild produziria outro lote.
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
+  --select taskf_entregavel taskf_familia_e_mecanismo
+
+bq query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=200 \
+  < target/compiled/dbt_futebol/analyses/taskf_entregavel.sql
+bq query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=100 \
+  < target/compiled/dbt_futebol/analyses/taskf_familia_e_mecanismo.sql
+
+# o número da seção "o que o merge não conserta", que não sai de análise nenhuma
+bq query --use_legacy_sql=false --project_id=smartbetting-dados <<'SQL'
+WITH janela AS (
+    SELECT fixture_id, competition, status_short
+    FROM `smartbetting-dados.futebol.fact_fixtures`
+    WHERE kickoff_utc >= TIMESTAMP('2026-06-16')
+      AND kickoff_utc <  TIMESTAMP('2026-08-04 12:00:00')
+)
+SELECT competition,
+       COUNT(*)                                      AS agendados,
+       COUNTIF(status_short = 'FT')                  AS ft,
+       COUNTIF(status_short IN ('FT', 'AET', 'PEN')) AS encerrados
+FROM janela GROUP BY competition ORDER BY encerrados DESC
+SQL
+```
+
+O `taskf_entregavel` sai com **60 linhas** — 39 no bloco `principal` e 21 no `anexo` — e o
+`taskf_familia_e_mecanismo` com **16** (13 de competição, 2 de família e 1 de total).
+
+⚠️ **Sem `--max_rows` o `bq query` corta em 100 linhas sem avisar**, e são 60 mais o cabeçalho de
+progresso; com o anexo junto a margem é pequena. É o mesmo corte silencioso da #57.
