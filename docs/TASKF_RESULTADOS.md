@@ -1152,8 +1152,8 @@ três), com `ERROR=0` e `SKIP=0` — iguais aos da #54.
 
 ## Ticket #56 — A reconciliação do diagnóstico de 180 dias
 
-`analyses/taskf_reconciliacao_180d.sql` · execução 2026-08-13 12:45 UTC · commit `de6ae05` ·
-dataset `futebol` (produção)
+`analyses/taskf_reconciliacao_180d.sql` + `analyses/taskf_partida_da_fronteira.sql` · execução
+2026-08-13 13:13 UTC · commit `7651233` · dataset `futebol` (produção)
 
 A tabela de quatro linhas que abre o ticket de origem — a que diz que o time de Copa do Brasil tem
 10,2 jogos na própria competição e 25,5 contando tudo — reproduzida da nossa base. É o que dá ao
@@ -1168,17 +1168,17 @@ conferiria coisa alguma.
 
 ### Veredito
 
-**15 das 16 células da tabela do ticket reproduzem EXATAMENTE**, por uma receita só, nas quatro
-competições. A décima sexta diverge em 0,1 jogo, e a divergência tem nome, sobrenome e horário:
+**15 dos 16 campos da tabela do ticket reproduzem EXATAMENTE**, por uma receita só, nas quatro
+competições. O décimo sexto diverge em 0,1 jogo, e a divergência tem nome, sobrenome e horário:
 uma partida que cai **30 minutos** dentro da fronteira dos 180 dias.
 
 O diagnóstico do ticket está certo, e as três leituras que ele tira da tabela se sustentam. Mas a
 tabela tem uma armadilha de construção que o próprio ticket não viu, e ela muda o que a linha da
-Champions significa: **as duas primeiras colunas não têm o mesmo recorte de tempo**.
+Champions significa: **as duas primeiras colunas não contam o mesmo trecho do passado**.
 
 ### A tabela do ticket, reproduzida
 
-Variante `A_ticket`. Cada célula sai como `medido / ticket`.
+Variante `A_ticket`. Cada campo sai como `medido / ticket`.
 
 | competição | jogos-âncora | pares | jogos na própria competição | jogos em tudo, 180 dias | % com < 5 na competição | % com < 5 contando tudo |
 |---|---|---|---|---|---|---|
@@ -1192,19 +1192,20 @@ Variante `A_ticket`. Cada célula sai como `medido / ticket`.
 Nenhum dos quatro pedaços é escolha de gosto: trocar qualquer um deles quebra a reprodução, e o
 número que ele passa a dar está medido nas variantes.
 
-- **O recorte de tempo é o universo congelado** (`taskf_universo()`), com o teto no instante de
-  04/08 12:00 UTC. O ticket foi aberto às **22:52 UTC** daquele dia; entre ~02:00 e 16:00 UTC não
-  há jogo nenhum na base, então qualquer instante do vão devolve o mesmo conjunto. É o mesmo
-  argumento de "instante, não dia" que o universo congelado já fazia para os 169 jogos.
-- **As âncoras são só os jogos ENCERRADOS**, `status_short = 'FT'`. Sem isso a Copa do Mundo sai
-  2,1 e 94% em vez de 2,0 e 96% — os 9 jogos de mata-mata decididos na prorrogação ou nos pênaltis
-  entram como âncora e puxam a conta.
-- **A unidade é o par (jogo, time)**, não o time distinto. O cabeçalho do ticket diz "times com <
-  5 jogos", mas um time entra uma vez por jogo que disputa. Por time distinto a Champions vai a
-  74% e a Copa do Mundo a 100%, e só **5 das 16 células** continuam batendo.
-- **As duas colunas usam recortes diferentes** — ver abaixo. É o pedaço que não se adivinha.
+- **O corte de tempo das âncoras é o universo congelado** (`taskf_universo()`), com o teto no
+  instante de 04/08 12:00 UTC. O ticket foi aberto às **22:52 UTC** daquele dia; entre ~02:00 e
+  16:00 UTC não há jogo nenhum na base, então qualquer instante do vão devolve o mesmo conjunto.
+  É o mesmo argumento de "instante, não dia" que o universo congelado já fazia para os 169 jogos.
+- **As âncoras são só os jogos ENCERRADOS**, `status_short = 'FT'` (variante `D`). Sem isso a Copa
+  do Mundo sai 2,1 e 94% em vez de 2,0 e 96% — os 9 jogos de mata-mata decididos na prorrogação ou
+  nos pênaltis entram como âncora e puxam a conta.
+- **A unidade é o par (jogo, time)**, não o time distinto (variante `G`). O cabeçalho do ticket
+  diz "times com < 5 jogos", mas um time entra uma vez por jogo que disputa. Por time distinto a
+  Champions vai a 74% e a Copa do Mundo a 100%, e só **5 dos 16 campos** continuam batendo.
+- **As duas colunas contam trechos diferentes do passado** — ver abaixo. É o pedaço que não se
+  adivinha.
 
-⚠️ O recorte é aplicado a `fact_fixtures`, e **não** ao universo de 169 jogos das células. São
+⚠️ O corte é aplicado a `fact_fixtures`, e **não** ao universo de 169 jogos das células. São
 conjuntos diferentes de propósito: as células medem jogo liquidado COM preço nos 5 mercados do
 Motor, e a Champions não tem um único jogo lá dentro (a #51 mediu isso). A tabela do ticket é
 sobre jogos, não sobre apostas — é por isso que a Champions pode ser diagnosticada aqui e não pôde
@@ -1212,7 +1213,7 @@ ser medida nas células, e é por isso que o `jogos_esperados = 169` não se apl
 seção. Nas duas copas os conjuntos coincidem (8 e 15 jogos, os mesmos das células); na Copa do
 Mundo são 80 âncoras contra 79 jogos medidos.
 
-### ⚠️ As duas colunas do ticket não têm o mesmo recorte — e a Champions é a prova
+### ⚠️ As duas colunas do ticket não contam o mesmo passado — e a Champions é a prova
 
 "Jogos na própria competição" conta o histórico **inteiro** do time naquela competição, todas as
 temporadas, sem limite de tempo. "Jogos em tudo, 180 dias" conta todas as competições, mas só nos
@@ -1221,11 +1222,13 @@ temporadas, sem limite de tempo. "Jogos em tudo, 180 dias" conta todas as compet
 Sob um recorte comum, `tudo` ⊇ `própria` e a segunda coluna **nunca** poderia ser menor que a
 primeira. A linha da Champions tem 4,0 e 1,0. Não é erro de medição do autor nem falha de
 reprodução nossa: é a assinatura de dois recortes diferentes na mesma tabela, e a decomposição
-mostra onde a diferença mora. Os 102 pares contam **405** partidas de Champions no total, das
-quais **309 são de 2024 e 2025** — quase todas de fase qualificatória, e todas fora dos 180 dias.
-Dentro dos 180 dias sobram **101** partidas contando todas as competições, e **96 delas são as
-próprias qualificatórias de 2026**: o campeonato nacional daqueles times rende cinco partidas na
-base inteira. O 4,0 é histórico antigo da mesma competição; o 1,0 é o presente em tudo.
+mostra onde a diferença mora. Os 102 pares contam **405** partidas de Champions no total
+(`soma_propria` da `A`), das quais só **96 são da temporada corrente** (`soma_propria` da `F`, que
+escopa por temporada) — as outras 309 são de 2024 e 2025, e nenhuma delas cabe em 180 dias. Dentro
+dos 180 dias sobram **101** partidas contando todas as competições (`soma_tudo` da `A`), e 96
+delas são as mesmas partidas de Champions desta temporada: o campeonato nacional daqueles times
+rende **cinco** partidas na base inteira. O 4,0 é histórico antigo da mesma competição; o 1,0 é o
+presente em tudo.
 
 Consequência para quem for ler a tabela de novo: **a leitura do ticket sobre a Champions se
 sustenta pelo lado do 1,0**, que é real e é o que interessa ("aqueles times têm 1 jogo na nossa
@@ -1247,29 +1250,53 @@ Ela está identificada:
 | fronteira dos 180 dias | 05/02/2026 **00:00** UTC |
 | partida na fronteira | `1492126` — Palmeiras × **Vitória**, Brasileirão 2026, 05/02/2026 **00:30** UTC |
 
-A partida cai meia hora dentro da fronteira. Contada em instante (`kickoff >= kickoff_âncora - 180
-dias`), ela entra e a média dá 25,6; contada em data (`DATE(kickoff) > DATE(âncora) - 180 dias`),
-ela sai e a média dá exatamente os 25,5 publicados. É a variante `B_fronteira_por_data`, e ela
-fecha **16 de 16**.
+A identificação não é dedução: `analyses/taskf_partida_da_fronteira.sql` lista todo par (âncora,
+partida do histórico) em que as duas réguas discordam, sobre as mesmas âncoras da reconciliação.
+A saída tem **uma linha**, e é esta, com `distancia_da_fronteira_min = 30`.
 
-⚠️ **A variante B não é a receita, e isto é deliberado.** Escolher a convenção que faz o último
-número bater é calibrar até o resultado sair — o oposto do que o universo congelado fez com o
-teto, onde a robustez veio de o vão de catorze horas devolver o mesmo conjunto. A convenção de
-instante é a que o resto da medição usa; ela fica, com o resíduo explicado. As outras quinze
-células são **insensíveis** à escolha: nenhuma delas se mexe entre A e B.
+A partida cai meia hora dentro da fronteira — ela é a **marginal** sob qualquer régua de 180 dias,
+e é por isso que uma diferença de régua aparece nela e em mais nada.
 
-### As variantes que não reproduzem, e o que cada uma mede
+| régua da fronteira | conta a partida? | Copa do Brasil "em tudo" | campos exatos |
+|---|---|---|---|
+| `A` — instante, inclusiva (`kickoff >= âncora − 180 dias`) | sim | 25,6 (409) | 15 / 16 |
+| `C` — data, inclusiva (`DATE(l) >= DATE(a) − 180`) | sim | 25,6 (409) | 15 / 16 |
+| `B` — data, **estrita** (`DATE(l) > DATE(a) − 180`) | não | **25,5** (408) | 16 / 16 |
 
-| variante | células exatas | o que ela troca |
+⚠️ **Não é a granularidade, é a estriteza** — e isso está medido, não deduzido. Trocar instante por
+data sem mexer no sinal (`C`) devolve os mesmos números da `A`, campo a campo: a partida das 00:30
+continua dentro. Quem a exclui é o `>` da `B`, que descarta o dia inteiro da fronteira e por isso
+é até 24 horas mais apertada que a régua por instante.
+
+⚠️ **A `B` não é a receita, e isto é deliberado.** Ela não é a convenção alternativa natural — é a
+convenção *mais apertada*, e adotá-la porque o último número bate seria calibrar até o resultado
+sair, o oposto do que o universo congelado fez com o teto (lá a robustez veio de o vão de catorze
+horas devolver o mesmo conjunto). A fronteira inclusiva fica, com o resíduo explicado. Os outros
+quinze campos são **insensíveis** às três réguas: nenhum deles se mexe entre `A`, `B` e `C`.
+
+Não dá para saber, de fora, qual régua o autor usou — e não precisa: a divergência inteira é uma
+partida em 409.
+
+### As sete variantes, e o que cada uma troca
+
+Cada uma mexe em **uma** coisa em relação à `A`, para a diferença ser atribuível. Uma variante que
+mexesse em duas mediria a soma dos dois efeitos e não falsificaria nenhum — é por isso que a
+leitura literal de "partidas encerradas" (AET e PEN dos dois lados) não tem variante própria: ela é
+a composição de `D` com `E`.
+
+| variante | campos exatos | o que ela troca |
 |---|---|---|
 | `A_ticket` | **15 / 16** | a receita |
-| `B_fronteira_por_data` | 16 / 16 | a fronteira dos 180 dias em data, não em instante |
-| `C_encerradas_literal` | 5 / 16 | "partidas encerradas" ao pé da letra: AET e PEN entram |
-| `D_como_o_pit_conta` | 7 / 16 | a contagem que o PIT de produção realmente faz |
+| `B_fronteira_estrita_por_data` | 16 / 16 | a fronteira dos 180 dias em data e estrita (`>`) |
+| `C_fronteira_inclusiva_por_data` | 15 / 16 | a fronteira em data e inclusiva (`>=`) — igual à `A` |
+| `D_ancoras_com_pen_aet` | 7 / 16 | AET e PEN entram como âncora, e só como âncora |
+| `E_historico_com_pen_aet` | 8 / 16 | AET e PEN entram no histórico, e só nele |
+| `F_como_o_pit_conta` | 7 / 16 | a contagem que o PIT de produção realmente faz |
+| `G_por_time_distinto` | 5 / 16 | a unidade: time distinto no lugar do par (jogo, time) |
 
 ### ⚠️ A coluna 1 do ticket é mais generosa que produção — o artefato é maior do que ele mediu
 
-A variante `D` responde uma pergunta que o ticket não faz: o que o Motor **de fato** enxerga.
+A variante `F` responde uma pergunta que o ticket não faz: o que o Motor **de fato** enxerga.
 Produção escopa por competição **e temporada** (é o join do `int_futebol_team_form_pit`, e é a
 célula `base`), enquanto a coluna 1 do ticket conta todas as temporadas daquela competição.
 
@@ -1285,10 +1312,12 @@ O time de Copa do Brasil não é tratado como um time de 10,2 jogos: é tratado 
 o que existe (25,6 em 180 dias, 26,4 na temporada corrente contando tudo) é maior do que os
 10,2 → 25,5 da tabela publicada.
 
-A Copa do Mundo é a linha que **não muda em definição nenhuma**: 2,0 nas quatro colunas, 96% em
-todas. Para seleção não existe outra competição para emprestar nem outra temporada para contar. O
-deserto dela não é artefato de escopo, de recorte, de temporada ou de convenção de fronteira — é o
-dado.
+E a Copa do Mundo tem uma invariante própria, visível nas **sete** variantes: as duas colunas dela
+são sempre **iguais entre si** — 2,0 e 2,0 na `A`, 2,1 e 2,1 na `D`, 1,8 e 1,8 na `G`. Juntar
+competição não acrescenta nada porque não há outra competição, e mudar de temporada não acrescenta
+nada porque não há outra temporada. O deserto dela não é artefato de escopo, de recorte, de
+temporada nem de convenção de fronteira: é o dado. O que move a linha da Copa do Mundo é só quem
+entra na conta (âncora e unidade), e isso move todas as linhas.
 
 ### O diagnóstico e as células dizem a mesma coisa
 
@@ -1296,18 +1325,19 @@ O ticket previu, a partir desta tabela, que juntar o histórico recuperaria Copa
 Sudamericana inteiras. A célula `escopo` mediu exatamente isso na #53: o piso 5 sobe de 69 para 92
 jogos, e os 23 que cruzam são **as 15 partidas de Sudamericana e as 8 de Copa do Brasil** — as
 mesmas 15 e 8 âncoras que aparecem na tabela desta seção. Aqui, a coluna "% com < 5 contando tudo"
-dá **0% nas duas**, e a variante `D` mostra que a contagem que a célula `escopo` usa (todas as
+dá **0% nas duas**, e a variante `F` mostra que a contagem que a célula `escopo` usa (todas as
 competições, temporada corrente) também dá 0% nas duas.
 
 A terceira leitura do ticket — "a Copa do Mundo é 47% da amostra de medição" — bate com os 46,7%
-(79 de 169) que a #53 mediu.
+(79 de 169) que a #51 publicou na composição do universo congelado.
 
 ### Observação de passagem: 142 partidas encerradas que não entram no histórico de ninguém
 
-A variante `C` foi construída para falsificar a leitura literal de "partidas encerradas", e mediu,
-de passagem, um efeito que não é da [F] mas fica registrado. O `team_log` de todo o pipeline
-filtra `status_short = 'FT'`, e jogo decidido na prorrogação (`AET`) ou nos pênaltis (`PEN`) não é
-`FT`:
+A variante `E` foi construída para falsificar o lado do histórico da leitura literal de "partidas
+encerradas", e mediu, de passagem, um efeito que não é da [F] mas fica registrado. O `team_log` de
+todo o pipeline filtra `status_short = 'FT'`, e jogo decidido na prorrogação (`AET`) ou nos
+pênaltis (`PEN`) não é `FT`. Contagem sobre a `fact_fixtures` inteira (a query está na Reprodução),
+com `status_short IN ('FT','AET','PEN')` como denominador:
 
 | competição | encerradas | fora do histórico (AET+PEN) | % |
 |---|---|---|---|
@@ -1318,8 +1348,12 @@ filtra `status_short = 'FT'`, e jogo decidido na prorrogação (`AET`) ou nos p�
 | Champions | 636 | 26 | 4,1% |
 | **base inteira** | **8.094** | **142** | 1,8% |
 
+As três que faltam para 142 são de Ligue 1 (2) e Bundesliga (1), e as três são jogo de
+acesso/rebaixamento — `Relegation Round`, `Semi-finals` e `Final` no campo `round`. Liga de pontos
+corridos não produz prorrogação; as copas produzem.
+
 No agregado é 1,8% e ninguém veria; nas copas de mata-mata é uma partida em sete. Sob a contagem
-`C`, a média da Copa do Brasil na própria competição vai de 10,2 para **11,4**. Não é para mexer
+`E`, a média da Copa do Brasil na própria competição vai de 10,2 para **11,4**. Não é para mexer
 aqui — a #56 e a #49 proíbem mudar pipeline —, e a decisão de incluir ou não tem lado defensável
 nos dois sentidos (o placar de um jogo decidido nos pênaltis é empate, e é assim que ele entraria
 nas médias de gols). Fica como candidato a ticket próprio.
@@ -1335,7 +1369,7 @@ justifica as outras: guarda que fica vermelha por trabalho alheio deixa de ser s
   dentro. Remarcação ou resultado ingerido depois muda âncora e histórico ao mesmo tempo.
 
 O gabarito de 16 números mora **dentro da análise**, com coluna de delta e um contador
-`celulas_exatas` por linha. Quem rodar vê a divergência sem conferir de olho, e nada fica vermelho
+`campos_exatos` por linha. Quem rodar vê a divergência sem conferir de olho, e nada fica vermelho
 em quem não pediu.
 
 ### Reprodução
@@ -1343,11 +1377,33 @@ em quem não pediu.
 ```bash
 cd dbt_futebol
 
-DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target dev --select taskf_reconciliacao_180d
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target dev \
+  --select taskf_reconciliacao_180d taskf_partida_da_fronteira
+
 bq query --use_legacy_sql=false --project_id=smartbetting-dados \
   < target/compiled/dbt_futebol/analyses/taskf_reconciliacao_180d.sql
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_partida_da_fronteira.sql
+
+# as duas contagens de passagem desta seção: o rodapé de AET/PEN e os PST dentro do corte
+bq query --use_legacy_sql=false --project_id=smartbetting-dados <<'SQL'
+SELECT COALESCE(competition, 'TOTAL') AS competicao,
+       COUNTIF(status_short IN ('FT','AET','PEN'))                     AS encerradas,
+       COUNTIF(status_short IN ('AET','PEN'))                          AS fora_do_historico,
+       COUNTIF(status_short = 'PST'
+               AND kickoff_utc >= TIMESTAMP('2026-06-16')
+               AND kickoff_utc <  TIMESTAMP('2026-08-04 12:00:00'))    AS pst_no_corte
+FROM `smartbetting-dados.futebol.fact_fixtures`
+GROUP BY ROLLUP(competition)
+HAVING fora_do_historico > 0 OR pst_no_corte > 0
+ORDER BY fora_do_historico DESC
+SQL
 ```
 
 O target é indiferente: `fact_fixtures` é a mesma tabela de produção em `dev`, `prod` e `taskF`, e
-esta análise não lê nada do dataset de medição. A saída são 16 linhas — quatro variantes × quatro
-competições —, e a soma de `celulas_exatas` na variante `A_ticket` é **15**.
+nenhuma das duas análises lê o dataset de medição. A reconciliação sai com **28 linhas** — sete
+variantes × quatro competições —, e a soma de `campos_exatos` na variante `A_ticket` é **15**. A
+análise da fronteira sai com **uma** linha.
+
+⚠️ `bq query` com o SQL como argumento trava nesta máquina; por redirecionamento ou heredoc,
+funciona.

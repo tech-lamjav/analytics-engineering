@@ -50,6 +50,7 @@ ancoras AS (
 SELECT
     a.competition                                        AS competicao_da_ancora,
     a.fixture_id                                         AS ancora_fixture_id,
+    a.mandante || ' × ' || a.visitante                   AS ancora_partida,
     a.team_name                                          AS time,
     FORMAT_TIMESTAMP('%F %H:%M', a.kickoff_utc)          AS ancora_kickoff_utc,
     FORMAT_TIMESTAMP('%F %H:%M',
