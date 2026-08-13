@@ -63,11 +63,13 @@
     COMO RODAR (do dbt_futebol/):
 
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_entregavel
-      bq query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=100 \
+      bq query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=200 \
         < target/compiled/dbt_futebol/analyses/taskf_entregavel.sql
 
-    (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento. E
-    sem `--max_rows` ele trunca em 100 linhas, que é menos do que as 60 do anexo mais as 39.)
+    (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento. O
+    `--max_rows` fica explícito por margem, não por necessidade de hoje: são 39 linhas mais 21 de
+    anexo, abaixo do corte silencioso de 100 — mas o anexo cresce a cada benchmark novo, e o corte
+    não avisa quando morde.)
 
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
@@ -81,7 +83,10 @@
     da [0.1], que é contra o qual o ticket contesta os números. O efeito de EXCLUIR jogos (Copa do
     Mundo, fase classificatória da Champions) é outra pergunta, e ela tem análise própria desde a
     #58 — analyses/taskf_exclusao.sql. -#}
-{%- set universo  = 'completo' -%}
+{#- Validado pela mesma macro que os predicados usam, mesmo sendo literal: o dia em que um nome de
+    universo for renomeado, isto quebra alto em vez de filtrar a tabela por um valor que não existe
+    mais — que devolveria zero linha e pareceria "a medição não tem estas premissas". -#}
+{%- set universo  = taskf_universo_valido('completo') -%}
 {#- Os nomes das duas células saem da macro que os define, e são CONFERIDOS: um nome que não
     existe vira Undefined, que o Jinja renderiza como string vazia — e `WHERE celula = ''`
     devolve zero linha, que nesta tabela se parece com "a medição não tem esta premissa". Aconteceu
@@ -95,10 +100,11 @@
         ~ "', junto='" ~ cel_junta ~ "'. Chaves aceitas: "
         ~ nomes_de_celula.keys() | join(' | ')) }}
 {%- endif -%}
-{#- Os mesmos quatro campos que a analyses/taskf_delta_celulas.sql usa para decidir se a premissa
-    se mexeu no piso 0. Uma segunda definição de "mexeu" faria as duas análises discordarem sobre
-    a mesma linha. -#}
-{%- set campos_piso0 = ['n_p0', 'a_odd_dava_p0', 'aconteceu_p0', 'diferenca_p0'] -%}
+{#- "Mexeu no piso 0" é o mesmo veredito que a analyses/taskf_delta_celulas.sql emite sobre a mesma
+    linha, então os quatro campos saem da macro que os declara — e não de uma segunda lista aqui,
+    que faria as duas análises discordarem em silêncio. Aqui os nomes são lidos direto da tabela
+    gravada; lá eles passam pelo alias local. -#}
+{%- set campos_piso0 = taskf_campos_do_piso0() -%}
 
 WITH {{ task01_base() }},
 
@@ -112,8 +118,8 @@ declaracao AS (
         STRUCT<mercado STRING, premissa STRING, fonte STRING, predicado STRING,
                escopo_hoje STRING, juntavel STRING, impedimento STRING, ressalva STRING>
         {%- for f in fontes %}
-        ('{{ f.mercado }}', '{{ f.premissa }}',
-         '{{ f.fonte | replace("'", "''") }}', '{{ f.predicado }}',
+        ('{{ f.mercado | replace("'", "''") }}', '{{ f.premissa | replace("'", "''") }}',
+         '{{ f.fonte | replace("'", "''") }}', '{{ f.predicado | replace("'", "''") }}',
          '{{ f.escopo_hoje }}', '{{ f.juntavel }}',
          '{{ f.impedimento | replace("'", "''") }}',
          '{{ f.ressalva | replace("'", "''") }}'){{ "," if not loop.last }}
@@ -122,9 +128,13 @@ declaracao AS (
 ),
 
 {#- ── A quebra por família ────────────────────────────────────────────────────────── -#}
+{#- O predicado sai do MESMO nome de universo que filtra a tabela de medição acima. Escrever
+    `taskf_universo_filtro()` direto daria o mesmo SQL hoje e deixaria as duas metades livres para
+    divergir amanhã — a quebra por família passaria a descrever outro conjunto de jogos que o dos
+    números ao lado. -#}
 apostas_congeladas AS (
     SELECT * FROM apostas
-    WHERE {{ taskf_universo_filtro() }}
+    WHERE {{ taskf_universo_predicado(universo) }}
 ),
 
 familia_do_universo AS (
@@ -289,4 +299,14 @@ SELECT
 FROM juntado AS j
 CROSS JOIN familia_resumo AS fr
 CROSS JOIN lote AS l
-ORDER BY bloco, j.mercado, j.premissa
+{#- `benchmark` entra na ordenação porque é parte do grão: sem ele, as duas linhas de uma premissa
+    do Gols (sharp e consenso) saem em ordem indefinida entre execuções, e a comparação linha a
+    linha de duas rodadas passaria a acusar diferença onde não há.
+    ⚠️ Este comentário fecha SEM o traço: com ele, o Jinja come a quebra de linha e cola o
+    ORDER BY no CROSS JOIN acima. Foi assim que o comentário da #37 quebrou o task01_base()
+    (commit b535130), e foi assim que este ORDER BY quebrou na primeira tentativa.
+    ⚠️ E o texto de um comentário não pode conter a sequência que o fecha — descrevê-la em
+    palavras é o jeito de falar dela aqui dentro; escrevê-la encerra o comentário no meio e
+    despeja o resto como SQL.
+ #}
+ORDER BY bloco, j.mercado, j.premissa, j.benchmark

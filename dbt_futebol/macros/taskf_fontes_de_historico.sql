@@ -21,6 +21,12 @@
       erro de compilação, no padrão fail-closed de taskf_eixos(). É o que pega premissa NOVA (o
       caso provável: alguém acrescenta uma premissa e ninguém lembra desta tabela).
 
+      ⚠️ E ela NÃO depende de alguém compilar a análise à mão: o erro sobe já no `dbt parse`,
+      porque a análise é nó do manifesto e o Jinja dela é renderizado ali. Medido, trocando
+      `ritmo_alto` por um nome inexistente — `dbt parse` sai com código 2 e a mensagem desta
+      macro. Como o workflow de docs roda `dbt docs generate`, que parseia o projeto inteiro, a
+      quebra aparece no CI mesmo que ninguém rode esta análise.
+
       LEITURA (analyses/taskf_entregavel.sql). A declaração é confrontada com a MEDIÇÃO: quem
       está declarado como imóvel (`nao` / `ja_junto` / `nao_se_aplica`) tem de sair com número
       idêntico entre `base` e `escopo` no piso 0, e quem está declarado `sim` tem de se mexer. É

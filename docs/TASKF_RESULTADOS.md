@@ -23,8 +23,9 @@ O escopo por competição existe, e é mais amplo do que o ticket supunha: não 
 `fact_standings_snapshot` (substituída pela correção da Task 0), e não é um lugar só. São **nove
 predicados** em seis modelos — o `int_futebol_team_form_pit` e as fontes de histórico próprias de
 cada mercado (os `last5` de Gols, BTTS e Dupla Chance, o `margin_stats` do Handicap, os spines de
-xG e de ritmo). **32 das 39 premissas** mudam de número quando ele é solto; as outras 7 não mudam,
-e cada uma tem motivo declarado.
+xG e de ritmo). **32 das 39 premissas** mudam de número quando ele é solto; as outras 7 ficam
+imóveis **no piso 0**, cada uma com motivo declarado — e ⚠️ *imóvel no piso 0 não quer dizer
+imóvel*: **cinco delas mudam no piso 5**, porque o `min_jogos` segue a célula (ADR 0008).
 
 O que o merge entrega é **amostra**: o universo que satisfaz `min_jogos >= 5` sobe de **69 para 92
 jogos** sem jogar nada fora, a amostra curta média cai de **45,5% para 34,5%** e os jogos médios
@@ -44,8 +45,9 @@ evidência (`superioridade_xg` e `tende_golear`).
 sem conserto.** Na Copa do Mundo o deserto é real e não artefato: **0% dos pares (jogo, time)
 ganham uma única partida** ao soltar a competição, porque seleção não joga mais nada na nossa base;
 dos 79 jogos dela no universo, 2 passam o piso 5, antes e depois. A Champions não tem **um** jogo
-no universo congelado — os 8 do período caem depois do teto —, e no universo estendido, onde ela
-existe, nenhum dos 18 passa o piso.
+no universo congelado, e por dois mecanismos somados: as **56 partidas** que ela jogou dentro da
+janela não têm preço coletado (a coleta da UCL entrou em 31/07) e as 8 que têm preço caem depois do
+teto. No universo estendido, onde ela existe, nenhum dos 18 passa o piso.
 
 ⚠️ **E a quebra por família não tem o que dizer nesta janela.** O universo congelado é **100%
 ano-calendário**: as ligas split-year não tinham começado em 16/06–04/08. Célula vazia é *sem
@@ -148,11 +150,18 @@ sudamericana 15 (8,9%), copa_do_brasil 8 (4,7%). Os 46,7% da Copa do Mundo batem
 amostra" que a spec #49 atribui a ela, e Copa do Brasil + Sudamericana somam 23, contra os "cerca
 de 24 jogos" que a spec estima que o merge recupera.
 
-⚠️ **A Champions não tem UM jogo no universo primário.** Os únicos jogos dela na janela são os 8
-de 04/08 à noite, e o corte os remove. A pergunta da spec sobre a fase classificatória da
-Champions (user story 24) não tem amostra nenhuma no universo congelado — quem for executar a
-#58 precisa saber disso antes de desenhar a resposta, porque ela terá de sair do universo
-estendido ou de lugar nenhum.
+⚠️ **A Champions não tem UM jogo no universo primário.** Os únicos jogos dela **com preço
+coletado** na janela são os 8 de 04/08 à noite, e o corte os remove. A pergunta da spec sobre a
+fase classificatória da Champions (user story 24) não tem amostra nenhuma no universo congelado —
+quem for executar a #58 precisa saber disso antes de desenhar a resposta, porque ela terá de sair
+do universo estendido ou de lugar nenhum.
+
+⚠️ *Precisado na #59.* Esta frase dizia "os únicos jogos dela na janela", sem o qualificador, e
+assim ela é falsa: a Champions **jogou 56 partidas dentro da janela**, de 07/07 a 29/07, todas
+encerradas e todas **antes** do teto. Nenhuma delas tem uma linha em `fact_odds_snapshot` — a
+coleta da UCL entrou no ar em 31/07 —, e o universo exige preço. São **dois** mecanismos
+independentes zerando a Champions, e só o segundo estava escrito: 56 jogos sem preço, mais 8 com
+preço depois do teto. A conclusão não muda; a explicação, sim.
 
 ### A tolerância, declarada
 
@@ -518,9 +527,11 @@ mesmo rótulo, e `escopo` junta os dois normalmente. **A [B] não deve herdar "e
 ajuda a Europa" como regra** — o que esta medição mostra é que, nesta janela, não há como
 verificar.
 
-Some-se a isso o que a #51 já registrou: os únicos jogos de Champions do período são os 8 de 04/08
-à noite, removidos pelo teto do universo congelado. A pergunta da spec sobre a fase
-classificatória da Champions (user story 24) segue sem amostra no universo primário.
+Some-se a isso o que a #51 já registrou: os únicos jogos de Champions do período **com preço
+coletado** são os 8 de 04/08 à noite, removidos pelo teto do universo congelado (as 56 partidas
+que ela jogou dentro da janela não têm preço nenhum — ver a precisão feita na #59, na seção da
+#51). A pergunta da spec sobre a fase classificatória da Champions (user story 24) segue sem
+amostra no universo primário.
 
 ### O que mudou nas 39 premissas
 
@@ -2384,9 +2395,27 @@ jogo, e se dá para juntar. `dbt compile` + `bq query`, e nada de `dbt build`.
 
 **As 39 linhas fecham, e a metade declarada delas está conferida contra a medição, não afirmada.**
 Das 39 premissas do catálogo, **32 se mexem** quando o histórico deixa de ser limitado à competição
-do jogo, **3** não se mexem por definição (as de tabela, ADR 0008), **1** já cruza campeonatos hoje
-(`h2h_favoravel`) e **3** não leem histórico nenhum (`desfalque_adversario` e as duas de movimento
-de linha). As 39 linhas da declaração batem uma a uma com o que a medição fez: **zero `DIVERGE`**.
+do jogo. As outras 7 ficam imóveis **no piso 0**: **3** por definição (as de tabela, ADR 0008),
+**1** porque já cruza campeonatos hoje (`h2h_favoravel`) e **3** porque não leem histórico nenhum
+(`desfalque_adversario` e as duas de movimento de linha). As 39 linhas da declaração batem uma a
+uma com o que a medição fez: **zero `DIVERGE`**.
+
+⚠️ **Imóvel no piso 0 não quer dizer imóvel.** **Cinco das sete** mudam no piso 5, porque o piso é
+propriedade do **jogo** e não da premissa: com o histórico junto, jogos que não passavam passam a
+passar, e a premissa é avaliada sobre um conjunto maior de linhas.
+
+| imóvel no piso 0 | n no piso 5 | diferença no piso 5 | mexe no piso 5? |
+|---|---|---|---|
+| `h2h_favoravel` (1X2) | 41 → 52 | −12,9 → −10,7 | **sim** |
+| `superioridade_tabela` (1X2) | 35 → 47 | −8,2 → −6,1 | **sim** |
+| `supremacia` (Handicap) | 95 → 121 | −6,0 → −6,4 | **sim** |
+| `linha_descendo` (Gols) | 213 → 296 | +5,5 → +3,8 | **sim** |
+| `linha_subindo` (Gols) | 96 → 116 | +0,8 → −6,6 | **sim** |
+| `sem_rodizio` (Handicap) | 188 → 188 | −2,7 → −2,7 | não |
+| `desfalque_adversario` (1X2) | 7 → 7 | −24,9 → −24,9 | não |
+
+As duas que não se mexem em piso nenhum são as de ponta oposta: `sem_rodizio` só acende em jogo com
+histórico longo (188 linhas nos quatro pisos) e `desfalque_adversario` acende em 7 linhas no total.
 
 O ganho de amostra é o que a spec previu e maior do que ela estimou no piso: o universo que
 satisfaz `min_jogos >= 5` sobe de **69 para 92 jogos** sem jogar nada fora, e a soma dos `n` do
@@ -2511,8 +2540,9 @@ segunda mão e **se mexe** (`n_p0` 160 → 165), porque a outra metade da defini
 
 A coluna "família" das 39 linhas vale `ano-calendário` nas 39 porque **o universo congelado inteiro
 é ano-calendário**. A janela (16/06 a 04/08) cai na virada de temporada europeia: as cinco ligas
-split-year ainda não tinham começado, e os únicos jogos de Champions do período são os 8 de 04/08 à
-noite, que o teto do universo remove.
+split-year ainda não tinham começado, e a Champions — que jogou 56 partidas de qualificatória
+dentro da janela — não entra no universo porque nenhuma delas tem preço coletado (a coleta da UCL
+entrou em 31/07); as 8 que têm preço são de 04/08 à noite, depois do teto.
 
 ⚠️ **Célula vazia é SEM AMOSTRA, nunca efeito nulo.** Não se pode concluir daqui que juntar
 campeonato não ajuda as europeias. O que se sabe sobre elas é mecânico, não medido: nesta janela o
@@ -2545,8 +2575,38 @@ do ticket original.
 | o **universo congelado** medido (169 jogos com linha de aposta) | 79 | **0** | 79 | 46,7% |
 
 A afirmação da spec é verdadeira sobre a **janela de jogos encerrados**, não sobre o universo em
-que as 39 linhas foram medidas — ali a Champions vale zero, porque o teto das 12:00 UTC de 04/08
-remove os 8 jogos dela e não sobra nenhum.
+que as 39 linhas foram medidas — ali a Champions vale zero.
+
+⚠️ **E o motivo do zero não é o teto, ou não só ele.** As 56 partidas de Champions da janela são
+todas encerradas e todas **anteriores** ao corte (07/07 a 29/07); o que as mantém fora do universo
+é não terem **uma linha sequer** em `fact_odds_snapshot` — a coleta da UCL entrou no ar em 31/07, e
+o universo é jogo com preço. O teto explica os **outros 8**, de 04/08 à noite, esses sim com preço.
+Os dois mecanismos são disjuntos e somam 64; medido:
+
+| jogos de Champions | partidas | encerradas | com preço coletado | período |
+|---|---|---|---|---|
+| dentro do teto (na janela medida) | **56** | 56 | **0** | 07/07 → 29/07 |
+| depois do teto | 8 | 8 | 8 | 04/08 |
+
+E não é um caso especial da Champions: **o universo é aposta, não partida**, e os dois filtros que
+o produzem — status `FT` (o `jogos_encerrados` do `task01_base()`) e ter preço coletado —
+reconstroem a composição dos 169 exatamente, competição a competição:
+
+| competição | encerradas na janela | `FT` | com preço | **`FT` + preço** | no universo (#51) |
+|---|---|---|---|---|---|
+| copa_mundo | 89 | 80 | 88 | **79** | 79 |
+| serie_b | 73 | 73 | 39 | **39** | 39 |
+| champions_league | 56 | 51 | **0** | **0** | 0 |
+| brasileirao | 28 | 28 | 28 | **28** | 28 |
+| sudamericana | 16 | 15 | 16 | **15** | 15 |
+| copa_do_brasil | 8 | 8 | 8 | **8** | 8 |
+| **total** | **270** | 255 | 179 | **169** | **169** |
+
+A Série B é a segunda demonstração: 73 jogos disputados e **39** no universo, porque a coleta dela
+entrou em 09/07 e a janela começa em 16/06. Quem ler "a Champions não tem amostra" como "a
+Champions não jogou" tira a conclusão errada sobre o que falta — **falta preço, não futebol**, e é
+por isso que ampliar a coleta (a task [C]) e juntar o histórico (esta) são alavancas diferentes
+sobre o mesmo problema.
 
 E "seguem de amostra curta" é literal nas duas:
 
@@ -2644,6 +2704,27 @@ nada mais depende do número (a recomendação de manter a Copa do Mundo se apoi
 piso 5 dentro dos 79, que não mudam). O aprendizado é o que a `taskf_publicado_01` já dizia sobre
 transcrever número para dentro de texto — **e vale para este documento tanto quanto para o da
 [0.1]**.
+
+### ⚠️ O que a revisão pegou, e que nenhuma guarda pegaria
+
+Seis correções, e **nenhuma delas move um número** — a saída depois de todas é idêntica linha a
+linha à de antes. Ficam registradas porque três são de conteúdo, não de forma:
+
+| o que | por que importava |
+|---|---|
+| **a Champions não é zerada pelo teto** — são 56 jogos sem preço mais 8 depois do corte | a explicação publicada não cobria as 56, e ela vinha da #51; a conclusão não muda, o mecanismo sim |
+| **"as 7 não mudam" virou "não mudam no piso 0"** | cinco das sete mudam no piso 5, e o texto do veredito dizia o contrário do que a própria tabela mostra |
+| **o cabeçalho da análise citava números errados** sobre o corte do `bq query` | é a falha que a regra de abertura deste documento existe para evitar: número dentro de comentário envelhece sozinho |
+| **`campos_piso0` era uma segunda cópia** da lista que define "mexeu" | duas definições fariam esta análise e a `taskf_delta_celulas` discordarem sobre a mesma linha; extraída para `taskf_campos_do_piso0()`, com o SQL compilado das duas conferido idêntico |
+| **o universo não era fail-closed** | a célula era validada e o universo não; agora passa por `taskf_universo_valido()` e o predicado sai do mesmo nome |
+| **a ordenação omitia `benchmark`** | é parte do grão: sem ele, duas execuções podem sair em ordem diferente e a comparação linha a linha acusaria diferença onde não há |
+
+E uma sexta quebra, esta de autoria: o comentário que documenta a ordenação **fechava com o traço**
+e comeu a quebra de linha, colando o `ORDER BY` no `CROSS JOIN` acima — exatamente o que o
+comentário da #37 fez com o `task01_base()` (commit `b535130`). O `bq query` recusou com erro de
+sintaxe, alto. E ao documentar isso dentro do próprio comentário, a sequência de fechamento
+escrita no texto **encerrou o comentário no meio** e despejou o resto como SQL. As duas quebraram
+antes de qualquer número sair.
 
 ### Reprodução
 
