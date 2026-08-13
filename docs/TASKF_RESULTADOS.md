@@ -2067,10 +2067,17 @@ declarado é o universo de placebo — remover 79 jogos sorteados por hash e com
 contra a distribuição do placebo. Ele continua não tendo sido rodado, e continua sendo a única
 coisa que mudaria a leitura desta linha.
 
-**De passagem, a mesma tabela mostra que a Copa do Mundo jogou 88 e não 79.** Nove partidas
-encerradas dela ficam fora do universo: oito por status (5 PEN e 3 AET — mata-mata decidido fora
-do tempo normal, o caso da issue #71) e **uma** por não ter preço coletado, na primeira rodada de
-grupos. O deserto de histórico dela, portanto, é medido sobre 79 dos 88 jogos que aconteceram.
+**De passagem, a mesma tabela mostra que a Copa do Mundo jogou 89 e não 79.** Dez partidas
+encerradas dela ficam fora do universo: **nove por status** (5 AET e 4 PEN — mata-mata decidido
+fora do tempo normal, o caso da issue #71) e **uma** por não ter preço coletado, na primeira rodada
+de grupos. O deserto de histórico dela, portanto, é medido sobre 79 dos 89 jogos que aconteceram.
+
+⚠️ *Corrigido na #59.* Este parágrafo dizia "88 … oito por status (5 PEN e 3 AET)". O bloco
+`fora_do_universo`, que não mudou, sempre devolveu **seis linhas somando 10** — AET 1+2+2 = 5 e
+PEN 1+3 = 4, mais a sem preço —, e a contagem direta no `fact_fixtures` confirma 80 FT + 5 AET +
+4 PEN = **89** na janela. Era erro de transcrição da prosa, não da medição: os rótulos de AET e PEN
+saíram trocados e uma partida se perdeu na soma. É o mesmo modo de falha que a
+`macros/taskf_publicado_01.sql` documenta sobre transcrever número para dentro do texto.
 
 ⚠️ **E a exclusão não é aleatória no tempo.** Tirar a Copa do Mundo não tira 47% dos jogos
 espalhados pela janela: tira **os primeiros 24 dias dela**. O universo `sem_copa_mundo` começa em
@@ -2620,6 +2627,24 @@ saiu com `WHERE celula = ''`, devolveu zero linha, e as 39 premissas apareceram 
 `taskf_nomes_de_celula().values()` e levanta erro de compilação. É o mesmo modo de falha que o
 fail-closed do `taskf_eixos()` existe para fechar, numa porta que ninguém tinha fechado.
 
+### ⚠️ O que apareceu no caminho: a #58 publicou 88 onde a query diz 89
+
+Contar as partidas encerradas da janela para responder ao critério de aceite deste ticket colidiu
+com um número já publicado: a seção da #58 dizia que a Copa do Mundo "jogou 88", com nove partidas
+fora do universo, "oito por status (5 PEN e 3 AET)".
+
+O `fact_fixtures` diz **80 FT + 5 AET + 4 PEN = 89**, nos dois datasets (produção e medição), e o
+bloco `fora_do_universo` do próprio `taskf_exclusao` — re-executado sem nenhuma alteração — devolve
+**seis linhas somando 10**: AET 1 + 2 + 2 = 5, PEN 1 + 3 = 4, mais a partida sem preço coletado.
+79 + 10 = 89.
+
+**A medição estava certa e a prosa errada**: os rótulos de AET e PEN saíram trocados e uma partida
+se perdeu na soma. A seção da #58 foi corrigida no lugar, com a marca de que a correção é da #59;
+nada mais depende do número (a recomendação de manter a Copa do Mundo se apoia nos 2 jogos acima do
+piso 5 dentro dos 79, que não mudam). O aprendizado é o que a `taskf_publicado_01` já dizia sobre
+transcrever número para dentro de texto — **e vale para este documento tanto quanto para o da
+[0.1]**.
+
 ### Reprodução
 
 ```bash
@@ -2648,10 +2673,16 @@ SELECT competition,
        COUNTIF(status_short IN ('FT', 'AET', 'PEN')) AS encerrados
 FROM janela GROUP BY competition ORDER BY encerrados DESC
 SQL
+
+# a correção do 88 → 89: o bloco `fora_do_universo` da #58, re-executado sem alteração nenhuma
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_exclusao
+bq query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=500 \
+  < target/compiled/dbt_futebol/analyses/taskf_exclusao.sql
 ```
 
 O `taskf_entregavel` sai com **60 linhas** — 39 no bloco `principal` e 21 no `anexo` — e o
-`taskf_familia_e_mecanismo` com **16** (13 de competição, 2 de família e 1 de total).
+`taskf_familia_e_mecanismo` com **16** (13 de competição, 2 de família e 1 de total). O
+`fora_do_universo` do `taskf_exclusao` sai com **seis linhas de `copa_mundo`**, somando 10.
 
 ⚠️ **Sem `--max_rows` o `bq query` corta em 100 linhas sem avisar**, e são 60 mais o cabeçalho de
 progresso; com o anexo junto a margem é pequena. É o mesmo corte silencioso da #57.
