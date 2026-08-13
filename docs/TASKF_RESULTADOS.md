@@ -913,3 +913,237 @@ vale a pena escrever: `jogos_medios_disp = jogos_medios_usado` em toda linha de 
 em `escopo`, **0/60** em `recorte` e em `ambos`. Uma guarda que exigisse só a igualdade passaria em
 branco se as quatro células virassem `temporada` por engano; exigir a desigualdade do outro lado
 fecha isso.
+
+---
+
+## Ticket #55 — Costura B: as invariantes deixam de ser afirmação
+
+`tests/assert_taskf_celulas_mesmo_universo.sql` + `assert_taskf_premissas_de_tabela_identicas.sql`
++ `assert_taskf_base_reproduz_01.sql` + `assert_taskf_contagens_por_recorte.sql` +
+`analyses/taskf_remedicao.sql` · execução 2026-08-12 19:55 a 20:05 UTC · commit `b535130` ·
+dataset `futebol_taskF`
+
+O que as três seções anteriores afirmam sobre a saída das quatro células vira cobrança automática.
+Antes deste ticket, "as quatro rodaram na mesma execução", "as premissas de tabela não se mexem" e
+"a `base` reproduz a [0.1]" eram disciplina de quem executou e parágrafo de quem leu. Depois dele,
+são quatro guardas com nome, tag e vermelho.
+
+### Veredito
+
+**Quatro guardas, quatro verdes**, sobre as quatro células re-medidas na mesma execução. As quatro
+foram **quebradas de propósito** — cinco quebras diferentes, cada uma desfeita em seguida e
+reconferida — e nenhuma delas passa em branco.
+
+```
+dbt test --target taskF --select tag:costura_b     →  PASS=4 ERROR=0
+```
+
+A tabela acumulativa mudou de schema (ganhou `odds_loaded_at`), o que obrigou a dropá-la e re-medir
+as quatro células. A re-medição reproduz a #54 em **7.195 de 7.200 campos**, e os 5 que divergem
+são empates de arredondamento comprovados aritmeticamente.
+
+### As quatro guardas, e o que cada uma cobra
+
+| guarda | o que cobra | cobertura hoje |
+|---|---|---|
+| `assert_taskf_celulas_mesmo_universo` | as quatro células existem, o rótulo casa com os eixos, universo idêntico e igual ao declarado, mesma construção dos fatos, fatos anteriores à medição e mesmo commit nas quatro | 4 células, 169 jogos / 8.567 linhas, `odds_loaded_at` 13:24:15 e `git_sha` `b535130` nas quatro |
+| `assert_taskf_premissas_de_tabela_identicas` | as três premissas de tabela têm números idênticos no piso 0 entre as células | 5 linhas de grão × 4 células, 7 campos — 105 comparações |
+| `assert_taskf_base_reproduz_01` | a `base` reproduz o Teste 2 publicado da [0.1] sob a régua declarada | 39 linhas, **225 campos publicados** comparados |
+| `assert_taskf_contagens_por_recorte` | disponível = usado sob `temporada`, e **alguma** linha diverge sob `ultimos_10` | 60/60 linhas iguais em `base` e `escopo`; 60/60 divergentes em `recorte` e `ambos` |
+
+As quatro leem **só `source('futebol_taskF', ...)`** — nenhuma faz `ref()` de modelo. Isso não é
+detalhe de estilo: um `ref()` as penduraria no grafo do `fact_odds_snapshot` e a seleção indireta
+do dbt as arrastaria para dentro dos `dbt build` das fases 1 e 2, onde elas são vermelhas por
+construção (as células ainda não foram medidas). Seria uma segunda `--exclude` na receita, e "a
+Costura A é a única exclusão que a medição precisa" é promessa escrita em três lugares desde a #52.
+Conferido no manifest: as quatro dependem de um nó só, a source.
+
+### Duas leituras do critério de aceite, já corrigidas antes desta guarda existir
+
+O critério da #55 pede "as **quatro** premissas de tabela com números **idênticos**". Implementado
+ao pé da letra, ele nasce vermelho — e as duas correções não são deste ticket, são da ADR 0008,
+medidas na #53 e na #54:
+
+- **três, não quatro.** `x_superioridade_tabela` não é uma das 39 medidas: é coluna interna do
+  `int_futebol_premissas_1x2` que a Dupla Chance reusa dentro do `lado_coberto_forte` — e este
+  também lê `forca_mismatch`, então segue o eixo. Cobrá-la daria zero linha comparada, que é
+  exatamente o silêncio verde que a guarda existe para não produzir;
+- **a identidade é no piso 0.** Nos pisos maiores as três mudam de número legitimamente, porque o
+  `min_jogos` segue a célula (o piso é propriedade do jogo, não da premissa):
+  `superioridade_tabela` vai de n=35 na `base` para n=47 na `escopo` no piso 5. Pelo mesmo motivo
+  `jogos_medios_disp`, `jogos_medios_usado` e `pct_amostra_curta` ficam fora da comparação mesmo no
+  piso 0 — `supremacia` mede 7,0 partidas médias na `base` e 29,1 na `ambos`, e isso é o resultado,
+  não um defeito.
+
+O enunciado da spec continua como está de propósito: ele é o registro do que se sabia antes de
+medir. O cabeçalho da guarda carrega as duas leituras por escrito.
+
+### A quarta guarda, que a #54 encomendou
+
+A #54 fechou pedindo uma invariante sobre as duas contagens de amostra, **escrita com as duas
+pontas**. Ela existe: sob recorte `temporada` toda linha tem disponível = usado (sem teto, tudo que
+existe é usado); sob `ultimos_10`, **alguma** linha tem de divergir. A segunda ponta é o que impede
+o silêncio verde — se as quatro células virassem `temporada` por engano, a igualdade sozinha
+passaria em todas e o eixo de recorte simplesmente não teria sido medido.
+
+⚠️ O lado `ultimos_10` é cobrado como "alguma linha diverge", e **não** como 60/60. Que hoje sejam
+60 de 60 é medição, não construção: uma premissa que só acendesse em jogo de time novo teria
+disponível < 10 em todas as suas linhas e as duas médias sairiam iguais, legitimamente. Cobrar o
+número de hoje seria congelar dado como se fosse regra.
+
+### A falsificação: cinco quebras, cinco vermelhos, cinco desfeitas
+
+O critério de aceite pede que as guardas falhem **de verdade**. Cada uma foi quebrada, conferida e
+restaurada; a integridade da tabela foi reconferida no fim contra a cópia da #54 — as mesmas 5
+divergências de arredondamento de antes, nem uma a mais.
+
+⚠️ **A quebra 8 é a que justifica a existência das outras.** Ela veio da revisão de standards, que
+achou um buraco no código antes de qualquer teste rodar: o `git_sha` tinha entrado no `ANY_VALUE`
+da CTE mas **não** na chave de `versoes_na_celula`, então uma célula com duas procedências dentro
+dela era achatada antes de a conferência de commit comparar coisa alguma — a cobrança passava
+justamente no caso para o qual foi escrita. Corrigido, a quebra 8 devolve `versoes_na_celula: 2`.
+Vale como aviso ao próximo: acrescentar campo à CTE de agregação **e** à chave de versão são dois
+passos, e esquecer o segundo é silencioso.
+
+| # | quebra | guarda que caiu | saída |
+|---|---|---|---|
+| 1 | `--vars '{taskf_tolerancia_pp: 0}'` (não toca no dado) | `base_reproduz_01` | **6 linhas**, todas os campos em pp de `linha_descendo` — o resíduo conhecido, e mais nada |
+| 2 | `SET n_p0 = n_p0 + 1 WHERE celula='escopo' AND premissa='supremacia' AND benchmark='sharp'` | `premissas_de_tabela_identicas` | **1 linha**: n_p0 302 contra 301 na referência |
+| 3 | `SET odds_loaded_at = TIMESTAMP_ADD(odds_loaded_at, INTERVAL 1 SECOND) WHERE celula='ambos'` | `celulas_mesmo_universo` | **3 linhas**, `leu_outra_construcao: true` — a assinatura exata de quem reconstruiu a ancestria no meio da medição |
+| 4 | `SET odds_loaded_at = TIMESTAMP '2026-08-13 00:00:00 UTC'` (as quatro) | `celulas_mesmo_universo` | **4 linhas**, `medida_antes_dos_fatos: true` e `leu_outra_construcao: false` — a outra ponta: quem rebuildou os fatos e esqueceu de re-medir |
+| 5 | `SET pit_recorte='temporada' WHERE celula='ambos'` | `contagens_por_recorte` **e** `celulas_mesmo_universo` | **61 linhas** (resumo + as 60 com teto) e **1 linha** (`rotulo_nao_casa_com_os_eixos`) |
+| 6 | `SET git_sha='cafebabe' WHERE celula='recorte'` | `celulas_mesmo_universo` | **1 linha**, `outro_commit: true` com os fatos iguais — a célula medida de outro código |
+| 7 | `SET git_sha='desconhecido'` (as quatro) | `celulas_mesmo_universo` | **4 linhas**, `sem_procedencia: true` — as quatro concordam entre si e nenhuma diz de onde veio |
+| 8 | `SET git_sha='cafebabe' WHERE celula='base' AND mercado='Gols'` | `celulas_mesmo_universo` | **1 linha**, `versoes_na_celula: 2` — duas procedências DENTRO de uma célula |
+
+⚠️ **A quebra 1 é a mais informativa das cinco.** Zerar a tolerância derruba exatamente 6 campos,
+todos da mesma premissa, e nenhum outro dos 225. Isso mede duas coisas de uma vez: a régua está
+cobrindo uma coisa só, e as outras 38 premissas reproduzem o publicado **exatamente**, sem folga
+nenhuma sustentando o verde.
+
+⚠️ **O critério de aceite pede que "os três" falhem se as células forem materializadas em execuções
+separadas, e isso não é o que acontece — nem deveria ser.** Quem cobra "mesma execução" é a
+primeira guarda, sozinha, pelas três pontas (mesma construção dos fatos, fatos antes da medição,
+mesmo commit). As outras não caem nesse cenário porque falam de outra coisa: a das premissas de
+tabela fala de escopo vazando, a da reprodução fala da [0.1], a das contagens fala do recorte.
+Espalhar a mesma cobrança pelas quatro daria redundância, não cobertura.
+
+⚠️ **E o que nenhuma das quatro alcança, dito antes que alguém descubra do jeito caro.** As quatro
+células são sempre materializadas por quatro `dbt build` separados — isso é da receita, não um
+desvio. O que a #51 fixou como "mesma execução" é **as quatro terem lido a mesma construção dos
+fatos**, e é isso que a guarda cobra. Logo: re-medir uma célula amanhã, sobre fatos intocados e do
+mesmo commit, sai **verde**.
+
+O que escapa nesse caso é a **deriva de reconstrução dos modelos** — e ela é real e está medida
+aqui mesmo: 5 campos em 7.200 mudaram entre duas medições sobre os mesmos fatos, todos empates de
+arredondamento do `AVG`. Nenhuma guarda distingue esse empate de um efeito de 0,1 pp, porque no
+número eles são idênticos. Quem quiser a diferença mede com `analyses/taskf_remedicao.sql`, que é
+onde ela é visível — e é por isso que a comparação da re-medição virou arquivo em vez de rascunho.
+O carimbo `git_sha` fecha a parte disso que **é** decidível sem régua arbitrária: duas células do
+mesmo commit ou não.
+
+### O carimbo `odds_loaded_at`, e o que ele custou
+
+A forma verificável de "mesma execução" que a #51 definiu era ler o
+`fact_odds_snapshot.dbt_loaded_at` **ao vivo** e conferir que é anterior aos quatro `medido_em`. A
+#55 gravou esse valor **na linha de cada célula**, e a mudança tem duas razões:
+
+1. lido ao vivo, o veredito **decai**: qualquer rebuild posterior no dataset de medição deixaria a
+   guarda vermelha sem que as quatro células tivessem deixado de ser comparáveis entre si — que é a
+   única coisa que a guarda quer afirmar;
+2. lido ao vivo, ele exige `ref()`, e o `ref()` traz o problema de grafo descrito acima.
+
+Carimbado, ele responde a pergunta certa para sempre — e responde **mais forte**: não é "os quatro
+carimbos são próximos", é "as quatro leram a MESMA construção", com o valor na linha.
+
+O preço é o que a #54 já tinha documentado: mudar o schema da acumulativa obriga a `bq rm` e
+re-medir as quatro células. Foi feito, e a `taskf_pit_por_celula` foi reescrita junto — as duas
+tabelas carregam a mesma execução.
+
+### A re-medição reproduz a #54: 5 campos em 7.200
+
+`analyses/taskf_remedicao.sql` — e desta vez a comparação **é re-derivável**. A #54 fez a mesma
+conferência com uma cópia tratada como rascunho e apagada em seguida, e registrou a lição; aqui a
+cópia é a tabela `futebol_taskF.taskf_teste2_54`, declarada em `sources.yml`, e a comparação é um
+arquivo.
+
+| célula | linhas | sem contraparte | linhas divergentes | campos divergentes | campos comparados |
+|---|---|---|---|---|---|
+| `base` | 60 | 0 | 1 | **1** | 1.800 |
+| `escopo` | 60 | 0 | 2 | **3** | 1.800 |
+| `recorte` | 60 | 0 | 0 | **0** | 1.800 |
+| `ambos` | 60 | 0 | 1 | **1** | 1.800 |
+
+Os cinco campos, e a prova de que os três casos são **empate de arredondamento** e não deriva —
+cada um cai exatamente no meio da grade de `ROUND(·, 1)`:
+
+| célula | linha | campo | antes → agora | grade | veredito |
+|---|---|---|---|---|---|
+| `base` | Handicap · `raramente_perde_por_2` · consenso | `aconteceu_p10` | 96,2 → 96,3 | n=320, 308/320 = **96,25** | empate exato |
+| `escopo` | Dupla Chance · `invicto_recente` · derivada | `jogos_medios_disp` e `_usado` | 10,2 → 10,3 | n=48, soma 492 → **10,25** | empate exato |
+| `escopo` e `ambos` | Gols · `historico_under` · consenso | `pct_amostra_curta` | 12,8 → 12,7 | n=400, 51/400 = **12,75** | empate exato |
+
+É o mesmo fenômeno que a #53 mediu em três casos e a #54 em um: o `AVG` do BigQuery acumula em
+ponto flutuante e a ordem depende do layout físico da tabela, que muda quando os modelos são
+reconstruídos. Nenhuma das cinco linhas é de benchmark preferido em mercado de peso — três das
+cinco são de consenso, que não pesa.
+
+E as conferências de fora não se moveram:
+
+- **reconciliação contra a [0.1]**: 38 `EXATO` / 1 `INVESTIGAR`, com `linha_descendo` nos mesmos
+  −2 de `n` e +0,1/+0,2 pp;
+- **saturação, piso, monotonicidade e chaves**: `OK` nos quatro blocos, 0 violações — 15.150 e
+  16.435 pares saturados, piso 5 em 69 / 92 / 81 / 92, 21.054 pares idênticos nas quatro.
+
+### ⚠️ E o que apareceu no caminho: o `task01_base()` estava quebrado em master
+
+Ao re-medir a primeira célula, o `taskf_teste2` compilado não era SQL válido. A causa não é da [F]:
+o PR #48 (spec #37, mergeado às **14:53** de 12/08) inseriu um bloco `{#- ... -#}` entre a última
+coluna do CTE `odds` e o `FROM`. O traço de abertura faz o Jinja comer a quebra de linha anterior, e
+o compilado saía `... AS conjunto_incompletoFROM (`.
+
+**Todas as 12 análises que chamam `task01_base()`** — as 8 da [0.1]/[A] e as 4 da [F] — pararam de
+compilar em master naquele merge. Ninguém viu por dois motivos que valem para a próxima vez:
+
+- nenhuma delas roda no agendado, que executa `dbt test --select tag:guarda`. Análise quebrada é
+  **muda** até alguém rodar;
+- a medição da #54 rodou às 15:29 do mesmo dia **de dentro do worktree dela**, que não continha o
+  merge. O isolamento que o `CLAUDE.md` exige protege de clobber de arquivo e, de brinde, esconde
+  regressão de master até o próximo branch novo.
+
+Corrigido no commit `b535130` (abre com `{#`, sem traço), com as quatro análises da [F] e a
+`task01_teste2` validadas no dry-run do BigQuery depois do fix.
+
+### Reprodução
+
+```bash
+cd dbt_futebol
+
+# FASE 0 — só porque a #55 mudou o schema da acumulativa (o odds_loaded_at)
+bq cp -f smartbetting-dados:futebol_taskF.taskf_teste2 \
+         smartbetting-dados:futebol_taskF.taskf_teste2_54   # a cópia que sobrevive
+bq rm -f -t smartbetting-dados:futebol_taskF.taskf_teste2
+
+# as quatro células, cada uma com build -> carimbo -> Teste 2 e as MESMAS vars. Nada de `+`.
+# (a ancestria não foi reconstruída: ela já estava no dataset e nenhum modelo dela mudou)
+# base    : --vars '{}'                                        (sem exclusão: a Costura A roda)
+# escopo  : --vars '{pit_escopo: todas}'                       --exclude assert_taskf_pit_default_igual_baseline
+# recorte : --vars '{pit_recorte: ultimos_10}'                 idem
+# ambos   : --vars '{pit_escopo: todas, pit_recorte: ultimos_10}' idem
+
+# FASE 3 — o portão. Enquanto não estiver verde, são quatro medições, e não um 2x2 comparável.
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt test --target taskF --select tag:costura_b
+
+# a re-medição contra a execução anterior
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_remedicao \
+  --vars '{taskf_remedicao_anterior: taskf_teste2_54}'
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_remedicao.sql
+
+# a falsificação que não toca no dado
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt test --target taskF \
+  --select assert_taskf_base_reproduz_01 --vars '{taskf_tolerancia_pp: 0}'
+```
+
+Os quatro `dbt build` fecham **43/43** (`base`, incluindo a Costura A) e **42/42** (as outras
+três), com `ERROR=0` e `SKIP=0` — iguais aos da #54.

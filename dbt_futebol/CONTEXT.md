@@ -296,7 +296,10 @@ _Avoid_: janela — that word is taken by the odds collection window, and the tw
 **Célula de medição**:
 One combination of escopo and recorte under which the whole premissa layer is rematerialised
 and remeasured. Two cells are comparable only if computed in the same run over the same frozen
-universe. The four are `base`, `escopo`, `recorte` and `ambos`, named for the axis each releases.
+universe — since #55 that condition is a guard, not a discipline: `dbt test --target taskF
+--select tag:costura_b` fails if the cells read different builds of `fact_odds_snapshot` (each
+cell stamps the one it read in `odds_loaded_at`) or if any of the four is missing. The four are
+`base`, `escopo`, `recorte` and `ambos`, named for the axis each releases.
 _Avoid_: C1–C4 (C1, C2 and C3 already name subtasks of the [C] Coleta task)
 
 **Universo congelado**:

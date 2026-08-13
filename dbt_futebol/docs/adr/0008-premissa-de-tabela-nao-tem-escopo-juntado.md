@@ -55,3 +55,9 @@ A quarta premissa que esta ADR nomeia, `x_superioridade_tabela`, **não é uma d
 coluna interna do `int_futebol_premissas_1x2` que a Dupla Chance reusa dentro do
 `lado_coberto_forte`, o qual também lê `forca_mismatch` e portanto segue o eixo. Quem for conferir
 a ADR na tabela do entregável procura três linhas, não quatro.
+
+Desde a #55 essa conferência não é manual: `tests/assert_taskf_premissas_de_tabela_identicas.sql`
+cobra as três, no piso 0, no grão (mercado, premissa, benchmark) — com as duas leituras acima
+escritas no cabeçalho e com guarda de não-vacuidade, para "idêntico" nunca significar "não havia o
+que comparar". Roda com `dbt test --target taskF --select tag:costura_b`, depois das quatro
+células.
