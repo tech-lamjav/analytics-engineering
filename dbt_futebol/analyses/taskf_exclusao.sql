@@ -54,7 +54,7 @@
     `excluido` abaixo): no piso 5 quase todos os jogos que ela remove JÁ estavam fora.
 
     ────────────────────────────────────────────────────────────────────────────────
-    OS QUATRO BLOCOS
+    OS CINCO BLOCOS
 
       universo    quantos jogos e linhas cada universo tem, por célula, e quantos a exclusão
                   remove. É a conferência de que o par pedido é encaixado (SEM ⊂ COM) e não-vazio
@@ -62,6 +62,9 @@
       excluido    QUEM são os jogos removidos: quanto histórico eles têm e quantos deles já
                   estavam abaixo do piso de amostra. É aqui que se vê a sobreposição entre excluir
                   e usar piso — e ela é o mecanismo por trás do veredito, não um detalhe.
+      composicao  o universo COM por competição. No par da Copa do Mundo ele reproduz a
+                  composição dos 169 que a #51 publicou; no par da Champions ele é a composição do
+                  universo ESTENDIDO, que é o que a user story 5 da #58 pede reportado à parte.
       fases       os jogos removidos por (competição, fase), contra o total daquela competição no
                   universo COM. É o que transforma "excluir a fase classificatória ≡ excluir a
                   Champions **nesta janela**" de afirmação em número.
@@ -237,6 +240,22 @@ bloco_denominador AS (
     JOIN pit_por_jogo AS p USING (fixture_id)
     WHERE c.no_com
     GROUP BY p.celula
+),
+
+-- ── bloco `composicao` ──────────────────────────────────────────────────────────────────────
+{# O universo COM inteiro, competição a competição. Sai daqui e não de uma contagem à parte porque
+   é do MESMO `classificado` que os outros blocos leem — duas contagens do mesmo universo em
+   lugares diferentes divergem uma hora, e a divergência seria muda. #}
+bloco_composicao AS (
+    SELECT
+        c.competition,
+        COUNT(*)                 AS jogos,
+        COUNTIF(NOT c.no_sem)    AS jogos_removidos,
+        MIN(DATE(c.kickoff_utc)) AS primeiro,
+        MAX(DATE(c.kickoff_utc)) AS ultimo
+    FROM classificado AS c
+    WHERE c.no_com
+    GROUP BY c.competition
 ),
 
 -- ── bloco `fases` ───────────────────────────────────────────────────────────────────────────
@@ -451,7 +470,19 @@ FROM bloco_excluido AS e
 JOIN bloco_denominador AS d USING (celula)
 
 UNION ALL
-SELECT 3, 'fases',
+SELECT 3, 'composicao',
+    competition,
+    IF(jogos_removidos = 0, 'INTACTA',
+       IF(jogos_removidos = jogos, 'REMOVIDA_INTEIRA', 'PARCIAL')),
+    CAST(jogos AS FLOAT64),
+    ROUND(100 * jogos / SUM(jogos) OVER (), 1),
+    CAST(jogos_removidos AS FLOAT64),
+    TO_JSON_STRING(STRUCT(competition, jogos, jogos_removidos, primeiro, ultimo,
+                          SUM(jogos) OVER () AS jogos_no_universo))
+FROM bloco_composicao
+
+UNION ALL
+SELECT 4, 'fases',
     FORMAT('%s · %s', competition, round),
     IF(jogos_removidos = jogos_no_com, 'FASE_INTEIRA',
        IF(jogos_removidos = 0, 'INTACTA', 'PARCIAL')),
@@ -462,7 +493,7 @@ SELECT 3, 'fases',
 FROM bloco_fases
 
 UNION ALL
-SELECT 4, 'ordenacao',
+SELECT 5, 'ordenacao',
     FORMAT('%s · piso %d', contraste, piso),
     veredito,
     rho,
