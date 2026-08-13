@@ -1153,7 +1153,7 @@ três), com `ERROR=0` e `SKIP=0` — iguais aos da #54.
 ## Ticket #56 — A reconciliação do diagnóstico de 180 dias
 
 `analyses/taskf_reconciliacao_180d.sql` + `analyses/taskf_partida_da_fronteira.sql` · execução
-2026-08-13 13:13 UTC · commit `7651233` · dataset `futebol` (produção)
+2026-08-13 13:13–13:14 UTC · commit `f27f79b` · dataset `futebol` (produção)
 
 A tabela de quatro linhas que abre o ticket de origem — a que diz que o time de Copa do Brasil tem
 10,2 jogos na própria competição e 25,5 contando tudo — reproduzida da nossa base. É o que dá ao
@@ -1189,8 +1189,9 @@ Variante `A_ticket`. Cada campo sai como `medido / ticket`.
 
 ### A receita, e o que cada pedaço dela vale
 
-Nenhum dos quatro pedaços é escolha de gosto: trocar qualquer um deles quebra a reprodução, e o
-número que ele passa a dar está medido nas variantes.
+Nenhum dos quatro pedaços é escolha de gosto: trocar qualquer um deles quebra a reprodução. Três
+deles têm o número da troca medido nas variantes; o quarto — o corte das âncoras — não ganhou
+variante própria porque herda o argumento já publicado do universo congelado.
 
 - **O corte de tempo das âncoras é o universo congelado** (`taskf_universo()`), com o teto no
   instante de 04/08 12:00 UTC. O ticket foi aberto às **22:52 UTC** daquele dia; entre ~02:00 e
