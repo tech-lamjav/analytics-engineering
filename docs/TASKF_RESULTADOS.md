@@ -2084,6 +2084,13 @@ UTC porque é até ali que vai o `fact_odds_snapshot` que as quatro células ler
 a única coisa que faz a comparação entre células significar algo. O universo é, por construção, "o
 que os fatos contêm" — e o `janela_fim` na linha diz até onde ele foi.
 
+**E o que esse teto custa está medido, não estimado.** A mesma análise rodada com `--target dev`,
+que lê produção e portanto alcança a data de execução, devolve **233 jogos** contra os 228 do
+dataset de medição: a diferença é de **5 jogos**, todos de 12/08 à noite e 13/08. É a resposta
+literal da user story 5 ("o universo estendido **até a data de execução**"), e ela mostra que a
+escolha de não reconstruir a ancestria custou 2,2% de amostra — bem menos do que custaria perder a
+comparabilidade entre as quatro células.
+
 | competição | jogos | % do estendido |
 |---|---|---|
 | copa_mundo | 79 | **34,6%** |
@@ -2206,8 +2213,10 @@ DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_exclu
 DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_exclusao \
   --vars '{taskf_universo_com: estendido, taskf_universo_sem: estendido_sem_champions_classif}'
 
-# o universo estendido, à parte
+# o universo estendido, à parte — no dataset de medição (228) e, com --target dev, contra
+# produção, que alcança a data de execução (233). A diferença é o que o teto dos fatos custa.
 DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_universo_congelado
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target dev   --select taskf_universo_congelado
 
 bq query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=500 \
   < target/compiled/dbt_futebol/analyses/<a análise>.sql
