@@ -49,7 +49,7 @@
     kickoff antes do teto congelado, encerrados em `FT` — o mesmo filtro do
     `int_futebol_team_form_pit`, para o elenco medido ser o dos jogos que de fato entram na média.
 
-    QUATRO NÍVEIS NA MESMA SAÍDA, com a coluna `nivel` separando os grãos:
+    CINCO NÍVEIS NA MESMA SAÍDA, com a coluna `nivel` separando os grãos:
 
       cobertura       por (competição, escopo). `pool` são os lados que esta medição usa;
                       `temporada` são TODOS os lados encerrados da temporada dentro do teto, e é
@@ -61,6 +61,12 @@
       time            por (time, estrato), só para os times que TÊM par liga↔copa — são os times
                       sobre os quais a pergunta do ticket existe. Quantos ficaram de fora por não
                       ter nenhum sai na linha `total`, em `times_sem_par_liga_copa`.
+      times_do_universo  por categoria de time: quem é cada um dos que ficaram de fora. Existe
+                      porque o `times_sem_par_liga_copa` sozinho convida à leitura "não jogam as
+                      duas coisas", que é verdade para a maioria e falsa para uma parte — há
+                      clube de liga que simplesmente não teve jogo de copa dentro do teto, e há
+                      quem jogue os dois sem que dois deles caiam consecutivos. `lados` aqui é
+                      jogo no pool (não lado), e `times_sem_par_nenhum` conta quem tem um jogo só.
 
     Somar linhas de níveis diferentes conta o mesmo par mais de uma vez — filtre `nivel` sempre.
 
@@ -113,6 +119,21 @@ fixtures AS (
 tipo_competicao AS (
     SELECT DISTINCT league_id AS competition_id, league_type
     FROM {{ ref('dim_leagues') }}
+),
+
+{# NA BASE = alcançado por alguma competição de pontos corridos da coleta. Mesma definição da
+   analyses/taskf_forca_do_adversario.sql, e pelo mesmo motivo: é ela que separa o clube cuja liga
+   não coletamos do clube que simplesmente não jogou copa nesta janela. -#}
+times_na_base AS (
+    SELECT DISTINCT lados.team_id
+    FROM (
+        SELECT home_team_id AS team_id, competition_id FROM fixtures
+        UNION ALL
+        SELECT away_team_id,            competition_id FROM fixtures
+    ) AS lados
+    JOIN tipo_competicao AS t
+      ON  t.competition_id = lados.competition_id
+     AND  t.league_type    = 'League'
 ),
 
 {# Os times do universo congelado, e a temporada deles — as duas coisas que amarram esta medição
@@ -331,6 +352,49 @@ por_time AS (
     GROUP BY p.team_id, p.estrato
 ),
 
+{# QUEM É QUEM NO UNIVERSO. O nível `total` diz quantos times ficaram sem par liga↔copa, e
+   sozinho esse número convida à leitura errada — "não jogam as duas coisas" —, que é verdade para
+   a maioria e falsa para uma parte. Aqui a composição sai medida: seleção não tem liga a jogar;
+   clube sul-americano de Libertadores e Sudamericana tem, mas não a coletamos; e existe ainda o
+   clube de liga que simplesmente não teve jogo de copa dentro do teto congelado, que é outro caso
+   e não pertence a nenhum dos dois. -#}
+perfil_do_time AS (
+    SELECT
+        team_id,
+        COUNT(*)                          AS jogos_no_pool,
+        COUNTIF(league_type = 'League')    AS jogos_de_liga,
+        COUNTIF(league_type = 'Cup')       AS jogos_de_copa
+    FROM pool
+    GROUP BY team_id
+),
+
+categoria_do_time AS (
+    SELECT
+        t.team_id,
+        t.jogos_no_pool,
+        CASE
+            WHEN dt.national          THEN 'selecao'
+            WHEN b.team_id IS NULL    THEN 'clube_sem_liga_na_coleta'
+            WHEN t.jogos_de_copa = 0  THEN 'clube_de_liga_sem_copa_no_pool'
+            WHEN t.jogos_de_liga = 0  THEN 'clube_so_de_copa_no_pool'
+            ELSE                           'joga_os_dois'
+        END AS categoria
+    FROM perfil_do_time AS t
+    LEFT JOIN {{ ref('dim_teams') }} AS dt USING (team_id)
+    LEFT JOIN times_na_base          AS b  USING (team_id)
+),
+
+por_categoria AS (
+    SELECT
+        categoria,
+        COUNT(*)                                                          AS times,
+        SUM(jogos_no_pool)                                                AS jogos_no_pool,
+        COUNTIF(team_id IN (SELECT team_id FROM times_com_par_misto))     AS times_com_par_liga_copa,
+        COUNTIF(jogos_no_pool = 1)                                        AS times_sem_par_nenhum
+    FROM categoria_do_time
+    GROUP BY categoria
+),
+
 empilhado AS (
     SELECT
         'cobertura'           AS nivel,
@@ -351,7 +415,9 @@ empilhado AS (
         CAST(NULL AS INT64)   AS sobreposicao_mediana,
         CAST(NULL AS INT64)   AS sobreposicao_min,
         CAST(NULL AS FLOAT64) AS dias_entre_medio,
-        CAST(NULL AS INT64)   AS times_sem_par_liga_copa
+        CAST(NULL AS INT64)   AS times_sem_par_liga_copa,
+        CAST(NULL AS INT64)   AS times_com_par_liga_copa,
+        CAST(NULL AS INT64)   AS times_sem_par_nenhum
     FROM cobertura
 
     UNION ALL
@@ -364,7 +430,8 @@ empilhado AS (
         sobreposicao_media, pct_sobreposicao, sobreposicao_mediana, sobreposicao_min,
         dias_entre_medio,
         (SELECT COUNT(DISTINCT team_id) FROM pares
-          WHERE team_id NOT IN (SELECT team_id FROM times_com_par_misto))
+          WHERE team_id NOT IN (SELECT team_id FROM times_com_par_misto)),
+        CAST(NULL AS INT64), CAST(NULL AS INT64)
     FROM por_estrato
 
     UNION ALL
@@ -376,7 +443,7 @@ empilhado AS (
         pares_no_estrato, pares, pares_descartados, times,
         sobreposicao_media, pct_sobreposicao, sobreposicao_mediana, sobreposicao_min,
         dias_entre_medio,
-        CAST(NULL AS INT64)
+        CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64)
     FROM por_estrato_dias
 
     UNION ALL
@@ -388,9 +455,21 @@ empilhado AS (
         p.pares_no_estrato, p.pares, p.pares_descartados, p.times,
         p.sobreposicao_media, p.pct_sobreposicao, p.sobreposicao_mediana, p.sobreposicao_min,
         p.dias_entre_medio,
-        CAST(NULL AS INT64)
+        CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64)
     FROM por_time AS p
     LEFT JOIN {{ ref('dim_teams') }} AS t USING (team_id)
+
+    UNION ALL
+
+    SELECT
+        'times_do_universo', 4, categoria, CAST(NULL AS STRING),
+        jogos_no_pool, CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64),
+        CAST(NULL AS FLOAT64),
+        CAST(NULL AS INT64), CAST(NULL AS INT64), CAST(NULL AS INT64), times,
+        CAST(NULL AS FLOAT64), CAST(NULL AS FLOAT64), CAST(NULL AS INT64), CAST(NULL AS INT64),
+        CAST(NULL AS FLOAT64),
+        CAST(NULL AS INT64), times_com_par_liga_copa, times_sem_par_nenhum
+    FROM por_categoria
 )
 
 SELECT *
