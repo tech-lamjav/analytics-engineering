@@ -376,7 +376,7 @@ conferencia AS (
         COUNTIF(categoria_adversario = 'selecao')                            AS adv_selecao,
         COUNTIF(adv_ppg_liga IS NOT NULL)                                    AS adv_com_ppg_liga,
         ROUND(AVG(adv_ppg), 3)                                               AS ppg_medio,
-        ROUND(APPROX_QUANTILES(adv_ppg, 2)[OFFSET(1)], 3)                    AS ppg_mediana,
+        {{ taskf_mediana('adv_ppg') }}                                       AS ppg_mediana,
         ROUND(AVG(adv_ppg_liga), 3)                                          AS ppg_liga_medio,
         ROUND(AVG(gf), 3)                                                    AS gols_pro_medio,
         ROUND(AVG(ga), 3)                                                    AS gols_contra_medio

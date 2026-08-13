@@ -247,7 +247,7 @@ pares AS (
         COUNT(DISTINCT IF(utilizavel, team_id, NULL))                   AS times,
         ROUND(AVG(IF(utilizavel, sobreposicao, NULL)), 2)               AS sobreposicao_media,
         ROUND(AVG(IF(utilizavel, sobreposicao, NULL)) / 11 * 100, 1)    AS pct_sobreposicao,
-        APPROX_QUANTILES(IF(utilizavel, sobreposicao, NULL), 2)[OFFSET(1)] AS sobreposicao_mediana,
+        {{ taskf_mediana('IF(utilizavel, sobreposicao, NULL)', casas=0) }} AS sobreposicao_mediana,
         MIN(IF(utilizavel, sobreposicao, NULL))                         AS sobreposicao_min,
         ROUND(AVG(IF(utilizavel, dias_entre, NULL)), 1)                 AS dias_entre_medio
 {%- endset %}
