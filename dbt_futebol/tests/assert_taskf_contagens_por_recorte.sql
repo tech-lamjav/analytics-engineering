@@ -26,6 +26,12 @@
 -- médias sairiam iguais, legitimamente. Cobrar 60/60 seria congelar o dado de hoje como se fosse
 -- regra — o mesmo erro que esta task existe para não cometer.
 --
+-- ⚠️ A COBRANÇA É POR (UNIVERSO × CÉLULA) DESDE A #58. O comportamento das duas contagens é
+-- propriedade do RECORTE da célula e vale em qualquer universo, então generalizar custou uma
+-- coluna no GROUP BY e multiplicou por quatro o que é conferido. E fechou um buraco: cobrada só
+-- sobre a tabela inteira, a ponta `ultimos_10_sem_teto` ficaria verde por uma célula com teto num
+-- universo só, mesmo que nos outros três o carimbo tivesse rodado fora de ordem.
+--
 -- ⚠️ NÃO É A MESMA CONFERÊNCIA DA `analyses/taskf_saturacao_recorte.sql`, e as duas não se
 -- substituem. Aquela mede a identidade `usado = LEAST(disponível, 10)` PAR A PAR, nos 21.054
 -- pares de (jogo, time) do carimbo do PIT; esta cobra o comportamento das duas colunas na tabela
@@ -40,13 +46,14 @@
 
 WITH por_celula AS (
     SELECT
+        universo,
         celula,
         ANY_VALUE(pit_recorte) AS pit_recorte,
         COUNT(*)               AS linhas,
         COUNTIF(jogos_medios_disp IS DISTINCT FROM jogos_medios_usado) AS linhas_com_teto,
         COUNT(DISTINCT pit_recorte) AS recortes_na_celula
     FROM {{ source('futebol_taskF', 'taskf_teste2') }}
-    GROUP BY celula
+    GROUP BY universo, celula
 ),
 
 divergencias AS (
@@ -57,7 +64,7 @@ divergencias AS (
             ELSE                                 'recorte_desconhecido'
         END AS motivo,
         TO_JSON_STRING(STRUCT(
-            celula, pit_recorte, linhas, linhas_com_teto, recortes_na_celula
+            universo, celula, pit_recorte, linhas, linhas_com_teto, recortes_na_celula
         )) AS linha
     FROM por_celula
     WHERE (pit_recorte = 'temporada'  AND linhas_com_teto > 0)
@@ -73,11 +80,11 @@ detalhe AS (
     SELECT
         'temporada_com_teto_detalhe' AS motivo,
         TO_JSON_STRING(STRUCT(
-            t.celula, t.mercado, t.premissa, t.benchmark,
+            t.universo, t.celula, t.mercado, t.premissa, t.benchmark,
             t.jogos_medios_disp, t.jogos_medios_usado
         )) AS linha
     FROM {{ source('futebol_taskF', 'taskf_teste2') }} AS t
-    JOIN por_celula AS c USING (celula)
+    JOIN por_celula AS c USING (universo, celula)
     WHERE c.pit_recorte = 'temporada'
       AND t.jogos_medios_disp IS DISTINCT FROM t.jogos_medios_usado
 )

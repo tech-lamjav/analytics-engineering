@@ -188,6 +188,7 @@ medido AS (
         n_p5, diferenca_p5, diferenca_p10
     FROM {{ source('futebol_taskF', 'taskf_teste2') }}
     WHERE celula = 'base'
+      AND universo = 'completo'
       AND usado_para_peso
 ),
 

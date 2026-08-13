@@ -1809,3 +1809,470 @@ argumento.
 
 ⚠️ `bq query` com o SQL como argumento trava nesta máquina; por redirecionamento ou heredoc,
 funciona. E sem `--max_rows` ele corta em 100 linhas sem avisar.
+
+---
+
+## Ticket #58 — As três respostas fechadas, e a Champions medida onde ela existe
+
+`analyses/taskf_exclusao.sql` + `taskf_sobrevivencia.sql` + `taskf_saturacao_recorte.sql` +
+`taskf_universo_congelado.sql` · execução 2026-08-13 17:49–18:31 UTC · dataset `futebol_taskF`
+
+O carimbo é de **três** commits, e a distinção não é burocracia — é a lição da #56, que teve de
+corrigir um carimbo apontando para um sha que não continha o código que produziu a saída:
+
+| o que | commit | quando |
+|---|---|---|
+| as quatro **células** (a medição propriamente dita) | `7fdd1a3` | 17:49–17:56 |
+| ordenação, sobrevivência, piso e composição do universo | `f293962` | 18:03–18:13 |
+| os blocos `topo` e `fora_do_universo`, acrescentados pela revisão | `d1fe3a2` | 18:25–18:31 |
+
+As células **não** foram re-medidas para os blocos novos: eles só leem, e os números de ordenação
+foram conferidos idênticos antes e depois de eles existirem.
+
+As três perguntas que a spec #49 cobra fechadas, mais a extensão que o grilling acrescentou. Duas
+delas — a da Copa do Mundo e a da Champions — são perguntas sobre **quais jogos entram na conta**,
+e não sobre o histórico que cada jogo carrega. Por isso o universo passou a ser um terceiro eixo da
+medição, e as quatro células foram re-medidas com ele.
+
+### Veredito
+
+**Nenhuma das duas exclusões se sustenta na medição.** A da Copa do Mundo é imaterial em três das
+quatro células no piso 5 e **idêntica** (ρ = 1,000) no piso 10; a da fase classificatória da
+Champions é **idêntica** no piso 5 e no 10 nas duas células que refletem produção. Nos dois casos o
+piso de amostra já faz o trabalho que a exclusão faria: dos 79 jogos de Copa do Mundo, **2** estão
+acima do piso 5; dos 18 de Champions, **zero** — em `base` e em `escopo`.
+
+Das quatro premissas de amostra curta, **duas sobrevivem** quando o histórico é real
+(`clean_sheets_altos` e `defesa_forte`) e duas continuam sem evidência (`superioridade_xg` e
+`tende_golear`).
+
+E o eixo que a [F] mede continua sendo muito maior que as duas exclusões juntas: no piso 5, soltar
+a competição move a ordenação para ρ = 0,648, enquanto a maior das exclusões a move para 0,964.
+
+### O universo é um terceiro eixo — e não uma quinta célula
+
+| | o que varia | onde mora |
+|---|---|---|
+| **célula** | qual HISTÓRICO cada jogo carrega | `macros/taskf_celula.sql` (escopo × recorte) |
+| **universo** | quais JOGOS são medidos | `macros/taskf_universos.sql` (#58) |
+| **janela** | qual coleta de ODDS foi lida | glossário do `CONTEXT.md` — nada a ver com a [F] |
+
+Os quatro universos de uma célula saem do **mesmo INSERT**. Se `completo` e `sem_copa_mundo`
+fossem duas execuções, a diferença entre elas carregaria uma reconstrução dos modelos dentro de si
+— e a #55 mediu que uma reconstrução move 5 campos em 7.200 sozinha. Como a comparação COM/SEM
+**é** o entregável, esse ruído entraria no lugar da resposta.
+
+| universo | jogos | linhas | janela | por que existe |
+|---|---|---|---|---|
+| `completo` | **169** | 8.567 | 16/06 → 04/08 | o congelado da [0.1], o primário |
+| `sem_copa_mundo` | **90** | 4.428 | **10/07** → 04/08 | o lado SEM da pergunta 7 da spec |
+| `estendido` | **228** | 11.554 | 16/06 → 12/08 | o secundário, e o único onde a Champions existe |
+| `estendido_sem_champions_classif` | **210** | 10.606 | 16/06 → 12/08 | o lado SEM da pergunta 24 |
+
+Os quatro carregam o mesmo `odds_loaded_at` (12/08 13:24:15) e o mesmo `git_sha` — conferido pela
+Costura B, que desde este ticket cobra por (universo × célula).
+
+### Resposta 1 — quantos jogos passam a satisfazer o piso de 5, célula a célula
+
+`analyses/taskf_saturacao_recorte.sql`, bloco `piso` · re-derivado nesta execução
+
+| piso | `base` | `escopo` | `recorte` | `ambos` |
+|---|---|---|---|---|
+| 0 | 169 | 169 | 169 | 169 |
+| 3 | 90 | **113** | 103 | **113** |
+| 5 | **69** | **92** | **81** | **92** |
+| 10 | 67 | 76 | 73 | **83** |
+
+Com o histórico junto, o piso 5 vai de **69 para 92 jogos** — 41% → 54% do universo — sem
+descartar nada. O eixo de escopo faz sozinho todo esse ganho; soltar só a temporada leva a 81, e
+soltar os dois não acrescenta nem um jogo ao que a competição já tinha aberto. A tabela reproduz a
+#54 e a #55 número a número, agora sobre células re-medidas com o eixo de universo dentro.
+
+⚠️ **Os 77 jogos que continuam abaixo do piso 5 na `base` são a Copa do Mundo inteira menos dois.**
+Isso não é leitura da tabela acima — é o bloco `excluido` do `taskf_exclusao.sql`: dos 79 jogos de
+Copa do Mundo, **2** têm `min_jogos` ≥ 5 em qualquer das quatro células, e o maior `min_jogos` do
+conjunto é **6**. É esse número que decide a resposta 3.
+
+### Resposta 2 — quais das quatro premissas sobrevivem quando o histórico é real
+
+`analyses/taskf_sobrevivencia.sql` · universo `completo`, piso 5
+
+A regra foi escrita antes de olhar: **sobrevive** quem tem `diferenca_p5` > 0 nas **duas** células
+de escopo solto (`escopo` e `ambos`) com n ≥ 25 nas duas. As duas células, e não uma, porque uma
+premissa que só melhora sob `ambos` melhora quando os dois eixos se soltam — e aí não dá para
+dizer qual deles a salvou, que é a pergunta 9 da spec. O n = 25 é o ponto em que o encolhimento
+`n/(n+50)` do próprio Teste 2 passa de 1/3; ele sai da constante que já existe, não de uma régua
+nova.
+
+| premissa | `base` | `escopo` | `recorte` | `ambos` | veredito |
+|---|---|---|---|---|---|
+| `clean_sheets_altos` | −1,7 (24) | **+6,3** (35) | +7,8 (63) | **+30,0** (34) | **SOBREVIVE** |
+| `defesa_forte` | −3,3 (12) | **+10,3** (28) | +5,7 (29) | **+15,1** (25) | **SOBREVIVE** |
+| `superioridade_xg` | −8,9 (31) | −4,1 (44) | +1,7 (45) | −5,6 (60) | SEM EVIDÊNCIA |
+| `tende_golear` | −18,5 (18) | −22,7 (21) | −20,3 (49) | +2,0 (52) | SEM EVIDÊNCIA |
+
+E a amostra curta delas, de `base` para as três outras células: `clean_sheets_altos` 77,1% →
+62,4% / 49,6% / 63,0%; `defesa_forte` 82,9% → 60,6% / 62,3% / 63,2%; `superioridade_xg` 71,6% →
+61,1% / 61,5% / 53,5%; `tende_golear` 88,3% → 83,6% / 70,7% / **67,3%**.
+
+As duas que caem, caem por motivos diferentes: `superioridade_xg` é **negativa nas duas** células
+de escopo solto (o sinal não aparece, ele some), e `tende_golear` é positiva **só em `ambos`**
+(+2,0), depois de −22,7 em `escopo` — exatamente o caso que a regra das duas células existe para
+não deixar passar.
+
+⚠️ **`defesa_forte` passa com n = 25 exatamente na `ambos`** — em cima da borda da régua. Uma linha
+a menos e ela sairia com ressalva. Fica dito porque a borda é da regra deste documento, não do
+dado.
+
+**A régua discrimina**: aplicada às 39 linhas do benchmark preferido, **10 sobrevivem** e 29 ficam
+sem evidência — nenhuma com ressalva. Se metade do catálogo "sobrevivesse", sobreviver não
+significaria nada. As dez: `adversario_limitado`, `clean_sheets_altos`, `defesa_forte`,
+`defesas_firmes`, `defesas_vazaveis` (BTTS), `favorito_irregular`, `historico_under`,
+`linha_descendo`, `raramente_perde_por_2`, `xg_baixo_combinado`.
+
+⚠️ Isto **não** é recomendação de peso, pelo mesmo motivo das seções anteriores: a [0.1] mediu que
+ganho in-sample não se replica out-of-sample (+10,0% virou −6,2%). "Sobrevive" quer dizer que a
+evidência que a [B] vai ler continua de pé quando o histórico deixa de ser artificialmente curto.
+
+### Resposta 3 — a Copa do Mundo, medida com e sem
+
+`analyses/taskf_exclusao.sql` · `completo` × `sem_copa_mundo`
+
+**A régua foi declarada antes de medir**, no cabeçalho da análise: a exclusão é MATERIAL num
+(célula, piso) quando `rho < 0,90` **ou** `trocas_no_topo ≥ 2` **ou** `trocas_de_sinal ≥ 4`. E
+junto vem o **contraste de referência** — as mesmas três métricas para `base` → `escopo` dentro do
+universo COM —, porque um ρ de 0,93 não diz nada sozinho: a referência é o efeito que a [F] existe
+para medir.
+
+| contraste | piso 0 | piso 3 | piso 5 | piso 10 |
+|---|---|---|---|---|
+| exclusão na `base` | 0,753 · MAT | 0,555 · MAT | **0,964 · IMAT** | **1,000 · IMAT** |
+| exclusão na `escopo` | 0,563 · MAT | 0,618 · MAT | **0,982 · IMAT** | **1,000 · IMAT** |
+| exclusão na `recorte` | 0,806 · MAT | 0,830 · MAT | **0,992 · MAT** | **1,000 · IMAT** |
+| exclusão na `ambos` | 0,858 · MAT | 0,884 · MAT | **0,986 · IMAT** | **1,000 · IMAT** |
+| **referência** `base`→`escopo` | 0,813 · MAT | 0,747 · MAT | **0,648 · MAT** | 0,644 · MAT |
+
+A leitura é uma linha: **a exclusão decide muito no piso 0 e 3, e não decide nada no piso 5 e 10 —
+onde o eixo que a task mede continua decidindo tudo.** No piso 3 da `base` a exclusão chega a mexer
+MAIS na ordenação (ρ = 0,555) do que o próprio eixo de escopo (0,747); no piso 5 a relação se
+inverte por completo (0,964 contra 0,648).
+
+**O mecanismo não é estatístico, é aritmético.** Dos 79 jogos removidos, **2** estão acima do piso
+5 e **nenhum** acima do piso 10 — `min_jogos` médio de 1,94 e máximo de 6. No piso 10 os dois
+universos são literalmente a mesma medição, e é por isso que ρ dá 1,000 exato com zero de
+diferença em todos os campos: não é uma correlação alta, é a mesma tabela. Excluir a Copa do Mundo
+e usar piso 5 fazem, em 77 dos 79 jogos, **o mesmo trabalho** — e o piso o faz sem precisar nomear
+competição nenhuma. Em número de jogos medidos, a exclusão custa 2 em cada célula: 69 → 67 na
+`base`, 92 → 90 na `escopo` e na `ambos`, 81 → 79 na `recorte`.
+
+⚠️ **A célula `recorte` sai MATERIAL no piso 5, e ela fica assim.** A régua disparou por uma das
+três pontas (`trocas_no_topo = 2`), com as outras duas limpas (ρ = 0,992, zero trocas de sinal). O
+que a troca é, medido: **uma permuta adjacente na fronteira do top 5** —
+
+| | 5º | 6º |
+|---|---|---|
+| `completo` | `clean_sheets_altos` (peso 4,36) | `defesas_firmes` (3,32) |
+| `sem_copa_mundo` | `defesas_firmes` (3,84) | `clean_sheets_altos` (3,18) |
+
+(bloco `topo` da mesma análise — ele emite posição e peso dos dois lados de quem entra ou sai,
+justamente para que "2 trocas no topo" não fique sendo um número sem conteúdo.)
+
+O veredito não é suavizado: a régua caiu **em cima** do corte, e amaciar um MATERIAL depois de
+vê-lo é exatamente o pós-hoc que o cabeçalho da análise proíbe. O que sustenta a recomendação
+apesar dele são as outras duas pernas, que a própria régua fornece: a referência de eixo (0,648
+contra 0,992) e o mecanismo dos 2 jogos em 79. **Se alguém quiser litigar essa célula**, o passo
+declarado é o universo de placebo — remover 79 jogos sorteados por hash e comparar a exclusão real
+contra a distribuição do placebo. Ele continua não tendo sido rodado, e continua sendo a única
+coisa que mudaria a leitura desta linha.
+
+**De passagem, a mesma tabela mostra que a Copa do Mundo jogou 88 e não 79.** Nove partidas
+encerradas dela ficam fora do universo: oito por status (5 PEN e 3 AET — mata-mata decidido fora
+do tempo normal, o caso da issue #71) e **uma** por não ter preço coletado, na primeira rodada de
+grupos. O deserto de histórico dela, portanto, é medido sobre 79 dos 88 jogos que aconteceram.
+
+⚠️ **E a exclusão não é aleatória no tempo.** Tirar a Copa do Mundo não tira 47% dos jogos
+espalhados pela janela: tira **os primeiros 24 dias dela**. O universo `sem_copa_mundo` começa em
+**10/07**, não em 16/06 — de 16/06 a 09/07 não há na base um único jogo que não seja de seleção.
+Quem for comparar as duas colunas em qualquer outro corte precisa saber que elas não cobrem o
+mesmo pedaço de calendário.
+
+**Recomendação: manter a Copa do Mundo na base de medição**, com uma condição explícita — que a
+[B] leia no piso 5 ou acima. É onde a exclusão não decide nada. Se a [B] optar por ler no piso 0 ou
+3, a exclusão passa a mudar a ordenação de forma material em todas as quatro células, e aí ela
+deve sair; mas nesse cenário a decisão que importa é **o piso**, não a competição. O argumento de
+princípio fica declarado como reserva, e ele é real: o deserto da Copa do Mundo não é acidente de
+amostra, as seleções não jogam outra coisa na nossa base, e a #53 mediu que o merge lhes empresta
+**exatamente zero** partida. Ele diz por que esses jogos são estruturalmente diferentes; o piso é o
+instrumento que já os remove.
+
+### Resposta 4 — a Champions, no único universo em que ela existe
+
+`analyses/taskf_exclusao.sql` · `estendido` × `estendido_sem_champions_classif`
+
+A #51 já tinha registrado que a Champions **não tem um jogo** no universo congelado. Ela existe no
+estendido: **18 jogos, 7,9% dos 228**.
+
+**Excluir a fase classificatória é, nesta janela, excluir a competição — e isso é medido.** O
+bloco `fases` devolve **uma única linha** de Champions no universo estendido:
+
+| competição · fase | jogos | removidos | período | veredito |
+|---|---|---|---|---|
+| `champions_league` · 3rd Qualifying Round | 18 | **18** | 04/08 → 11/08 | FASE_INTEIRA |
+
+Não há fase de liga na janela (ela começa em setembro), então o predicado de fase e o de competição
+selecionam o mesmo conjunto. O predicado continua escrito por **semântica de fase**, e não por
+competição, porque a coincidência é da janela e não da definição — e porque `'Play-offs'` (agosto,
+classificatória) e `'Knockout Round Play-offs'` (fevereiro, mata-mata) convivem no mesmo campo
+`round` nas temporadas 2024 e 2025. Casar o primeiro por igualdade, e não por `LIKE '%Play-off%'`,
+é o que impede a mesma consulta de mentir numa janela de fevereiro.
+
+| contraste | piso 0 | piso 3 | piso 5 | piso 10 |
+|---|---|---|---|---|
+| exclusão na `base` | 0,947 · MAT | 0,934 · MAT | **1,000 · IMAT** | **1,000 · IMAT** |
+| exclusão na `escopo` | 0,966 · MAT | 0,933 · MAT | **1,000 · IMAT** | **1,000 · IMAT** |
+| exclusão na `recorte` | 0,968 · MAT | 0,958 · MAT | 0,970 · MAT | 0,992 · MAT |
+| exclusão na `ambos` | 0,965 · MAT | 0,958 · MAT | **0,984 · IMAT** | 0,992 · MAT |
+| **referência** `base`→`escopo` | 0,790 · MAT | 0,745 · MAT | **0,696 · MAT** | 0,608 · MAT |
+
+Em `base` e em `escopo` o ρ de 1,000 no piso 5 tem a mesma origem do caso da Copa do Mundo no piso
+10: **nenhum** dos 18 jogos passa o piso ali, então os dois universos são a mesma medição. Nas duas
+células com recorte de contagem a exclusão mexe em alguma coisa — e mexe porque ali esses jogos
+**passam** a ter histórico:
+
+| célula | `min_jogos` médio dos 18 | máximo | acima do piso 3 | acima do piso 5 |
+|---|---|---|---|---|
+| `base` | 1,78 | 4 | 5 de 123 | **0 de 91** |
+| `escopo` | **1,78** | **4** | 5 de 150 | **0 de 124** |
+| `recorte` | 3,89 | 10 | 11 de 153 | 6 de 123 |
+| `ambos` | **5,44** | **15** | 13 de 165 | **8 de 139** |
+
+**Recomendação: manter a fase classificatória da Champions na base de medição.** Onde ela poderia
+importar — o piso que a [B] vai usar, nas células que refletem produção — a exclusão é literalmente
+sem efeito. E onde ela tem efeito (`recorte` e `ambos`), removê-la jogaria fora justamente os jogos
+que o merge acabou de resgatar, que é o oposto do que a [F] existe para fazer. A reserva de
+princípio também é real e fica declarada: a qualificatória traz clubes de ligas que **não
+coletamos**, e por isso o adversário deles é invisível — se uma janela futura tiver a Champions com
+peso maior que 7,9%, a pergunta se re-mede, e o par de universos já está construído para isso.
+
+⚠️ **7,9% e não 22% — e a conta inteira sai de uma tabela.** A spec #49 atribui à fase
+classificatória "22% da janela". A diferença tem mecanismo, não é erro de ninguém, e o bloco
+`fora_do_universo` a fecha partida a partida — ele lista as encerradas que o universo **não**
+alcança, por fase e por status:
+
+| fase | status | partidas | com preço coletado | veredito |
+|---|---|---|---|---|
+| 1st Qualifying Round | FT | 27 | **0** | sem preço coletado |
+| 1st Qualifying Round | AET | 1 | **0** | sem preço coletado |
+| 2nd Qualifying Round | FT | 24 | **0** | sem preço coletado |
+| 2nd Qualifying Round | PEN | 3 | **0** | sem preço coletado |
+| 2nd Qualifying Round | AET | 1 | **0** | sem preço coletado |
+| 3rd Qualifying Round | AET | 2 | **2** | só o status |
+
+A temporada 2026 da Champions tem **76** partidas encerradas desde 16/06 (28 + 28 + 20); o
+universo mede **18**. As 56 de Q1 e Q2, de julho, não têm preço nenhum: a coleta de odds da UCL
+entrou no ar em **31/07** (rollout da liga 2), e ela é forward-only. É também a razão de a
+Champions ter zero jogo no universo congelado. A spec contou **fixtures**; o universo de medição
+exige **preço**. Mesmo tipo de reconciliação do "69 contra 67" da #53: nenhum dos dois números
+está errado, eles contam populações diferentes.
+
+⚠️ **E as duas últimas linhas da tabela são um segundo mecanismo, não o mesmo.** Os 2 jogos de Q3
+que ficaram de fora **têm** preço coletado: eles caem pelo `status_short = 'FT'` do
+`jogos_encerrados`, porque terminaram na prorrogação. É o achado de passagem da #56, que virou a
+[issue #71](https://github.com/tech-lamjav/analytics-engineering/issues/71) — aqui ele aparece com
+nome e sobrenome: **18 dos 20** jogos de Q3 entram, e os 2 que faltam são AET de 11/08. A coluna
+`com_preco` do bloco existe exatamente para separar as duas causas sem precisar de uma segunda
+consulta.
+
+### ⚠️ A previsão da spec sobre `escopo` e a Champions virou medição
+
+Este é o achado incidental mais forte do ticket.
+
+A spec #49 afirma, na seção "o que já se sabe antes de rodar", que **`escopo` não conserta a
+Champions na janela medida** — porque os rótulos de `season` se sucedem, e um jogo de
+qualificatória em agosto está sob a temporada nova enquanto o histórico doméstico daquele time
+ainda está sob a anterior. A #53 e a #54 registraram isso como **não verificável**: sem jogo de
+Champions no universo primário, não havia o que medir.
+
+No estendido, há. E a previsão se confirma **no número exato**: `base` e `escopo` dão o **mesmo**
+`min_jogos` médio para os 18 jogos — 1,78 —, o mesmo máximo — 4 — e os mesmos zero jogos acima do
+piso 5. Soltar a competição sem soltar a temporada não empresta **uma única partida** a esses
+times. Quem alcança o caso é `ambos`, que triplica a média (5,44) e leva 8 dos 18 acima do piso 5.
+
+⚠️ E a leitura que continua **não** podendo ser tirada daqui é "escopo sozinho nunca ajuda a
+Europa". Isto é específico da virada de temporada: em janeiro, um time de Bundesliga tem o
+campeonato nacional e a Champions sob o mesmo rótulo de `season`, e `escopo` junta os dois
+normalmente. A janela desta medição cai inteira na virada.
+
+### O universo estendido, reportado à parte
+
+`analyses/taskf_universo_congelado.sql`, variante `E_estendido`
+
+| variante | período | jogos | vs publicado |
+|---|---|---|---|
+| `C_universo_congelado` | 16/06 → 04/08 | 169 | 0 |
+| `E_estendido` | 16/06 → **12/08** | **228** | **+59** |
+
+⚠️ **O que limita o estendido não é uma data, é a construção dos fatos.** Ele alcança 12/08 00:30
+UTC porque é até ali que vai o `fact_odds_snapshot` que as quatro células leram (`odds_loaded_at`
+12/08 13:24:15). Rebuildar a ancestria para ele alcançar "hoje" custaria re-medir tudo e quebraria
+a única coisa que faz a comparação entre células significar algo. O universo é, por construção, "o
+que os fatos contêm" — e o `janela_fim` na linha diz até onde ele foi.
+
+**E o que esse teto custa está medido, não estimado.** A mesma análise rodada com `--target dev`,
+que lê produção e portanto alcança a data de execução, devolve **233 jogos** contra os 228 do
+dataset de medição: a diferença é de **5 jogos**, todos de 12/08 à noite e 13/08. É a resposta
+literal da user story 5 ("o universo estendido **até a data de execução**"), e ela mostra que a
+escolha de não reconstruir a ancestria custou 2,2% de amostra — bem menos do que custaria perder a
+comparabilidade entre as quatro células.
+
+| competição | jogos | % do estendido |
+|---|---|---|
+| copa_mundo | 79 | **34,6%** |
+| serie_b | 49 | 21,5% |
+| brasileirao | 38 | 16,7% |
+| champions_league | 18 | **7,9%** |
+| sudamericana | 17 | 7,5% |
+| copa_do_brasil | 16 | 7,0% |
+| primeira_liga | 9 | 3,9% |
+| libertadores | 2 | 0,9% |
+
+**Ele acrescenta pouco, e o pouco é mensurável.** A spec estimava "~37 jogos"; foram **59** — a
+estimativa envelheceu, e o número medido é o que vale. Mas o efeito que se poderia esperar dele
+**não** acontece: a Copa do Mundo continua sendo mais de um terço da amostra (34,6%, contra 46,7%
+no congelado), e das seis ligas europeias do portfólio **uma única** aparece — a Primeira Liga, com
+9 jogos. Bundesliga, La Liga, Ligue 1, Premier League e Serie A ITA seguem em **zero**. A família
+split-year, que a #53 e a #54 deixaram registrada como "sem amostra", continua sem amostra
+suficiente para deixar de ser degenerada.
+
+E aqui a tolerância de 0,5 pp declarada na #51 **volta a ter mordida**: no congelado, a coleta de
+odds já tinha parado (zero capturas após 04/08, medido); no estendido, não. Toda leitura de
+`linha_subindo`/`linha_descendo` nas linhas de universo estendido está sujeita a ela.
+
+### ⚠️ `defesas_vazaveis` é a única premissa em dois mercados — e os dois vereditos são opostos
+
+O cabeçalho do `taskf_sobrevivencia.sql` diz, antes de rodar, que agrupa por mercado "porque supor
+unicidade de nome é como se descobre que ela não valia". Valeu a pena:
+
+| mercado · benchmark | `base` | `escopo` | `recorte` | `ambos` | veredito |
+|---|---|---|---|---|---|
+| BTTS · consenso | +8,7 (31) | +1,6 (36) | +7,3 (32) | +6,3 (44) | **SOBREVIVE** |
+| Gols · sharp | −5,8 (158) | −5,8 (201) | −6,2 (181) | −7,7 (214) | SEM EVIDÊNCIA |
+
+As "39 premissas" do entregável são **39 linhas de (mercado, premissa, benchmark) sobre 38 nomes
+distintos**. Quem ler a tabela final da #59 por nome de premissa vai encontrar `defesas_vazaveis`
+duas vezes, com sinais opostos, e isso não é duplicata: são dois mercados, dois benchmarks
+preferidos e duas medições legítimas.
+
+### As guardas: quatro verdes, e duas quebras novas
+
+```
+dbt test --target taskF --select tag:costura_b     →  PASS=4 ERROR=0
+```
+
+Três das quatro mudaram de grão nesta task — passaram a cobrar por (universo × célula) — e ficaram
+**mais fortes**, não mais fracas: são quatro vezes mais comparações. A quarta,
+`assert_taskf_base_reproduz_01`, foi recortada no universo `completo` de propósito: o lado esquerdo
+dela são os números publicados da [0.1], que existem para um recorte só. Não há [0.1] "sem Copa do
+Mundo" contra a qual reproduzir.
+
+Que os quatro universos tenham passado com contagens **diferentes** (169, 90, 228, 210) já é a
+prova viva de que a referência é por universo — uma referência global teria ficado vermelha nas
+três últimas. As duas cobranças que esse argumento não alcança foram quebradas de propósito:
+
+| quebra | guarda que caiu | saída |
+|---|---|---|
+| `SET jogos_no_universo = +1 WHERE universo='sem_copa_mundo' AND celula='ambos'` | `celulas_mesmo_universo` | **4 linhas**: 1 `jogos_fora_do_gabarito` (91 contra o gabarito 90) e 3 `universo_divergente` — as outras três células daquele universo denunciando a quarta |
+| `SET universo='completo_v2' WHERE universo='estendido' AND celula='recorte'` | `celulas_mesmo_universo` **e** `premissas_de_tabela_identicas` | **2 linhas** (`celulas_faltando`, nos dois sentidos: o universo que não devia existir e o par que sumiu) e **10 linhas** de grão incompleto |
+
+As duas foram desfeitas e as quatro guardas voltaram ao verde; a tabela foi reconferida depois, e
+os 16 pares (universo × célula) devolvem exatamente os mesmos números de antes das quebras.
+
+### ⚠️ O que a revisão pegou, e que nenhuma guarda pegaria
+
+A revisão de standards encontrou um defeito que passou por `dbt parse`, por quatro guardas verdes
+e por uma medição inteira: a edição do `sources.yml` que documentou a coluna `universo` **comeu a
+linha `- name: medido_em`**, deixando duas chaves `description:` sob o mesmo item. Em YAML a
+última vence, então a coluna `universo` passou a ser documentada como *"Quando a célula foi
+materializada…"* e a descrição do universo sumiu.
+
+O dbt avisa (`DuplicateYAMLKeysDeprecation`) e **não** falha. É metadado de documentação, não
+muda número nenhum — mas é exatamente o tipo de erro que vive para sempre: o schema YAML não é
+lido por teste nenhum, e quem for consultar a coluna daqui a seis meses lê a descrição errada com
+cara de certa. Corrigido antes do merge, junto com a descrição de `jogos_no_universo`, que ainda
+dizia "universo congelado (169), idêntico nas quatro células" — verdade que a coluna deixou de
+ter quando ela passou a ser por universo.
+
+### A re-medição reproduz a #55: 6 campos em 7.200
+
+`analyses/taskf_remedicao.sql` contra `taskf_teste2_55` — a cópia declarada em `sources.yml` antes
+de a acumulativa ser dropada para ganhar a coluna de universo.
+
+| célula | linhas | sem contraparte | linhas divergentes | campos divergentes | campos comparados |
+|---|---|---|---|---|---|
+| `base` | 60 | 0 | 2 | 3 | 1.800 |
+| `escopo` | 60 | 0 | 1 | 1 | 1.800 |
+| `recorte` | 60 | 0 | **0** | **0** | 1.800 |
+| `ambos` | 60 | 0 | 2 | 2 | 1.800 |
+
+Cinco dos seis campos são os **mesmos** empates de arredondamento que a #53, a #54 e a #55 já
+tinham medido e provado (55/80 = 68,75; 308/320 = 96,25; 51/400 = 12,75). O sexto é novo —
+`clean_sheets_altos` · `jogos_medios_usado` na `ambos`, 5,2 → 5,3 — e foi provado do mesmo jeito, e
+não presumido: **92 linhas, soma 483, média exata 483/92 = 5,25**, em cima do meio da grade de
+`ROUND(·, 1)`.
+
+A comparação é só do universo `completo`, e não é lacuna: os três universos novos nasceram nesta
+execução e não têm lado esquerdo. Comparar 240 linhas de hoje contra 60 de ontem produziria 180
+`SEM_CONTRAPARTE` que esconderiam a divergência real.
+
+E as conferências de fora não se moveram: a reconciliação contra a [0.1] segue **38 EXATO / 1
+INVESTIGAR**, com `linha_descendo` nos mesmos −2 de `n`; saturação, piso, monotonicidade e chaves
+seguem `OK` nos quatro blocos, com os mesmos 21.054 pares nas quatro células.
+
+### Reprodução
+
+```bash
+cd dbt_futebol
+
+# FASE 0 — só porque a #58 mudou o schema da acumulativa (a coluna `universo`)
+bq cp -f smartbetting-dados:futebol_taskF.taskf_teste2 \
+         smartbetting-dados:futebol_taskF.taskf_teste2_55   # a cópia que sobrevive
+bq rm -f -t smartbetting-dados:futebol_taskF.taskf_teste2
+
+# as quatro células, cada uma com build -> carimbo -> Teste 2 e as MESMAS vars. Nada de `+`.
+# (a ancestria NÃO foi reconstruída: ela já estava no dataset e nenhum modelo dela mudou —
+#  e é ela que fixa até onde o universo estendido alcança)
+# base    : --vars '{}'                                        (sem exclusão: a Costura A roda)
+# escopo  : --vars '{pit_escopo: todas}'                       --exclude assert_taskf_pit_default_igual_baseline
+# recorte : --vars '{pit_recorte: ultimos_10}'                 idem
+# ambos   : --vars '{pit_escopo: todas, pit_recorte: ultimos_10}' idem
+
+# FASE 3 — o portão
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt test --target taskF --select tag:costura_b
+
+# resposta 1 (o piso célula a célula)
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_saturacao_recorte
+
+# resposta 2 (a sobrevivência das quatro)
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_sobrevivencia
+
+# resposta 3 (Copa do Mundo) — o default do taskf_exclusao
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_exclusao
+
+# resposta 4 (Champions) — o mesmo arquivo, outro par de universos
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_exclusao \
+  --vars '{taskf_universo_com: estendido, taskf_universo_sem: estendido_sem_champions_classif}'
+
+# o universo estendido, à parte — no dataset de medição (228) e, com --target dev, contra
+# produção, que alcança a data de execução (233). A diferença é o que o teto dos fatos custa.
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_universo_congelado
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target dev   --select taskf_universo_congelado
+
+bq query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=500 \
+  < target/compiled/dbt_futebol/analyses/<a análise>.sql
+```
+
+Os quatro `dbt build` fecham **43/43** (`base`, incluindo a Costura A) e **42/42** (as outras
+três), com `ERROR=0` e `SKIP=0` — iguais aos da #54 e da #55.
+
+⚠️ **Sem `--max_rows` o `bq query` corta em 100 linhas sem avisar**, e o `taskf_exclusao` emite
+mais do que isso. É o mesmo corte silencioso que a #57 documentou.

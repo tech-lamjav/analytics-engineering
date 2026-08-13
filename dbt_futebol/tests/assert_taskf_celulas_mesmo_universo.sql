@@ -8,20 +8,29 @@
 -- de valor entre builds, e nada no número denuncia. Até a #54 isso era disciplina de execução
 -- (a receita do analyses/taskf_teste2.sql); aqui vira cobrança.
 --
--- O QUE É COBRADO, em quatro blocos, e cada um tem um modo de falha próprio:
+-- ⚠️ O GRÃO DA COBRANÇA É (UNIVERSO × CÉLULA) DESDE A #58. A tabela ganhou uma coluna de
+-- universo — quais JOGOS entram na conta —, ortogonal à célula, que diz qual HISTÓRICO cada jogo
+-- carrega. A invariante não é "a tabela inteira tem o mesmo universo": os universos têm contagens
+-- diferentes DE PROPÓSITO, e é justamente essa diferença que a #58 mede. O que continua valendo,
+-- e é o que sustenta toda comparação entre células, é que DENTRO de cada universo as quatro
+-- células meçam os mesmos jogos. Ver macros/taskf_universos.sql.
 --
---   celulas_faltando     as quatro células existem, com os nomes que taskf_nomes_de_celula()
---                        define. É também a guarda de NÃO-VACUIDADE de tudo o que vem abaixo:
---                        uma comparação "todas iguais" sobre uma tabela com uma célula só passa
---                        em branco, e é exatamente esse o estado da tabela no meio de uma
---                        medição interrompida.
+-- O QUE É COBRADO, em cinco blocos, e cada um tem um modo de falha próprio:
+--
+--   celulas_faltando     as quatro células existem EM CADA UNIVERSO, com os nomes que
+--                        taskf_nomes_de_celula() define. É também a guarda de NÃO-VACUIDADE de
+--                        tudo o que vem abaixo: uma comparação "todas iguais" sobre uma tabela
+--                        com uma célula só passa em branco, e é exatamente esse o estado da
+--                        tabela no meio de uma medição interrompida.
 --   rotulo_nao_casa_...  e o nome de cada célula casa com o par de eixos gravado ao lado dele.
---   universo_divergente  jogos, linhas e as duas pontas do corte idênticos nas quatro.
---   jogos_fora_do_gabarito  e os jogos são os 169 que o universo congelado declara
---                        (taskf_universo().jogos_esperados). Sem isto, quatro células medidas
+--   universo_divergente  jogos, linhas e as duas pontas do corte idênticos nas quatro células
+--                        DAQUELE universo.
+--   jogos_fora_do_gabarito  e os jogos são os que o universo declara, nos universos que declaram
+--                        um número (macros/taskf_universos.sql: os dois congelados têm gabarito,
+--                        os dois estendidos não — ver o bloco). Sem isto, quatro células medidas
 --                        sobre o mesmo universo ERRADO passariam juntas.
---   execucao_divergente  as quatro leram a MESMA construção dos fatos, leram ANTES de medir, e
---                        saíram do MESMO commit (com procedência declarada).
+--   execucao_divergente  todas as linhas da tabela leram a MESMA construção dos fatos, leram
+--                        ANTES de medir, e saíram do MESMO commit (com procedência declarada).
 --
 -- ⚠️ AS QUATRO CÉLULAS NÃO PRECISAM TER O MESMO NÚMERO DE LINHAS DE PREMISSA, e por isso isso não
 -- é cobrado. Uma premissa entra na tabela quando acende pelo menos uma vez (`HAVING
@@ -58,11 +67,14 @@
 
 {% set j = taskf_universo() %}
 {% set nomes = taskf_nomes_de_celula().values() | list %}
--- Os 169 jogos e os quatro nomes de célula acima saem de macro (macros/taskf_universo.sql e
--- macros/taskf_celula.sql): esta guarda não tem número nem rótulo digitado.
+{% set universos = taskf_universos() %}
+-- Os jogos esperados e os quatro nomes de célula acima saem de macro (macros/taskf_universo.sql,
+-- macros/taskf_universos.sql e macros/taskf_celula.sql): esta guarda não tem número nem rótulo
+-- digitado.
 
 WITH celulas AS (
     SELECT
+        universo,
         celula,
         ANY_VALUE(jogos_no_universo)  AS jogos_no_universo,
         ANY_VALUE(linhas_no_universo) AS linhas_no_universo,
@@ -86,26 +98,38 @@ WITH celulas AS (
             jogos_no_universo, linhas_no_universo,
             janela_ini, janela_fim, odds_loaded_at, git_sha))) AS versoes_na_celula
     FROM {{ source('futebol_taskF', 'taskf_teste2') }}
-    GROUP BY celula
+    GROUP BY universo, celula
 ),
 
+-- O produto (universo × célula) é o grão da cobrança desde a #58: cada universo tem de ter as
+-- quatro células, e cada universo é conferido DENTRO de si. Cobrar sobre a tabela inteira daria
+-- vermelho permanente pelo motivo errado — os universos têm contagens de jogos diferentes de
+-- propósito, é exatamente essa diferença que a #58 mede.
 esperadas AS (
-    SELECT nome FROM UNNEST({{ nomes | tojson }}) AS nome
+    SELECT universo, nome
+    FROM UNNEST({{ universos | map(attribute='nome') | list | tojson }}) AS universo
+    CROSS JOIN UNNEST({{ nomes | tojson }}) AS nome
 ),
 
--- 1. AS QUATRO EXISTEM. Nos dois sentidos: célula que falta e célula com nome que o 2×2 não
---    define (que só aparece se alguém escrever na tabela por fora do taskf_celula()).
+-- 1. AS QUATRO EXISTEM, EM CADA UNIVERSO. Nos dois sentidos: par que falta e célula com nome que
+--    o 2×2 não define (que só aparece se alguém escrever na tabela por fora do taskf_celula()).
+--    Também pega universo que sumiu — um `--vars` que não passasse pela lista de macros/
+--    taskf_universos.sql deixaria a tabela com três dos quatro, e "não medimos esse" se parece
+--    demais com "esse deu igual".
 presenca AS (
     SELECT
         'celulas_faltando' AS motivo,
         TO_JSON_STRING(STRUCT(
+            e.universo                                          AS universo_esperado,
+            c.universo                                          AS universo_encontrado,
             e.nome                                              AS celula_esperada,
             c.celula                                            AS celula_encontrada,
-            (SELECT COUNT(*) FROM celulas)                      AS celulas_na_tabela,
-            {{ nomes | length }}                                AS celulas_esperadas
+            (SELECT COUNT(*) FROM celulas)                      AS pares_na_tabela,
+            {{ (nomes | length) * (universos | length) }}       AS pares_esperados
         )) AS linha
     FROM esperadas AS e
-    FULL OUTER JOIN celulas AS c ON c.celula = e.nome
+    FULL OUTER JOIN celulas AS c
+      ON c.celula = e.nome AND c.universo = e.universo
     WHERE e.nome IS NULL OR c.celula IS NULL
 ),
 
@@ -130,16 +154,20 @@ rotulos AS (
     END
 ),
 
--- 2. O MESMO UNIVERSO. Comparação contra a primeira célula em ordem alfabética — um par por
---    célula divergente, e não um produto cartesiano de reclamações sobre a mesma diferença.
+-- 2. O MESMO UNIVERSO — DENTRO DE CADA UNIVERSO. Comparação contra a primeira célula em ordem
+--    alfabética DAQUELE universo: um par por célula divergente, e não um produto cartesiano de
+--    reclamações sobre a mesma diferença. Entre universos diferentes a contagem DEVE divergir, e
+--    é por isso que a referência é por universo e não uma linha só da tabela.
 referencia AS (
-    SELECT * FROM celulas ORDER BY celula LIMIT 1
+    SELECT * FROM celulas
+    QUALIFY ROW_NUMBER() OVER (PARTITION BY universo ORDER BY celula) = 1
 ),
 
 universo AS (
     SELECT
         'universo_divergente' AS motivo,
         TO_JSON_STRING(STRUCT(
+            c.universo,
             c.celula, r.celula AS referencia,
             c.jogos_no_universo,  r.jogos_no_universo  AS jogos_ref,
             c.linhas_no_universo, r.linhas_no_universo AS linhas_ref,
@@ -148,7 +176,7 @@ universo AS (
             c.versoes_na_celula
         )) AS linha
     FROM celulas AS c
-    CROSS JOIN referencia AS r
+    JOIN referencia AS r ON r.universo = c.universo
     WHERE c.jogos_no_universo  IS DISTINCT FROM r.jogos_no_universo
        OR c.linhas_no_universo IS DISTINCT FROM r.linhas_no_universo
        OR c.janela_ini         IS DISTINCT FROM r.janela_ini
@@ -156,17 +184,30 @@ universo AS (
        OR c.versoes_na_celula  <> 1
 ),
 
--- 3. E É O UNIVERSO DECLARADO. `jogos_esperados` mora em macros/taskf_universo.sql, junto do
---    predicado que produz o recorte — as duas pontas não têm como divergir.
+-- 3. E É O UNIVERSO DECLARADO — onde há número a declarar. `jogos_esperados` mora em
+--    macros/taskf_universos.sql, junto do predicado que produz cada recorte, e as duas pontas não
+--    têm como divergir.
+--
+--    ⚠️ Só os DOIS UNIVERSOS CONGELADOS têm gabarito; os estendidos entram na lista com `none` e
+--    ficam de fora deste bloco. Não é lacuna: eles crescem legitimamente a cada construção dos
+--    fatos, e um número aqui viraria cobrança a atualizar toda execução — a espécie de guarda que
+--    só ensina a ignorar guarda. O que vale para os quatro é o bloco 2 (as células concordarem
+--    entre si dentro do universo), e ele não depende de gabarito nenhum.
 gabarito AS (
     SELECT
         'jogos_fora_do_gabarito' AS motivo,
         TO_JSON_STRING(STRUCT(
-            celula, jogos_no_universo, {{ j.jogos_esperados }} AS jogos_esperados,
+            c.universo, c.celula, c.jogos_no_universo, g.jogos_esperados,
             '{{ j.ini }}' AS universo_ini, '{{ j.teto_utc }}' AS universo_teto_utc
         )) AS linha
-    FROM celulas
-    WHERE jogos_no_universo IS DISTINCT FROM {{ j.jogos_esperados }}
+    FROM celulas AS c
+    JOIN (
+        {%- for u in universos if u.jogos_esperados is not none %}
+        SELECT '{{ u.nome }}' AS universo, {{ u.jogos_esperados }} AS jogos_esperados
+        {{ "UNION ALL" if not loop.last }}
+        {%- endfor %}
+    ) AS g ON g.universo = c.universo
+    WHERE c.jogos_no_universo IS DISTINCT FROM g.jogos_esperados
 ),
 
 -- 4. A MESMA EXECUÇÃO, em TRÊS pontas: mesma construção dos fatos nas quatro, fatos construídos
@@ -190,10 +231,19 @@ gabarito AS (
 --    em 7.200 mudando entre duas medições sobre os mesmos fatos, todos empates de arredondamento
 --    do `AVG`. Nenhuma guarda distingue esse empate de um efeito real de 0,1 — quem quiser a
 --    diferença mede com `analyses/taskf_remedicao.sql`, que é onde ela é visível.
+-- A referência aqui é UMA linha da tabela inteira, e não uma por universo: os quatro universos de
+-- uma célula saem do MESMO INSERT (compartilham `medido_em`, `git_sha` e `odds_loaded_at` por
+-- construção), então "mesma execução" é uma afirmação sobre a tabela toda. Uma referência por
+-- universo deixaria passar quatro medições feitas em quatro dias, cada uma internamente coerente.
+referencia_global AS (
+    SELECT * FROM celulas ORDER BY universo, celula LIMIT 1
+),
+
 execucao AS (
     SELECT
         'execucao_divergente' AS motivo,
         TO_JSON_STRING(STRUCT(
+            c.universo,
             c.celula, r.celula AS referencia,
             c.odds_loaded_at, r.odds_loaded_at AS odds_loaded_at_ref,
             c.medido_em, c.git_sha, r.git_sha AS git_sha_ref,
@@ -203,7 +253,7 @@ execucao AS (
             c.git_sha = 'desconhecido'                          AS sem_procedencia
         )) AS linha
     FROM celulas AS c
-    CROSS JOIN referencia AS r
+    CROSS JOIN referencia_global AS r
     WHERE c.odds_loaded_at IS DISTINCT FROM r.odds_loaded_at
        OR c.odds_loaded_at IS NULL
        OR NOT (c.odds_loaded_at < c.medido_em)

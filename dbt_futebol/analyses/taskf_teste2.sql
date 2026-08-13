@@ -27,7 +27,7 @@
     referência, com o risco de reconciliar a medição contra um bug meu.
 
     ────────────────────────────────────────────────────────────────────────────────
-    O QUE MUDA EM RELAÇÃO AO ORIGINAL — cinco coisas, e só cinco:
+    O QUE MUDA EM RELAÇÃO AO ORIGINAL — seis coisas, e só seis:
 
     1. UNIVERSO CONGELADO. `apostas` é recortada por taskf_universo_filtro(). O original rodou sem
        corte (a janela dele é o instante da execução). Ver macros/taskf_universo.sql: o teto é um
@@ -45,6 +45,33 @@
     5. O CARIMBO DA CONSTRUÇÃO DOS FATOS (#55), `odds_loaded_at`. Ver a CTE `fatos`: é ele que
        tira "as quatro rodaram na mesma execução" da disciplina e põe na linha, onde a Costura B
        consegue cobrar.
+    6. A COLUNA DE UNIVERSO (#58). O recorte do item 1 deixa de ser único: cada célula emite uma
+       linha por (universo, mercado, premissa, benchmark), com os universos de
+       macros/taskf_universos.sql. Ver a seção abaixo.
+
+    ────────────────────────────────────────────────────────────────────────────────
+    OS QUATRO UNIVERSOS, E POR QUE ELES SAEM DO MESMO INSERT (#58)
+
+    A #58 fecha duas perguntas que são sobre QUAIS JOGOS ENTRAM NA CONTA, e não sobre o histórico
+    que cada jogo carrega: a Copa do Mundo deve sair da base de medição? E a fase classificatória
+    da Champions? As duas só se respondem medindo COM e SEM.
+
+    O universo é, portanto, um TERCEIRO EIXO — ortogonal à célula. As definições e o argumento de
+    cada variante estão em macros/taskf_universos.sql; aqui importa uma consequência de
+    engenharia: **os quatro universos de uma célula saem do MESMO INSERT**. Se `completo` e
+    `sem_copa_mundo` fossem duas execuções, a diferença entre elas carregaria dentro de si uma
+    reconstrução dos modelos — e a #55 mediu que uma reconstrução move 5 campos em 7.200 sozinha.
+    Como a comparação COM/SEM é exatamente o entregável, esse ruído entraria no lugar da resposta.
+
+    Emitidos juntos, os quatro compartilham `medido_em`, `git_sha` e `odds_loaded_at` por
+    construção (`CURRENT_TIMESTAMP()` é estável dentro de um statement no BigQuery), e a única
+    coisa que difere entre eles é o conjunto de jogos — que é a pergunta.
+
+    ⚠️ `jogos_no_universo`, `linhas_no_universo`, `janela_ini` e `janela_fim` passam a ser POR
+    UNIVERSO. Quem ler a tabela sem filtrar universo verá quatro valores para cada um deles e
+    quatro linhas por premissa — é por isso que TODO consumidor recorta o universo que quer, e a
+    Costura B cobra a invariante de universo dentro de cada um deles em vez de sobre a tabela
+    inteira.
 
     ────────────────────────────────────────────────────────────────────────────────
     AS DUAS CONTAGENS DE AMOSTRA, E QUAL DELAS O PISO CORTA (#54)
@@ -86,8 +113,9 @@
 
     ⚠️ E É POR ISSO QUE MUDAR O SCHEMA EXIGE DROPAR A TABELA. `CREATE TABLE IF NOT EXISTS` não
     acrescenta coluna a uma tabela que já existe: com o schema novo, o INSERT de lista explícita
-    falha na primeira célula. Aconteceu duas vezes — a #54 (as duas contagens de amostra) e a #55
-    (o `odds_loaded_at`) —, e nas duas a tabela foi dropada antes da primeira célula, o que só é
+    falha na primeira célula. Aconteceu três vezes — a #54 (as duas contagens de amostra), a #55
+    (o `odds_loaded_at`) e a #58 (a coluna de universo) —, e nas três a tabela foi dropada antes da
+    primeira célula, o que só é
     seguro porque as quatro são re-medidas na mesma execução, que é o que a spec exige de qualquer
     jeito. Se um ticket futuro mudar o schema de novo, é o mesmo passo, e ele NÃO é rotina: dropar
     sem re-medir as quatro deixa a tabela com células de formatos diferentes de execuções
@@ -110,8 +138,8 @@
     ────────────────────────────────────────────────────────────────────────────────
     COMO RODAR (do dbt_futebol/) — EM FASES, e a separação não é economia, é correção.
 
-    FASE 0, só quando o schema de uma das duas tabelas acumulativas muda (foi o caso na #54 e na
-    #55). Dropar só a que mudou de formato basta — a outra é reescrita célula a célula pelo
+    FASE 0, só quando o schema de uma das duas tabelas acumulativas muda (foi o caso na #54, na
+    #55 e na #58). Dropar só a que mudou de formato basta — a outra é reescrita célula a célula pelo
     DELETE + INSERT da fase 2, e a fase 2 roda inteira nas quatro de qualquer forma, então as duas
     terminam carregando a mesma execução:
 
@@ -195,7 +223,7 @@
     vezes, ela derivaria — e um INSERT posicional com colunas trocadas de lugar não dá erro, dá
     número errado. -#}
 {%- set colunas = [
-    'celula STRING', 'pit_escopo STRING', 'pit_recorte STRING',
+    'celula STRING', 'pit_escopo STRING', 'pit_recorte STRING', 'universo STRING',
     'medido_em TIMESTAMP', 'git_sha STRING', 'odds_loaded_at TIMESTAMP',
     'janela_ini DATE', 'janela_fim DATE',
     'jogos_no_universo INT64', 'linhas_no_universo INT64',
@@ -252,11 +280,25 @@ pit_disponivel AS (
           AND a.team_id    = j.away_team_id
 ),
 
-{#- O UNIVERSO CONGELADO. Por que o recorte cai aqui, em cima de `apostas`, e não num parâmetro
-    novo do task01_base(): está no cabeçalho de macros/taskf_universo.sql, junto do predicado. -#}
-apostas_congeladas AS (
+{#- AS APOSTAS COM O QUE OS UNIVERSOS PRECISAM LER. Sem recorte nenhum aqui: o recorte é o eixo
+    de universo e acontece no CTE seguinte, uma vez por variante.
+
+    `round` entra por join com o fact_fixtures porque `apostas` não o carrega, e o predicado da
+    fase classificatória da Champions é escrito por semântica de fase (ver
+    macros/taskf_universos.sql). É o mesmo seam do `pit_disponivel` acima e pelo mesmo motivo: o
+    task01_base() é o artefato que produziu os números publicados da [0.1] e não é tocado por esta
+    medição.
+
+    O COALESCE do `round` não é decoração. Sem ele, um fixture de Champions com `round` nulo
+    tornaria `NOT (competition = ... AND round LIKE ...)` nulo, e a linha sumiria do universo
+    `estendido_sem_champions_classif` calada — some do lado SEM, que é exatamente onde ninguém
+    procuraria. Com string vazia, ela cai do lado certo (não é classificatória por rótulo) e
+    aparece na contagem. Nas linhas fora da Champions o predicado já é FALSE pelo primeiro termo,
+    então nada depende do rótulo. -#}
+apostas_marcadas AS (
     SELECT
         a.*,
+        COALESCE(f.round, '')                  AS round,
         {#- O `min_jogos` que vem do task01_base() é o USADO: ele sai do played_total do PIT, que
             sob recorte de contagem já vem saturado. Ganha aqui um nome que diz isso — o `a.*`
             acima mantém o original, então as duas formas convivem no CTE e só a nomeada chega à
@@ -266,7 +308,23 @@ apostas_congeladas AS (
     FROM apostas AS a
     LEFT JOIN pit_disponivel AS d
            ON d.fixture_id = a.fixture_id
-    WHERE {{ taskf_universo_filtro('a.') }}
+    LEFT JOIN {{ ref('fact_fixtures') }} AS f
+           ON f.fixture_id = a.fixture_id
+),
+
+{#- OS UNIVERSOS, um recorte por variante, todos na mesma passada. Ver macros/taskf_universos.sql
+    para o que cada um responde. A lista vem da macro e nunca é digitada aqui: um universo que
+    existisse no predicado e não na lista (ou o contrário) produziria coluna vazia numa tabela
+    que já tem quatro dimensões, que é o tipo de buraco que ninguém encontra olhando. -#}
+apostas_universos AS (
+    {%- for u in taskf_universos() %}
+    SELECT '{{ u.nome }}' AS universo, a.*
+    FROM apostas_marcadas AS a
+    WHERE {{ taskf_universo_predicado(u.nome, 'a.') }}
+    {%- if not loop.last %}
+    UNION ALL
+    {%- endif %}
+    {%- endfor %}
 ),
 
 {#- Uma passada, grão (mercado, premissa, benchmark). Só as linhas em que a premissa ACENDEU
@@ -279,6 +337,7 @@ apostas_congeladas AS (
     artefato que matou os +9,7% da Task [0]. Ver os dois lado a lado é o ponto. -#}
 agregado AS (
     SELECT
+        a.universo,
         a.market_id,
         pl.premissa,
         a.benchmark,
@@ -292,23 +351,28 @@ agregado AS (
         AVG(IF(pl.acesa AND a.min_jogos_disponivel >= {{ piso }},
                CAST(a.ganhou AS INT64), NULL))                   AS p_real_{{ piso }}
         {%- endfor %}
-    FROM apostas_congeladas AS a
+    FROM apostas_universos AS a
     JOIN prem_long AS pl
       ON  pl.market_id                  = a.market_id
       AND pl.fixture_id                 = a.fixture_id
       AND pl.outcome_side               = a.outcome_side
       AND COALESCE(pl.line_value, -999) = COALESCE(a.line_value, -999)
-    GROUP BY a.market_id, pl.premissa, a.benchmark
+    GROUP BY a.universo, a.market_id, pl.premissa, a.benchmark
     HAVING COUNTIF(pl.acesa) > 0
 ),
 
+{#- POR UNIVERSO, e não uma linha só: cada universo tem o seu corte, então tem a sua contagem de
+    jogos e as suas duas pontas de janela. É o que deixa a Costura B cobrar a invariante de
+    universo DENTRO de cada um deles. -#}
 janela AS (
     SELECT
+        universo,
         MIN(DATE(kickoff_utc))     AS janela_ini,
         MAX(DATE(kickoff_utc))     AS janela_fim,
         COUNT(DISTINCT fixture_id) AS jogos_no_universo,
         COUNT(*)                   AS linhas_no_universo
-    FROM apostas_congeladas
+    FROM apostas_universos
+    GROUP BY universo
 ),
 
 {#- QUAL CONSTRUÇÃO DOS FATOS ESTA CÉLULA LEU (#55). O `fact_odds_snapshot` é `materialized:
@@ -353,6 +417,7 @@ SELECT
     '{{ c.nome }}'                                          AS celula,
     '{{ c.escopo }}'                                        AS pit_escopo,
     '{{ c.recorte }}'                                       AS pit_recorte,
+    r.universo,
     CURRENT_TIMESTAMP()                                     AS medido_em,
     '{{ var("taskf_git_sha", "desconhecido") }}'            AS git_sha,
     -- A construção dos fatos que esta célula leu; ver a CTE `fatos`. É o que deixa "as quatro
@@ -395,5 +460,5 @@ SELECT
        ROUND(GREATEST((r.p_real_0 - r.p_odd_0) * 100, 0), 2),
        NULL)                                                AS peso_p0_k0
 FROM rotulado AS r
-CROSS JOIN janela AS j
+JOIN janela AS j ON j.universo = r.universo
 CROSS JOIN fatos AS f
