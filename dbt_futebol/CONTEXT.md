@@ -302,9 +302,20 @@ cell stamps the one it read in `odds_loaded_at`) or if any of the four is missin
 `base`, `escopo`, `recorte` and `ambos`, named for the axis each releases.
 _Avoid_: C1–C4 (C1, C2 and C3 already name subtasks of the [C] Coleta task)
 
+**Universo de medição**:
+Which fixtures enter the count. Since #58 it is a **third axis**, orthogonal to the célula: the
+célula decides what history each fixture carries, the universo decides which fixtures are
+measured at all. Four of them, defined once in `taskf_universos()`: `completo` (the frozen 169),
+`sem_copa_mundo`, `estendido` (no ceiling — it reaches whatever the facts construction contains)
+and `estendido_sem_champions_classif`. All four of a célula are emitted by the **same INSERT**, so
+the difference between two of them cannot carry a rebuild of the models inside it. Every consumer
+of `taskf_teste2` must filter one; without the filter each premissa appears four times.
+_Avoid_: treating a universo as a fifth célula — they answer different questions, and only cells
+within the same universo are comparable as a 2×2.
+
 **Universo congelado**:
-The fixed set of fixtures every célula is measured over — the [0.1]'s published window, 169
-fixtures. Its ceiling is an **instant**, not a date: the [0.1] ran mid-day with no frozen cutoff,
+The `completo` universo, and the primary one: the fixed set of fixtures every célula is measured
+over — the [0.1]'s published window, 169 fixtures. Its ceiling is an **instant**, not a date: the [0.1] ran mid-day with no frozen cutoff,
 so `DATE(kickoff) <= '2026-08-04'` returns 178 and only `kickoff < 04/08 12:00 UTC` returns the
 published 169. Written once in `taskf_universo()`; see `docs/TASKF_RESULTADOS.md`.
 _Avoid_: janela in prose — that word already names the odds collection window and its two
