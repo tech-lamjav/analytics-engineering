@@ -71,13 +71,7 @@
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
 
-{%- set universo = var('taskf_universo', 'completo') -%}
-{%- set universos_validos = [] -%}
-{%- for u in taskf_universos() -%}{%- set _ = universos_validos.append(u.nome) -%}{%- endfor -%}
-{%- if universo not in universos_validos -%}
-    {{ exceptions.raise_compiler_error(
-        "universo inválido: '" ~ universo ~ "'. Valores aceitos: " ~ universos_validos | join(' | ')) }}
-{%- endif -%}
+{%- set universo = taskf_universo_valido(var('taskf_universo', 'completo')) -%}
 
 {%- set pisos = taskf_pisos() -%}
 {# As quatro que a spec #49 nomeia. Digitadas porque é uma lista da spec, não algo a derivar do
@@ -103,9 +97,15 @@ WITH medido AS (
 ),
 
 {# Uma linha por premissa, com as quatro células lado a lado. O grão do Teste 2 é (mercado,
-   premissa, benchmark); no benchmark preferido cada premissa aparece uma vez por mercado, e
-   nenhuma das 39 aparece em dois mercados — mas o agrupamento carrega o mercado assim mesmo,
-   porque supor unicidade de nome é como se descobre que ela não valia. #}
+   premissa, benchmark), e o agrupamento aqui carrega o mercado junto porque supor unicidade de
+   NOME é como se descobre que ela não valia.
+
+   ⚠️ E ela não vale: `defesas_vazaveis` existe em DOIS mercados — BTTS (consenso) e Gols (sharp)
+   —, com vereditos OPOSTOS. As "39 premissas" do entregável são 39 linhas de (mercado, premissa,
+   benchmark) sobre 38 nomes distintos. Este cabeçalho dizia o contrário até a medição da #58
+   desmenti-lo; a expectativa fica registrada, corrigida, porque é ela que explica por que o
+   agrupamento não é por nome. Quem agrupar só por `premissa` mistura as duas linhas e produz um
+   veredito que não é de nenhuma das duas. #}
 por_premissa AS (
     SELECT
         mercado,
@@ -126,9 +126,12 @@ por_premissa AS (
     GROUP BY mercado, premissa, benchmark
 ),
 
-{# A regra, aplicada. `celulas = 4` entra no veredito porque uma premissa que não acende numa das
-   células de histórico real não tem como ter sinal positivo nela — e sem esta linha ela sairia
-   SEM_EVIDENCIA por NULL, que é o veredito certo pelo motivo errado. #}
+{# A regra, aplicada. Uma premissa que não acende numa das duas células de histórico real cai no
+   primeiro WHEN — a diferença dela ali é NULL — e sai SEM_EVIDENCIA por ausência de medida, não
+   por sinal negativo. O teste de NULL vem PRIMEIRO de propósito: em SQL, `NULL > 0` é NULL e não
+   FALSE, então sem ele a linha escorregaria até o ELSE e sairia com o mesmo rótulo pelo motivo
+   errado. A contagem `celulas` viaja junto e sai no detalhe: ela é o diagnóstico de quantas das
+   quatro a premissa alcançou, e é o que distingue os dois casos ao ler a saída. #}
 julgado AS (
     SELECT
         p.*,
@@ -154,7 +157,7 @@ SELECT 1 AS ordem, 'quatro' AS bloco,
     dif_{{ cel_ambos }}  AS dif_ambos,
     CAST(n_{{ cel_escopo }} AS FLOAT64) AS n_escopo,
     TO_JSON_STRING(STRUCT(
-        mercado, benchmark,
+        mercado, benchmark, celulas,
         dif_{{ cel_base }}    AS dif_base,    n_{{ cel_base }}    AS n_base,
         dif_{{ cel_recorte }} AS dif_recorte, n_{{ cel_recorte }} AS n_recorte,
         n_{{ cel_ambos }} AS n_ambos,

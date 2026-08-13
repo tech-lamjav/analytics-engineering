@@ -94,17 +94,10 @@
 
 {%- set cel_a = var('taskf_celula_a', 'base') -%}
 {%- set cel_b = var('taskf_celula_b', 'escopo') -%}
-{#- O universo é validado pelo mesmo caminho das células — taskf_universo_predicado() levanta erro
-    de compilação em nome desconhecido —, mas aqui o valor é usado como FILTRO da tabela já medida,
-    e não como predicado sobre apostas. A validação vem da lista da macro, não de uma segunda
-    cópia digitada. -#}
-{%- set universo = var('taskf_universo', 'completo') -%}
-{%- set universos_validos = [] -%}
-{%- for u in taskf_universos() -%}{%- set _ = universos_validos.append(u.nome) -%}{%- endfor -%}
-{%- if universo not in universos_validos -%}
-    {{ exceptions.raise_compiler_error(
-        "universo inválido: '" ~ universo ~ "'. Valores aceitos: " ~ universos_validos | join(' | ')) }}
-{%- endif -%}
+{#- O universo é validado pela mesma macro que o predicado usa (taskf_universo_valido), embora
+    aqui o valor vire FILTRO da tabela já medida e não predicado sobre apostas. Um nome digitado
+    errado devolveria zero linha, que se parece demais com "as duas células são idênticas". -#}
+{%- set universo = taskf_universo_valido(var('taskf_universo', 'completo')) -%}
 {#- Os quatro nomes vêm da macro que os define, nunca de uma segunda lista digitada aqui: uma
     cópia que precisa ficar igual para sempre não fica, e a divergência seria muda. -#}
 {%- set celulas_validas = taskf_nomes_de_celula().values() | list -%}

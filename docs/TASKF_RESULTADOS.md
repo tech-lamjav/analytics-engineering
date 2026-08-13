@@ -1963,6 +1963,9 @@ que a troca é, medido: **uma permuta adjacente na fronteira do top 5** —
 | `completo` | `clean_sheets_altos` (peso 4,36) | `defesas_firmes` (3,32) |
 | `sem_copa_mundo` | `defesas_firmes` (3,84) | `clean_sheets_altos` (3,18) |
 
+(bloco `topo` da mesma análise — ele emite posição e peso dos dois lados de quem entra ou sai,
+justamente para que "2 trocas no topo" não fique sendo um número sem conteúdo.)
+
 O veredito não é suavizado: a régua caiu **em cima** do corte, e amaciar um MATERIAL depois de
 vê-lo é exatamente o pós-hoc que o cabeçalho da análise proíbe. O que sustenta a recomendação
 apesar dele são as outras duas pernas, que a própria régua fornece: a referência de eixo (0,648
@@ -1970,6 +1973,11 @@ contra 0,992) e o mecanismo dos 2 jogos em 79. **Se alguém quiser litigar essa 
 declarado é o universo de placebo — remover 79 jogos sorteados por hash e comparar a exclusão real
 contra a distribuição do placebo. Ele continua não tendo sido rodado, e continua sendo a única
 coisa que mudaria a leitura desta linha.
+
+**De passagem, a mesma tabela mostra que a Copa do Mundo jogou 88 e não 79.** Nove partidas
+encerradas dela ficam fora do universo: oito por status (5 PEN e 3 AET — mata-mata decidido fora
+do tempo normal, o caso da issue #71) e **uma** por não ter preço coletado, na primeira rodada de
+grupos. O deserto de histórico dela, portanto, é medido sobre 79 dos 88 jogos que aconteceram.
 
 ⚠️ **E a exclusão não é aleatória no tempo.** Tirar a Copa do Mundo não tira 47% dos jogos
 espalhados pela janela: tira **os primeiros 24 dias dela**. O universo `sem_copa_mundo` começa em
@@ -2035,19 +2043,34 @@ princípio também é real e fica declarada: a qualificatória traz clubes de li
 coletamos**, e por isso o adversário deles é invisível — se uma janela futura tiver a Champions com
 peso maior que 7,9%, a pergunta se re-mede, e o par de universos já está construído para isso.
 
-⚠️ **7,9% e não 22% — as duas contas não medem a mesma coisa.** A spec #49 atribui à fase
-classificatória "22% da janela". A diferença tem mecanismo, não é erro de ninguém: a spec contou
-**fixtures** do calendário, e o universo de medição exige **preço coletado**. A coleta de odds da
-UCL entrou no ar em **31/07** (rollout da liga 2), então as 56 partidas de Q1 e Q2, de julho,
-existem no `fact_fixtures` e não existem em `apostas` — que é também a razão de a Champions ter
-zero jogo no universo congelado. É o mesmo tipo de reconciliação do "69 contra 67" da #53: nenhum
-dos dois números está errado, eles contam populações diferentes.
+⚠️ **7,9% e não 22% — e a conta inteira sai de uma tabela.** A spec #49 atribui à fase
+classificatória "22% da janela". A diferença tem mecanismo, não é erro de ninguém, e o bloco
+`fora_do_universo` a fecha partida a partida — ele lista as encerradas que o universo **não**
+alcança, por fase e por status:
 
-⚠️ **18 de 20: os dois que faltam são AET.** A Q3 de 2026 tem 20 partidas encerradas com odds nos
-nossos dados; duas delas — as de 11/08 — terminaram na prorrogação. O `jogos_encerrados` do
-`task01_base()` filtra `status_short = 'FT'`, então AET e PEN não entram no universo. É o achado
-de passagem da #56, que virou a [issue #71](https://github.com/tech-lamjav/analytics-engineering/issues/71);
-aqui ele aparece com nome e sobrenome num conjunto de 20.
+| fase | status | partidas | com preço coletado | veredito |
+|---|---|---|---|---|
+| 1st Qualifying Round | FT | 27 | **0** | sem preço coletado |
+| 1st Qualifying Round | AET | 1 | **0** | sem preço coletado |
+| 2nd Qualifying Round | FT | 24 | **0** | sem preço coletado |
+| 2nd Qualifying Round | PEN | 3 | **0** | sem preço coletado |
+| 2nd Qualifying Round | AET | 1 | **0** | sem preço coletado |
+| 3rd Qualifying Round | AET | 2 | **2** | só o status |
+
+A temporada 2026 da Champions tem **76** partidas encerradas desde 16/06 (28 + 28 + 20); o
+universo mede **18**. As 56 de Q1 e Q2, de julho, não têm preço nenhum: a coleta de odds da UCL
+entrou no ar em **31/07** (rollout da liga 2), e ela é forward-only. É também a razão de a
+Champions ter zero jogo no universo congelado. A spec contou **fixtures**; o universo de medição
+exige **preço**. Mesmo tipo de reconciliação do "69 contra 67" da #53: nenhum dos dois números
+está errado, eles contam populações diferentes.
+
+⚠️ **E as duas últimas linhas da tabela são um segundo mecanismo, não o mesmo.** Os 2 jogos de Q3
+que ficaram de fora **têm** preço coletado: eles caem pelo `status_short = 'FT'` do
+`jogos_encerrados`, porque terminaram na prorrogação. É o achado de passagem da #56, que virou a
+[issue #71](https://github.com/tech-lamjav/analytics-engineering/issues/71) — aqui ele aparece com
+nome e sobrenome: **18 dos 20** jogos de Q3 entram, e os 2 que faltam são AET de 11/08. A coluna
+`com_preco` do bloco existe exatamente para separar as duas causas sem precisar de uma segunda
+consulta.
 
 ### ⚠️ A previsão da spec sobre `escopo` e a Champions virou medição
 
@@ -2152,6 +2175,21 @@ três últimas. As duas cobranças que esse argumento não alcança foram quebra
 
 As duas foram desfeitas e as quatro guardas voltaram ao verde; a tabela foi reconferida depois, e
 os 16 pares (universo × célula) devolvem exatamente os mesmos números de antes das quebras.
+
+### ⚠️ O que a revisão pegou, e que nenhuma guarda pegaria
+
+A revisão de standards encontrou um defeito que passou por `dbt parse`, por quatro guardas verdes
+e por uma medição inteira: a edição do `sources.yml` que documentou a coluna `universo` **comeu a
+linha `- name: medido_em`**, deixando duas chaves `description:` sob o mesmo item. Em YAML a
+última vence, então a coluna `universo` passou a ser documentada como *"Quando a célula foi
+materializada…"* e a descrição do universo sumiu.
+
+O dbt avisa (`DuplicateYAMLKeysDeprecation`) e **não** falha. É metadado de documentação, não
+muda número nenhum — mas é exatamente o tipo de erro que vive para sempre: o schema YAML não é
+lido por teste nenhum, e quem for consultar a coluna daqui a seis meses lê a descrição errada com
+cara de certa. Corrigido antes do merge, junto com a descrição de `jogos_no_universo`, que ainda
+dizia "universo congelado (169), idêntico nas quatro células" — verdade que a coluna deixou de
+ter quando ela passou a ser por universo.
 
 ### A re-medição reproduz a #55: 6 campos em 7.200
 

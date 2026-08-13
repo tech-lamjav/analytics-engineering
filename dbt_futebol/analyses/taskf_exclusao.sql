@@ -54,7 +54,7 @@
     `excluido` abaixo): no piso 5 quase todos os jogos que ela remove JÁ estavam fora.
 
     ────────────────────────────────────────────────────────────────────────────────
-    OS CINCO BLOCOS
+    OS SETE BLOCOS
 
       universo    quantos jogos e linhas cada universo tem, por célula, e quantos a exclusão
                   remove. É a conferência de que o par pedido é encaixado (SEM ⊂ COM) e não-vazio
@@ -68,8 +68,30 @@
       fases       os jogos removidos por (competição, fase), contra o total daquela competição no
                   universo COM. É o que transforma "excluir a fase classificatória ≡ excluir a
                   Champions **nesta janela**" de afirmação em número.
+      fora_do_universo  as partidas ENCERRADAS das competições que a exclusão toca e que mesmo
+                  assim não entram no universo, por fase e por status. É o que separa "não
+                  medimos" de "não aconteceu" — e responde de uma vez as duas perguntas que
+                  costumam vir depois de uma contagem baixa: a partida sem preço coletado e a que
+                  terminou fora do tempo normal (`status_short <> 'FT'`, o filtro do
+                  task01_base(); ver a issue #71).
       ordenacao   as três métricas e o veredito, por (contraste, piso) — as quatro células mais o
                   contraste de referência.
+      topo        as premissas que ENTRARAM ou SAÍRAM do top {{ n_topo }}, com posição e peso dos
+                  dois lados. Sem ele, `trocas_no_topo = 2` é um número sem conteúdo: não dá para
+                  saber se foi uma permuta adjacente na fronteira ou duas premissas atravessando a
+                  tabela inteira, e as duas coisas pedem leituras opostas.
+
+    ────────────────────────────────────────────────────────────────────────────────
+    AS COLUNAS `a`, `b`, `c` MUDAM DE SENTIDO POR BLOCO — é o preço de sete blocos num UNION, e a
+    legenda é esta (o `detalhe` traz o resto sempre):
+
+      universo          a = jogos no COM      b = jogos no SEM     c = jogos removidos
+      excluido          a = jogos excluídos   b = min_jogos médio  c = excluídos acima do piso 5
+      composicao        a = jogos             b = % do universo    c = jogos removidos
+      fases             a = jogos na fase     b = jogos removidos  c = —
+      fora_do_universo  a = partidas de fora  b = com preço        c = —
+      ordenacao         a = rho               b = trocas no topo   c = trocas de sinal
+      topo              a = posição no COM    b = posição no SEM   c = peso no COM
 
     ────────────────────────────────────────────────────────────────────────────────
     COMO RODAR (do dbt_futebol/), depois das quatro células medidas:
@@ -92,16 +114,8 @@
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
 
-{%- set u_com = var('taskf_universo_com', 'completo') -%}
-{%- set u_sem = var('taskf_universo_sem', 'sem_copa_mundo') -%}
-{%- set universos_validos = [] -%}
-{%- for u in taskf_universos() -%}{%- set _ = universos_validos.append(u.nome) -%}{%- endfor -%}
-{%- for u in [u_com, u_sem] -%}
-    {%- if u not in universos_validos -%}
-        {{ exceptions.raise_compiler_error(
-            "universo inválido: '" ~ u ~ "'. Valores aceitos: " ~ universos_validos | join(' | ')) }}
-    {%- endif -%}
-{%- endfor -%}
+{%- set u_com = taskf_universo_valido(var('taskf_universo_com', 'completo')) -%}
+{%- set u_sem = taskf_universo_valido(var('taskf_universo_sem', 'sem_copa_mundo')) -%}
 {%- if u_com == u_sem -%}
     {{ exceptions.raise_compiler_error(
         "taskf_universo_com e taskf_universo_sem são o mesmo universo ('" ~ u_com ~ "') — nada a excluir.") }}
@@ -278,6 +292,34 @@ bloco_fases AS (
     GROUP BY c.competition, c.round
 ),
 
+-- ── bloco `fora_do_universo` ────────────────────────────────────────────────────────────────
+{# As encerradas que o universo NÃO alcança, nas competições que a exclusão toca. Duas causas
+   possíveis e as duas importam: a partida não teve preço coletado (a coleta é forward-only e
+   entra no ar quando a liga é lançada) ou ela terminou fora do tempo normal — o
+   `jogos_encerrados` do task01_base() filtra `status_short = 'FT'`, então AET e PEN ficam de fora
+   (achado da #56, issue #71).
+
+   `com_preco` distingue as duas sem precisar de terceira consulta: partida encerrada, com preço
+   coletado e ainda assim fora do universo só pode ter saído pelo status. #}
+fora_do_universo AS (
+    SELECT
+        f.competition,
+        f.round,
+        f.status_short,
+        COUNT(*) AS partidas,
+        COUNTIF(o.fixture_id IS NOT NULL) AS com_preco,
+        MIN(DATE(f.kickoff_utc)) AS primeiro,
+        MAX(DATE(f.kickoff_utc)) AS ultimo
+    FROM {{ ref('fact_fixtures') }} AS f
+    LEFT JOIN (SELECT DISTINCT fixture_id FROM {{ ref('fact_odds_snapshot') }}) AS o
+           ON o.fixture_id = f.fixture_id
+    WHERE f.kickoff_utc >= TIMESTAMP('{{ taskf_universo().ini }}')
+      AND f.status_short IN ('FT', 'AET', 'PEN')
+      AND f.competition IN (SELECT DISTINCT competition FROM excluidos)
+      AND f.fixture_id NOT IN (SELECT fixture_id FROM jogos_marcados)
+    GROUP BY f.competition, f.round, f.status_short
+),
+
 -- ── bloco `ordenacao` ───────────────────────────────────────────────────────────────────────
 {# Os lados de cada contraste. Quatro contrastes de EXCLUSÃO (a mesma célula, dois universos) e
     um de EIXO (o mesmo universo, duas células) — construídos pela mesma máquina de propósito: as
@@ -433,6 +475,26 @@ bloco_ordenacao AS (
     FROM metricas AS m
     JOIN trocas_topo AS t USING (contraste, piso)
     JOIN descartes   AS d USING (contraste, piso)
+),
+
+{# QUEM entrou e quem saiu do topo, com posição e peso dos dois lados. Só os que se mexeram: o
+   topo inteiro de cada (contraste, piso) seriam centenas de linhas, e o que a leitura precisa é
+   do movimento. Sem este bloco, a caracterização de uma troca vira consulta ad-hoc — e número de
+   documento que não sai de query commitada é número que ninguém confere depois. #}
+bloco_topo AS (
+    SELECT
+        t.contraste,
+        t.piso,
+        t.premissa,
+        t.mercado,
+        t.pos_a,
+        t.pos_b,
+        p.peso_a,
+        p.peso_b,
+        IF(t.pos_a <= {{ n_topo }}, 'saiu', 'entrou') AS direcao
+    FROM topo AS t
+    JOIN pareado AS p USING (contraste, piso, mercado, premissa, benchmark)
+    WHERE (t.pos_a <= {{ n_topo }}) != (t.pos_b <= {{ n_topo }})
 )
 
 -- ── saída ───────────────────────────────────────────────────────────────────────────────────
@@ -493,7 +555,19 @@ SELECT 4, 'fases',
 FROM bloco_fases
 
 UNION ALL
-SELECT 5, 'ordenacao',
+SELECT 5, 'fora_do_universo',
+    FORMAT('%s · %s · %s', competition, round, status_short),
+    IF(com_preco = partidas, 'SO_O_STATUS',
+       IF(com_preco = 0, 'SEM_PRECO_COLETADO', 'MISTO')),
+    CAST(partidas AS FLOAT64),
+    CAST(com_preco AS FLOAT64),
+    NULL,
+    TO_JSON_STRING(STRUCT(competition, round, status_short, partidas, com_preco,
+                          primeiro, ultimo))
+FROM fora_do_universo
+
+UNION ALL
+SELECT 6, 'ordenacao',
     FORMAT('%s · piso %d', contraste, piso),
     veredito,
     rho,
@@ -506,5 +580,16 @@ SELECT 5, 'ordenacao',
         {{ trocas_sinal_material }} AS regua_sinal
     ))
 FROM bloco_ordenacao
+
+UNION ALL
+SELECT 7, 'topo',
+    FORMAT('%s · piso %d · %s', contraste, piso, premissa),
+    direcao,
+    CAST(pos_a AS FLOAT64),
+    CAST(pos_b AS FLOAT64),
+    peso_a,
+    TO_JSON_STRING(STRUCT(contraste, piso, premissa, mercado, direcao,
+                          pos_a, pos_b, peso_a, peso_b))
+FROM bloco_topo
 
 ORDER BY ordem, chave

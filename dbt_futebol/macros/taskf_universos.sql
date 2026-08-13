@@ -95,6 +95,31 @@
 
 
 {#-
+    A VALIDAÇÃO DO NOME, num lugar só — e devolvendo o nome, para caber numa linha no consumidor:
+
+        {%- set universo = taskf_universo_valido(var('taskf_universo', 'completo')) -%}
+
+    Existe pelo mesmo argumento que a ADR 0007 usa para a lista de valores de eixo em
+    `taskf_eixos()`: a LISTA já morava num lugar só, mas o VALIDADOR estava copiado em cada
+    consumidor, e quatro cópias de uma checagem que precisa ficar igual para sempre não ficam. A
+    divergência aqui seria muda das duas formas — um consumidor aceitando um nome que outro recusa
+    lê universo vazio, e universo vazio se parece com "essa premissa não acende aqui".
+
+    Fail-closed: nome desconhecido levanta erro de compilação em vez de virar filtro que não casa
+    com linha nenhuma.
+-#}
+{% macro taskf_universo_valido(nome) %}
+    {%- set nomes = [] -%}
+    {%- for u in taskf_universos() -%}{%- set _ = nomes.append(u.nome) -%}{%- endfor -%}
+    {%- if nome not in nomes -%}
+        {{ exceptions.raise_compiler_error(
+            "universo inválido: '" ~ nome ~ "'. Valores aceitos: " ~ nomes | join(' | ')) }}
+    {%- endif -%}
+    {{ return(nome) }}
+{% endmacro %}
+
+
+{#-
     O PREDICADO DE CADA UNIVERSO. `alias` inclui o ponto: taskf_universo_predicado('completo', 'a.')
 
     O alias precisa expor `kickoff_utc`, `competition` e `round`. Os dois primeiros vêm de
@@ -107,12 +132,7 @@
 -#}
 {% macro taskf_universo_predicado(nome, alias='') %}
     {%- set j = taskf_universo() -%}
-    {%- set nomes = [] -%}
-    {%- for u in taskf_universos() -%}{%- set _ = nomes.append(u.nome) -%}{%- endfor -%}
-    {%- if nome not in nomes -%}
-        {{ exceptions.raise_compiler_error(
-            "universo inválido: '" ~ nome ~ "'. Valores aceitos: " ~ nomes | join(' | ')) }}
-    {%- endif -%}
+    {%- set _ = taskf_universo_valido(nome) -%}
     {%- if nome == 'completo' -%}
         {{ taskf_universo_filtro(alias) }}
     {%- elif nome == 'sem_copa_mundo' -%}

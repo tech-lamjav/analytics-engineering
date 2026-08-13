@@ -614,6 +614,7 @@ sources:
               ⚠️ TODO consumidor precisa recortar o universo. Sem o filtro, cada premissa aparece
               quatro vezes e `jogos_no_universo` tem quatro valores. O default de quem lê é
               `completo`, que é o universo congelado da [0.1] e o primário da medição.
+          - name: medido_em
             description: >
               Quando a célula foi materializada. Existe porque a spec exige que as quatro rodem na
               MESMA execução — `linha_subindo`/`linha_descendo` leem odds ao vivo e viram sozinhas
@@ -632,8 +633,10 @@ sources:
               construção) e anterior ao `medido_em` de cada uma (os fatos vieram antes).
           - name: jogos_no_universo
             description: >
-              Jogos distintos do universo congelado (169). Idêntico nas quatro células por
-              construção — é a primeira invariante da Costura B.
+              Jogos distintos do universo DESTA LINHA. Desde a #58 ele é por universo — 169 no
+              `completo`, 90 no `sem_copa_mundo`, e os dois estendidos crescem com a construção
+              dos fatos. O que continua idêntico por construção, e é a primeira invariante da
+              Costura B, é o valor entre as QUATRO CÉLULAS de um MESMO universo.
           - name: usado_para_peso
             description: >
               A linha está no benchmark PREFERIDO do mercado (sharp p/ 1X2, Handicap e Gols;
