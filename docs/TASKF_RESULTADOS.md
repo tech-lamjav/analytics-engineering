@@ -2684,5 +2684,9 @@ O `taskf_entregavel` sai com **60 linhas** — 39 no bloco `principal` e 21 no `
 `taskf_familia_e_mecanismo` com **16** (13 de competição, 2 de família e 1 de total). O
 `fora_do_universo` do `taskf_exclusao` sai com **seis linhas de `copa_mundo`**, somando 10.
 
+Rodado duas vezes seguidas, o `taskf_entregavel` devolve CSV **idêntico linha a linha** — que é o
+que "o lote está congelado" quer dizer em fato verificável, e não em promessa. Ele lê tabela
+gravada e não reconstrói nada; a deriva de odds que a #51 documentou não o alcança.
+
 ⚠️ **Sem `--max_rows` o `bq query` corta em 100 linhas sem avisar**, e são 60 mais o cabeçalho de
 progresso; com o anexo junto a margem é pequena. É o mesmo corte silencioso da #57.
