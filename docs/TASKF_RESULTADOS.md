@@ -1420,7 +1420,7 @@ funciona.
 ## Ticket #57 — Os dois confundidores, medidos
 
 `analyses/taskf_forca_do_adversario.sql` + `analyses/taskf_rodizio_de_elenco.sql` · execução
-2026-08-13 14:37–14:38 UTC · commit `7fdf1b3` · dataset `futebol_taskF`
+2026-08-13 14:55–14:57 UTC · commit `d6ad236` · dataset `futebol_taskF`
 
 Os dois confundidores que podem inverter a recomendação da task: se o ganho de amostra do merge
 vier com viés de nível, ou descrever um elenco que não entra em campo, juntar deixa de ser
@@ -1608,8 +1608,28 @@ parecer mais limpo do que é.
 
 Os 33 times com par liga↔copa têm todos os dois estratos: **24 caem e 9 sobem**. O rodízio não é
 regra de campeonato, é escolha de clube — e os que mais poupam são os que disputam Libertadores e
-Sudamericana. Os outros 67 times do universo não têm nenhum par liga↔copa, porque não jogam as
-duas coisas: as 48 seleções da Copa do Mundo e os clubes sul-americanos cuja liga não coletamos.
+Sudamericana.
+
+Os outros **67** não têm nenhum par liga↔copa, e "não jogam as duas coisas" só explica a maioria
+deles. O nível `times_do_universo` mede quem são, porque a leitura preguiçosa dessa linha é
+exatamente o tipo de coisa que a [B] herdaria como verdade:
+
+| categoria | times | jogos no pool | com par liga↔copa |
+|---|---|---|---|
+| seleção (Copa do Mundo) | 48 | 190 | 0 |
+| clube cuja liga nacional não coletamos | 12 | 102 | 0 |
+| clube de liga sem jogo de copa dentro do teto | 6 | 120 | 0 |
+| joga os dois | 34 | 878 | **33** |
+
+São **100 times no universo**, e 100 − 33 = 67 fecha. Os 6 da terceira linha não são time que não
+joga copa: são time de liga que, dentro do teto congelado, não teve jogo de copa — outro caso, e
+não pertence a nenhum dos dois primeiros. E um dos 34 que jogam os dois nunca teve dois jogos
+consecutivos de tipos diferentes, então não produziu par.
+
+⚠️ O `times_sem_par_liga_copa` é contado sobre quem tem PELO MENOS UM par de qualquer tipo, então
+time com um único jogo no pool escaparia dele. Hoje não escapa ninguém — `times_sem_par_nenhum` é
+**0** nas quatro categorias —, e é por isso que a conta fecha em 100. A coluna existe para que o
+dia em que deixar de fechar seja visível em vez de calado.
 
 ### ⚠️ A cobertura de lineups NÃO é de 100% em todas as competições
 
@@ -1633,7 +1653,9 @@ de Série C ou D, e a API não traz nem a classificação dele nem a escalação
 
 Dentro do pool que esta medição usa o estrago é menor — 94,8% a 100% —, porque o pool só tem times
 do universo e o time de Série C não está lá. Nenhum lado sem XI utilizável entrou num par: foram
-contados e descartados (7 pares no `copa_copa`, 0 nos outros dois), nunca completados.
+contados e descartados — **11 pares no `copa_copa`, 1 no `liga_copa`, 0 no `liga_liga`** —, nunca
+completados. A conta fecha nos três estratos (254 = 243 + 11, 301 = 300 + 1, 635 = 635 + 0), e o
+fechamento não é decorativo: ver o quarto achado de percurso.
 
 ### O que a fase `real` da escalação evitou
 
@@ -1655,11 +1677,11 @@ Sem o filtro, 33 lados entrariam na medição com XI de tamanho errado — e "so
 estaria comparando conjuntos de tamanhos diferentes, inflando o número sem ninguém ver. O que
 sobra depois do filtro é falha de coleta, não dedup, e é o que a tabela anterior mostra.
 
-### ⚠️ Dois números publicados não eram reproduzíveis, e um terceiro estava truncado
+### ⚠️ Quatro achados de percurso, os quatro sobre a própria maquinaria
 
-Achados de percurso, os três corrigidos antes de qualquer número desta seção ser escrito. Ficam
-registrados porque nenhum deles é específico da #57 — os três voltam a morder na próxima análise
-que alguém escrever neste repositório.
+Corrigidos antes de qualquer número desta seção ser publicado. Ficam registrados porque nenhum
+deles é específico da #57 — os quatro voltam a morder na próxima análise que alguém escrever neste
+repositório.
 
 1. **`APPROX_QUANTILES` é um sketch.** Duas execuções seguidas, dado idêntico e query idêntica,
    devolveram **1,313 e depois 1,294** para a mediana de `ppg` do histórico nativo do Brasileirão,
@@ -1673,11 +1695,21 @@ que alguém escrever neste repositório.
    seguem em `AVG`, porque o somando já é FLOAT64 e não há soma exata a recuperar — está declarado
    no comentário da análise, não escondido.
 
-3. **`bq query` trunca em 100 linhas por padrão, calado.** A análise de rodízio tem 117 linhas: o
+3. **`bq query` trunca em 100 linhas por padrão, calado.** A análise de rodízio tem 121 linhas: o
    nível `time` perdia os últimos times em ordem alfabética, e a contagem saiu **29 times quando
    são 33** — com Vasco da Gama, que é o maior efeito de rodízio da tabela, entre os cortados. A
    saída sai com cara de completa. `--max_rows` está agora nos dois cabeçalhos, ao lado da
    armadilha que já se conhecia (SQL como argumento trava a máquina).
+
+4. **`NULL AND TRUE` é NULL, e o contador de descarte pulava esses pares.** O critério de par
+   utilizável era `xa.n_titulares = 11 AND xb.n_titulares = 11`, e lado SEM escalação nenhuma sai
+   do LEFT JOIN com `n_titulares` NULL — logo o critério dava NULL, não FALSE, e o
+   `COUNTIF(NOT utilizavel)` o pulava. Esses pares ficavam em `pares_no_estrato` e em NENHUMA das
+   duas colunas, quebrando `pares_no_estrato = pares + pares_descartados` em silêncio e
+   **exatamente onde a cobertura é pior** — que é a única coisa que `pares_descartados` existe para
+   mostrar. Os descartes iam de 7 para os 12 reais. As médias não se mexeram (o `IF(NULL, x, 0)` já
+   dava 0 e o `COUNTIF` já não contava), mas a frase "foram contados e descartados" estava errada
+   sobre 5 pares antes desta correção.
 
 ### O que ficou de fora, e por quê
 
@@ -1766,10 +1798,14 @@ SQL
 ```
 
 A análise de força sai com **55 linhas** (1 de conferência, 3 de total, 14 de competição, 11 de
-fonte, 19 de liga do adversário e 7 de referência de `ppg`) e a de rodízio com **117** (20 de
-cobertura, 3 de total, 12 de estrato × dias e 82 de time). As duas leem o carimbo das células
-`base` e `escopo`, que precisa estar gravado — já estava, da #53. A consulta (a) devolve **1.916 de
-1.916** e a (b), **40 de 194**.
+fonte, 19 de liga do adversário e 7 de referência de `ppg`) e a de rodízio com **121** (20 de
+cobertura, 3 de total, 12 de estrato × dias, 82 de time e 4 de times do universo). As duas leem o
+carimbo das células `base` e `escopo`, que precisa estar gravado — já estava, da #53. A consulta
+(a) devolve **1.916 de 1.916** e a (b), **40 de 194**.
+
+Rodadas duas vezes seguidas no commit carimbado, as duas devolvem CSV **idêntico linha a linha** —
+é assim que o segundo e o terceiro achados de percurso ficam fechados por medição e não por
+argumento.
 
 ⚠️ `bq query` com o SQL como argumento trava nesta máquina; por redirecionamento ou heredoc,
 funciona. E sem `--max_rows` ele corta em 100 linhas sem avisar.
