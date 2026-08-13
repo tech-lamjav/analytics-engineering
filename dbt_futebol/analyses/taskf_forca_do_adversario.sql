@@ -381,8 +381,12 @@ conferencia AS (
         ROUND(AVG(adv_ppg), 3)                                               AS ppg_medio,
         {{ taskf_mediana('adv_ppg') }}                                       AS ppg_mediana,
         ROUND(AVG(adv_ppg_liga), 3)                                          AS ppg_liga_medio,
-        ROUND(AVG(gf), 3)                                                    AS gols_pro_medio,
-        ROUND(AVG(ga), 3)                                                    AS gols_contra_medio
+        {#- SUM/COUNT, e não AVG, pelo mesmo motivo do analyses/taskf_rodizio_de_elenco.sql: gols
+            são INT64, a soma é exata e a média fica determinística. Os dois `ppg_*` acima seguem
+            em AVG porque o somando já é FLOAT64 e não há soma exata a recuperar — nas três
+            execuções desta análise eles não se mexeram, mas a garantia ali é mais fraca. -#}
+        ROUND(SAFE_DIVIDE(SUM(gf), COUNT(*)), 3)                             AS gols_pro_medio,
+        ROUND(SAFE_DIVIDE(SUM(ga), COUNT(*)), 3)                             AS gols_contra_medio
 {%- endset %}
 
 por_total AS (

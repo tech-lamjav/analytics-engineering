@@ -280,11 +280,20 @@ pares AS (
         COUNTIF(utilizavel)                                             AS pares,
         COUNTIF(NOT utilizavel)                                         AS pares_descartados,
         COUNT(DISTINCT IF(utilizavel, team_id, NULL))                   AS times,
-        ROUND(AVG(IF(utilizavel, sobreposicao, NULL)), 2)               AS sobreposicao_media,
-        ROUND(AVG(IF(utilizavel, sobreposicao, NULL)) / 11 * 100, 1)    AS pct_sobreposicao,
+        {#- SUM/COUNT, e não AVG: `sobreposicao` é INT64, a soma dele é exata e a divisão fica
+            determinística. O AVG do BigQuery combina médias parciais em ponto flutuante e o
+            resultado depende de como a execução foi paralelizada — medido na #57, o estrato
+            `copa_copa` na faixa de 4 a 5 dias saiu 8,43 numa execução e 8,42 na seguinte, sobre
+            dado idêntico: a média verdadeira é 8,425 e cai bem em cima do desempate do ROUND.
+            Mesmo argumento do macros/taskf_mediana.sql. -#}
+        ROUND(SAFE_DIVIDE(SUM(IF(utilizavel, sobreposicao, 0)),
+                          COUNTIF(utilizavel)), 2)                      AS sobreposicao_media,
+        ROUND(SAFE_DIVIDE(SUM(IF(utilizavel, sobreposicao, 0)),
+                          COUNTIF(utilizavel)) / 11 * 100, 1)           AS pct_sobreposicao,
         {{ taskf_mediana('IF(utilizavel, sobreposicao, NULL)', casas=0) }} AS sobreposicao_mediana,
         MIN(IF(utilizavel, sobreposicao, NULL))                         AS sobreposicao_min,
-        ROUND(AVG(IF(utilizavel, dias_entre, NULL)), 1)                 AS dias_entre_medio
+        ROUND(SAFE_DIVIDE(SUM(IF(utilizavel, dias_entre, 0)),
+                          COUNTIF(utilizavel)), 1)                      AS dias_entre_medio
 {%- endset %}
 
 por_estrato AS (
