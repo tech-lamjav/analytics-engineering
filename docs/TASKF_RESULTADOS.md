@@ -2084,12 +2084,16 @@ UTC porque é até ali que vai o `fact_odds_snapshot` que as quatro células ler
 a única coisa que faz a comparação entre células significar algo. O universo é, por construção, "o
 que os fatos contêm" — e o `janela_fim` na linha diz até onde ele foi.
 
-| competição | jogos | % | · | competição | jogos | % |
-|---|---|---|---|---|---|---|
-| copa_mundo | 79 | **34,6%** | · | sudamericana | 17 | 7,5% |
-| serie_b | 49 | 21,5% | · | copa_do_brasil | 16 | 7,0% |
-| brasileirao | 38 | 16,7% | · | primeira_liga | 9 | 3,9% |
-| champions_league | 18 | 7,9% | · | libertadores | 2 | 0,9% |
+| competição | jogos | % do estendido |
+|---|---|---|
+| copa_mundo | 79 | **34,6%** |
+| serie_b | 49 | 21,5% |
+| brasileirao | 38 | 16,7% |
+| champions_league | 18 | **7,9%** |
+| sudamericana | 17 | 7,5% |
+| copa_do_brasil | 16 | 7,0% |
+| primeira_liga | 9 | 3,9% |
+| libertadores | 2 | 0,9% |
 
 **Ele acrescenta pouco, e o pouco é mensurável.** A spec estimava "~37 jogos"; foram **59** — a
 estimativa envelheceu, e o número medido é o que vale. Mas o efeito que se poderia esperar dele
