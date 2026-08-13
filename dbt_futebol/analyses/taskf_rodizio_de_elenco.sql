@@ -38,9 +38,10 @@
     ⚠️ POR QUE A FASE `real`, E NÃO A ESCALAÇÃO INTEIRA. O `fact_fixture_lineups_players` dedupa
     por (fixture_id, player_id) com latest-wins, e não por (fixture_id, team_id, fase). Quando a
     escalação `confirmed` (~T-30min) e a `real` (pós-jogo) discordam sobre um jogador, as duas
-    sobrevivem — uma por jogador — e o time aparece com 12 ou 13 "titulares". Medido sobre 2026:
-    92 lados fora de 11 sem o filtro, contra 34 com ele. Os 34 que sobram são falha de coleta, não
-    artefato de dedup, e caem no `cobertura`.
+    sobrevivem — uma por jogador — e o time aparece com 12 ou 13 "titulares". O custo do filtro
+    não é afirmação de cabeçalho: o escopo `temporada_sem_filtro_de_fase` do nível `cobertura`
+    repete a mesma contagem sem ele, e a diferença entre os dois escopos é o tamanho do artefato.
+    O que sobra depois do filtro é falha de coleta, não dedup.
 
     ────────────────────────────────────────────────────────────────────────────────
     O UNIVERSO. Os times são os do universo congelado da [F] (a mesma macro do resto da task), e
@@ -50,9 +51,11 @@
 
     QUATRO NÍVEIS NA MESMA SAÍDA, com a coluna `nivel` separando os grãos:
 
-      cobertura       por (competição, escopo). `escopo = pool` são os lados que esta medição usa;
-                      `escopo = temporada` são TODOS os lados encerrados da temporada dentro do
-                      teto, e é ali que a afirmação de cobertura do ticket é conferida.
+      cobertura       por (competição, escopo). `pool` são os lados que esta medição usa;
+                      `temporada` são TODOS os lados encerrados da temporada dentro do teto, e é
+                      ali que a afirmação de cobertura do ticket é conferida;
+                      `temporada_sem_filtro_de_fase` é o mesmo sem o filtro `real`, e a diferença
+                      para o anterior é o tamanho do artefato de dedup.
       total           por estrato, todos os times juntos. É a linha do veredito.
       estrato_x_dias  por (estrato, faixa de dias entre os dois jogos). O controle do calendário.
       time            por (time, estrato), só para os times que TÊM par liga↔copa — são os times
@@ -63,16 +66,21 @@
 
     COMO RODAR (do dbt_futebol/):
 
-      # uma vez, se dim_leagues/dim_teams ainda não estiverem no dataset de medição
+      # uma vez, se os nós abaixo ainda não estiverem no dataset de medição — a ancestria das
+      # células não passa por eles, e nenhum dos seis nós de premissas os referencia
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt run --target taskF \
-        --select dim_leagues stg_futebol_leagues dim_teams stg_futebol_teams
+        --select dim_leagues stg_futebol_leagues dim_teams stg_futebol_teams \
+                 fact_fixture_lineups_players stg_futebol_fixture_lineups_players
 
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
         --select taskf_rodizio_de_elenco
-      bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+      bq query --use_legacy_sql=false --max_rows=100000 --project_id=smartbetting-dados \
         < target/compiled/dbt_futebol/analyses/taskf_rodizio_de_elenco.sql
 
-    (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
+    ⚠️ DUAS ARMADILHAS DO `bq query`, as duas silenciosas. O SQL como ARGUMENTO trava nesta
+    máquina (sempre por redirecionamento). E o `--max_rows` PRECISA estar lá: o default é 100
+    linhas e ele TRUNCA sem avisar — a saída sai com cara de completa, e a linha que falta é
+    exatamente a do fim da ordenação. Custou uma contagem errada de times durante a própria #57.
 
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
@@ -153,6 +161,21 @@ xi AS (
     GROUP BY fixture_id, team_id
 ),
 
+{# O MESMO XI SEM O FILTRO DE FASE, que só existe para o custo do filtro ser um número emitido e
+   não uma afirmação do cabeçalho. Ele alimenta o escopo `temporada_sem_filtro_de_fase` do nível
+   `cobertura`, e a diferença entre os dois escopos é exatamente quantos lados a discordância
+   entre a escalação `confirmed` e a `real` inflaria. -#}
+xi_sem_filtro AS (
+    SELECT
+        fixture_id,
+        team_id,
+        CAST(NULL AS ARRAY<INT64>) AS jogadores,
+        COUNT(*)                   AS n_titulares
+    FROM {{ ref('fact_fixture_lineups_players') }}
+    WHERE is_starter
+    GROUP BY fixture_id, team_id
+),
+
 {# Todos os lados encerrados da temporada dentro do teto, INCLUSIVE os de times que não estão no
    universo — é o escopo em que a afirmação do ticket ("cobertura de 100% em todas as
    competições") pode ser conferida. O pool sozinho não a falsificaria: ele só tem os times do
@@ -195,6 +218,18 @@ cobertura AS (
         {{ metricas_de_cobertura }}
     FROM lados_da_temporada AS p
     LEFT JOIN xi AS x
+           ON  x.fixture_id = p.fixture_id
+          AND  x.team_id    = p.team_id
+    GROUP BY p.competition
+
+    UNION ALL
+
+    SELECT
+        p.competition,
+        'temporada_sem_filtro_de_fase',
+        {{ metricas_de_cobertura }}
+    FROM lados_da_temporada AS p
+    LEFT JOIN xi_sem_filtro AS x
            ON  x.fixture_id = p.fixture_id
           AND  x.team_id    = p.team_id
     GROUP BY p.competition

@@ -125,10 +125,13 @@
 
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
         --select taskf_forca_do_adversario
-      bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+      bq query --use_legacy_sql=false --max_rows=100000 --project_id=smartbetting-dados \
         < target/compiled/dbt_futebol/analyses/taskf_forca_do_adversario.sql
 
-    (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
+    ⚠️ DUAS ARMADILHAS DO `bq query`, as duas silenciosas. O SQL como ARGUMENTO trava nesta
+    máquina (sempre por redirecionamento). E o `--max_rows` PRECISA estar lá: o default é 100
+    linhas e ele TRUNCA sem avisar — a saída sai com cara de completa, e a linha que falta é
+    exatamente a do fim da ordenação. Custou uma contagem errada de times durante a própria #57.
 
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
