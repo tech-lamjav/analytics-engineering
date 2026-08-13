@@ -49,6 +49,22 @@
 -- `INVESTIGAR`. A guarda é deliberadamente a mais frouxa das duas leituras: ela protege o
 -- caminho da medição, não a explicação do resíduo.
 --
+-- ⚠️ O MODO DE FALHA CONHECIDO DESTA GUARDA É O EMPATE DE ARREDONDAMENTO, e quem a vir vermelha
+-- deve descartá-lo ANTES de procurar bug. O `AVG` do BigQuery acumula em ponto flutuante e a
+-- ordem depende do layout físico da tabela, que muda quando os modelos são reconstruídos; um valor
+-- exatamente no meio da grade de `ROUND(·, 1)` cai para um lado numa medição e para o outro na
+-- seguinte. A própria #55 mediu isso: entre duas medições sobre os MESMOS fatos, 5 campos de 7.200
+-- viraram 0,1 — e um deles era `aconteceu_p10` da `base`, que só não bate aqui porque a linha é de
+-- consenso e o `usado_para_peso` a deixa de fora. Numa linha de benchmark preferido o mesmo empate
+-- deixa esta guarda VERMELHA sem defeito nenhum por trás.
+--
+-- Ela continua EXATA assim mesmo, e a escolha é deliberada: uma folga de 0,1 em todos os campos
+-- engoliria divergência real de 0,1 pp, que é a ordem de grandeza do que esta task mede. O
+-- diagnóstico é aritmético e fechado, não opinião — pegue o `n` da linha, veja se o valor cai em
+-- cima de um múltiplo de meia unidade da grade (51/400 = 12,75; 308/320 = 96,25; 492/48 = 10,25) e,
+-- se cair, é empate. `analyses/taskf_remedicao.sql` faz essa comparação entre duas medições e é
+-- onde o caso se confirma.
+--
 -- ────────────────────────────────────────────────────────────────────────────────
 -- O QUE É COMPARÁVEL. O doc da [0.1] publica três recortes diferentes (ver
 -- macros/taskf_publicado_01.sql), então nem toda linha tem todo campo — NULL ali significa NÃO

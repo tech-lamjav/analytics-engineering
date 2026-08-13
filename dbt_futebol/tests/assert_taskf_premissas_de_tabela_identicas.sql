@@ -77,7 +77,8 @@ WITH medido AS (
 ),
 
 -- A referência é a célula base do 2×2 quando ela existe (é a que não muda nada); na falta dela, a
--- primeira em ordem alfabética, para a guarda não passar em branco por causa da ausência.
+-- primeira em ordem alfabética, para a guarda não passar em branco por causa da ausência. O nome
+-- vem de taskf_nomes_de_celula(), como em toda parte: rótulo de célula não se digita.
 referencia AS (
     SELECT * FROM medido
     -- `WHERE TRUE` não é enfeite: o BigQuery só aceita QUALIFY quando há WHERE, GROUP BY ou
@@ -86,7 +87,7 @@ referencia AS (
     WHERE TRUE
     QUALIFY ROW_NUMBER() OVER (
         PARTITION BY mercado, premissa, benchmark
-        ORDER BY IF(celula = 'base', 0, 1), celula
+        ORDER BY IF(celula = '{{ taskf_nomes_de_celula()['da_competicao|temporada'] }}', 0, 1), celula
     ) = 1
 ),
 

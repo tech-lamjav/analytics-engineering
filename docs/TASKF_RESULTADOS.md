@@ -946,7 +946,7 @@ são empates de arredondamento comprovados aritmeticamente.
 
 | guarda | o que cobra | cobertura hoje |
 |---|---|---|
-| `assert_taskf_celulas_mesmo_universo` | as quatro células existem, o rótulo casa com os eixos, universo idêntico e igual ao declarado, mesma construção dos fatos e fatos anteriores à medição | 4 células, 169 jogos / 8.567 linhas, `odds_loaded_at` 13:24:15 nas quatro |
+| `assert_taskf_celulas_mesmo_universo` | as quatro células existem, o rótulo casa com os eixos, universo idêntico e igual ao declarado, mesma construção dos fatos, fatos anteriores à medição e mesmo commit nas quatro | 4 células, 169 jogos / 8.567 linhas, `odds_loaded_at` 13:24:15 e `git_sha` `b535130` nas quatro |
 | `assert_taskf_premissas_de_tabela_identicas` | as três premissas de tabela têm números idênticos no piso 0 entre as células | 5 linhas de grão × 4 células, 7 campos — 105 comparações |
 | `assert_taskf_base_reproduz_01` | a `base` reproduz o Teste 2 publicado da [0.1] sob a régua declarada | 39 linhas, **225 campos publicados** comparados |
 | `assert_taskf_contagens_por_recorte` | disponível = usado sob `temporada`, e **alguma** linha diverge sob `ultimos_10` | 60/60 linhas iguais em `base` e `escopo`; 60/60 divergentes em `recorte` e `ambos` |
@@ -997,6 +997,14 @@ O critério de aceite pede que as guardas falhem **de verdade**. Cada uma foi qu
 restaurada; a integridade da tabela foi reconferida no fim contra a cópia da #54 — as mesmas 5
 divergências de arredondamento de antes, nem uma a mais.
 
+⚠️ **A quebra 8 é a que justifica a existência das outras.** Ela veio da revisão de standards, que
+achou um buraco no código antes de qualquer teste rodar: o `git_sha` tinha entrado no `ANY_VALUE`
+da CTE mas **não** na chave de `versoes_na_celula`, então uma célula com duas procedências dentro
+dela era achatada antes de a conferência de commit comparar coisa alguma — a cobrança passava
+justamente no caso para o qual foi escrita. Corrigido, a quebra 8 devolve `versoes_na_celula: 2`.
+Vale como aviso ao próximo: acrescentar campo à CTE de agregação **e** à chave de versão são dois
+passos, e esquecer o segundo é silencioso.
+
 | # | quebra | guarda que caiu | saída |
 |---|---|---|---|
 | 1 | `--vars '{taskf_tolerancia_pp: 0}'` (não toca no dado) | `base_reproduz_01` | **6 linhas**, todas os campos em pp de `linha_descendo` — o resíduo conhecido, e mais nada |
@@ -1004,16 +1012,35 @@ divergências de arredondamento de antes, nem uma a mais.
 | 3 | `SET odds_loaded_at = TIMESTAMP_ADD(odds_loaded_at, INTERVAL 1 SECOND) WHERE celula='ambos'` | `celulas_mesmo_universo` | **3 linhas**, `leu_outra_construcao: true` — a assinatura exata de quem reconstruiu a ancestria no meio da medição |
 | 4 | `SET odds_loaded_at = TIMESTAMP '2026-08-13 00:00:00 UTC'` (as quatro) | `celulas_mesmo_universo` | **4 linhas**, `medida_antes_dos_fatos: true` e `leu_outra_construcao: false` — a outra ponta: quem rebuildou os fatos e esqueceu de re-medir |
 | 5 | `SET pit_recorte='temporada' WHERE celula='ambos'` | `contagens_por_recorte` **e** `celulas_mesmo_universo` | **61 linhas** (resumo + as 60 com teto) e **1 linha** (`rotulo_nao_casa_com_os_eixos`) |
+| 6 | `SET git_sha='cafebabe' WHERE celula='recorte'` | `celulas_mesmo_universo` | **1 linha**, `outro_commit: true` com os fatos iguais — a célula medida de outro código |
+| 7 | `SET git_sha='desconhecido'` (as quatro) | `celulas_mesmo_universo` | **4 linhas**, `sem_procedencia: true` — as quatro concordam entre si e nenhuma diz de onde veio |
+| 8 | `SET git_sha='cafebabe' WHERE celula='base' AND mercado='Gols'` | `celulas_mesmo_universo` | **1 linha**, `versoes_na_celula: 2` — duas procedências DENTRO de uma célula |
 
 ⚠️ **A quebra 1 é a mais informativa das cinco.** Zerar a tolerância derruba exatamente 6 campos,
 todos da mesma premissa, e nenhum outro dos 225. Isso mede duas coisas de uma vez: a régua está
 cobrindo uma coisa só, e as outras 38 premissas reproduzem o publicado **exatamente**, sem folga
 nenhuma sustentando o verde.
 
-⚠️ **As quebras 3 e 4 são as que respondem ao critério ao pé da letra** ("falham se alguém
-materializar as células em execuções separadas"). As outras duas guardas não caem nesse cenário, e
-não deveriam: a das premissas de tabela fala de escopo vazando, a da reprodução fala da [0.1]. Quem
-cobra "mesma execução" é a primeira, pelas duas pontas.
+⚠️ **O critério de aceite pede que "os três" falhem se as células forem materializadas em execuções
+separadas, e isso não é o que acontece — nem deveria ser.** Quem cobra "mesma execução" é a
+primeira guarda, sozinha, pelas três pontas (mesma construção dos fatos, fatos antes da medição,
+mesmo commit). As outras não caem nesse cenário porque falam de outra coisa: a das premissas de
+tabela fala de escopo vazando, a da reprodução fala da [0.1], a das contagens fala do recorte.
+Espalhar a mesma cobrança pelas quatro daria redundância, não cobertura.
+
+⚠️ **E o que nenhuma das quatro alcança, dito antes que alguém descubra do jeito caro.** As quatro
+células são sempre materializadas por quatro `dbt build` separados — isso é da receita, não um
+desvio. O que a #51 fixou como "mesma execução" é **as quatro terem lido a mesma construção dos
+fatos**, e é isso que a guarda cobra. Logo: re-medir uma célula amanhã, sobre fatos intocados e do
+mesmo commit, sai **verde**.
+
+O que escapa nesse caso é a **deriva de reconstrução dos modelos** — e ela é real e está medida
+aqui mesmo: 5 campos em 7.200 mudaram entre duas medições sobre os mesmos fatos, todos empates de
+arredondamento do `AVG`. Nenhuma guarda distingue esse empate de um efeito de 0,1 pp, porque no
+número eles são idênticos. Quem quiser a diferença mede com `analyses/taskf_remedicao.sql`, que é
+onde ela é visível — e é por isso que a comparação da re-medição virou arquivo em vez de rascunho.
+O carimbo `git_sha` fecha a parte disso que **é** decidível sem régua arbitrária: duas células do
+mesmo commit ou não.
 
 ### O carimbo `odds_loaded_at`, e o que ele custou
 

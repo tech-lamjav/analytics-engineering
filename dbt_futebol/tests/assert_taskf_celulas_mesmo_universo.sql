@@ -16,11 +16,12 @@
 --                        em branco, e é exatamente esse o estado da tabela no meio de uma
 --                        medição interrompida.
 --   rotulo_nao_casa_...  e o nome de cada célula casa com o par de eixos gravado ao lado dele.
---   universo_divergente  jogos, linhas e as duas pontas da janela idênticos nas quatro.
+--   universo_divergente  jogos, linhas e as duas pontas do corte idênticos nas quatro.
 --   jogos_fora_do_gabarito  e os jogos são os 169 que o universo congelado declara
 --                        (taskf_universo().jogos_esperados). Sem isto, quatro células medidas
 --                        sobre o mesmo universo ERRADO passariam juntas.
---   execucao_divergente  as quatro leram a MESMA construção dos fatos, e leram ANTES de medir.
+--   execucao_divergente  as quatro leram a MESMA construção dos fatos, leram ANTES de medir, e
+--                        saíram do MESMO commit (com procedência declarada).
 --
 -- ⚠️ AS QUATRO CÉLULAS NÃO PRECISAM TER O MESMO NÚMERO DE LINHAS DE PREMISSA, e por isso isso não
 -- é cobrado. Uma premissa entra na tabela quando acende pelo menos uma vez (`HAVING
@@ -68,16 +69,22 @@ WITH celulas AS (
         ANY_VALUE(janela_ini)         AS janela_ini,
         ANY_VALUE(janela_fim)         AS janela_fim,
         ANY_VALUE(odds_loaded_at)     AS odds_loaded_at,
+        ANY_VALUE(git_sha)            AS git_sha,
         MIN(medido_em)                AS medido_em,
-        -- Dentro de UMA célula os cinco campos acima são constantes por construção (saem de um
+        -- Dentro de UMA célula os seis campos acima são constantes por construção (saem de um
         -- CROSS JOIN de CTE de uma linha só). COUNT(DISTINCT) confere isso em vez de supor: se um
         -- INSERT parcial misturar duas execuções sob o mesmo rótulo, o ANY_VALUE acima escolheria
         -- uma delas em silêncio. TO_JSON_STRING e não FORMAT: FORMAT devolve NULL se QUALQUER
         -- argumento for NULL, e a linha NULL sai do COUNT(DISTINCT) — uma célula com metade das
         -- linhas sem carimbo contaria 1 e passaria.
+        --
+        -- ⚠️ `git_sha` PRECISA estar nesta lista, e o motivo é o pior caso dela: uma célula cujas
+        -- linhas carreguem DOIS commits é achatada pelo ANY_VALUE antes de a terceira ponta da
+        -- conferência de execução comparar coisa alguma — ou seja, a cobrança de "mesmo commit"
+        -- passaria justamente no caso para o qual foi escrita.
         COUNT(DISTINCT TO_JSON_STRING(STRUCT(
             jogos_no_universo, linhas_no_universo,
-            janela_ini, janela_fim, odds_loaded_at))) AS versoes_na_celula
+            janela_ini, janela_fim, odds_loaded_at, git_sha))) AS versoes_na_celula
     FROM {{ source('futebol_taskF', 'taskf_teste2') }}
     GROUP BY celula
 ),
@@ -162,25 +169,47 @@ gabarito AS (
     WHERE jogos_no_universo IS DISTINCT FROM {{ j.jogos_esperados }}
 ),
 
--- 4. A MESMA EXECUÇÃO, nas duas pontas: mesma construção dos fatos nas quatro, e os fatos
---    construídos ANTES de a célula ser medida. A segunda ponta é o que pega o caso em que alguém
---    rebuilda a ancestria e esquece de re-medir — ali as quatro continuariam com o mesmo
---    `odds_loaded_at` entre si, mas ele seria posterior aos `medido_em`.
+-- 4. A MESMA EXECUÇÃO, em TRÊS pontas: mesma construção dos fatos nas quatro, fatos construídos
+--    ANTES de a célula ser medida, e as quatro medidas do MESMO COMMIT.
+--
+--    A segunda ponta pega quem rebuilda a ancestria e esquece de re-medir — ali as quatro
+--    continuariam com o mesmo `odds_loaded_at` entre si, mas ele seria posterior aos `medido_em`.
+--
+--    A terceira fecha o buraco que sobrava: dois fatos idênticos não impedem que o CÓDIGO que os
+--    leu tenha mudado entre uma célula e outra. Medir a `base` num commit e a `ambos` noutro, sobre
+--    os mesmos fatos, passaria pelas duas primeiras pontas e ainda assim compararia duas coisas
+--    diferentes. `git_sha` é o único eixo de "mesma execução" que não precisa de régua arbitrária:
+--    ou é o mesmo commit, ou não é. Um carimbo `desconhecido` (a var não foi passada) também cai —
+--    célula sem procedência não sustenta afirmação nenhuma sobre execução, e é o mesmo argumento
+--    do carimbo de procedência da imagem dbt (ADR 0001 do repo raiz).
+--
+--    ⚠️ O QUE ESTAS TRÊS PONTAS **NÃO** ALCANÇAM, e está medido: re-medir uma célula depois, sobre
+--    fatos intocados e do mesmo commit, sai VERDE — e é o comportamento pretendido, porque a
+--    definição de "mesma execução" que a #51 fixou é "as quatro leram a mesma construção dos
+--    fatos". O que escapa aí é a deriva de reconstrução dos modelos: a própria #55 mediu 5 campos
+--    em 7.200 mudando entre duas medições sobre os mesmos fatos, todos empates de arredondamento
+--    do `AVG`. Nenhuma guarda distingue esse empate de um efeito real de 0,1 — quem quiser a
+--    diferença mede com `analyses/taskf_remedicao.sql`, que é onde ela é visível.
 execucao AS (
     SELECT
         'execucao_divergente' AS motivo,
         TO_JSON_STRING(STRUCT(
             c.celula, r.celula AS referencia,
             c.odds_loaded_at, r.odds_loaded_at AS odds_loaded_at_ref,
-            c.medido_em,
+            c.medido_em, c.git_sha, r.git_sha AS git_sha_ref,
             c.odds_loaded_at IS DISTINCT FROM r.odds_loaded_at AS leu_outra_construcao,
-            NOT (c.odds_loaded_at < c.medido_em)                AS medida_antes_dos_fatos
+            NOT (c.odds_loaded_at < c.medido_em)                AS medida_antes_dos_fatos,
+            c.git_sha IS DISTINCT FROM r.git_sha                AS outro_commit,
+            c.git_sha = 'desconhecido'                          AS sem_procedencia
         )) AS linha
     FROM celulas AS c
     CROSS JOIN referencia AS r
     WHERE c.odds_loaded_at IS DISTINCT FROM r.odds_loaded_at
        OR c.odds_loaded_at IS NULL
        OR NOT (c.odds_loaded_at < c.medido_em)
+       OR c.git_sha IS DISTINCT FROM r.git_sha
+       OR c.git_sha = 'desconhecido'
+       OR c.git_sha IS NULL
 )
 
 SELECT motivo, linha FROM presenca
