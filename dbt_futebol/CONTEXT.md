@@ -339,3 +339,12 @@ How a competition labels its seasons: *ano-calendário* (Brasileirão, Série B,
 Mundo) or *split-year* (the European leagues and the Champions, where season N means N/N+1). A
 team belongs to one family, and the family decides whether releasing escopo without releasing
 recorte does anything for it.
+
+**Diagnóstico de 180 dias**:
+The four-row table that opens the [F] source ticket — prior fixtures per team in Copa do Brasil,
+Sudamericana, Copa do Mundo and Champions. Reproduced from `fact_fixtures` in
+`analyses/taskf_reconciliacao_180d.sql`, 15 of its 16 fields exactly.
+⚠️ Its first two columns do **not** count the same stretch of the past: column 1 is the team's
+whole history in that competition, every season, unbounded; column 2 is every competition but only
+180 days back. That is why the Champions row reads 4,0 against 1,0, which no common window could
+produce — and why the two columns must never be compared to each other.
