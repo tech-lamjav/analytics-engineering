@@ -33,11 +33,11 @@
     sabemos. Marcador também não — ele nem soma nem subtrai.
 
     ⚠️ SÓ ENXERGA A AUSÊNCIA QUE CHEGA COMO NULL. Insumo COALESCEado antes daqui é
-    indistinguível de valor real e o contador o dá por presente. Depois da #41 isso vale para
-    UMA premissa: `desfalque_adversario`, cujos s_missing/o_missing seguem COALESCEados para
-    zero até a #42 (que espera o vazio registrado de data-engineering#33). As outras 38 têm
-    insumo capaz de expressar ausência. As três classes de disfarce estão no cabeçalho do
-    macros/premissas_insumos.sql. -#}
+    indistinguível de valor real e o contador o dá por presente. Depois da #42 as 39 premissas
+    têm insumo capaz de expressar ausência — `desfalque_adversario` era a última, e o NULL dela
+    só existe porque a coleta passou a registrar o vazio (data-engineering#33). As três classes
+    de disfarce estão no cabeçalho do macros/premissas_insumos.sql, e nenhuma delas fica
+    vermelha sozinha: quem repuser um COALESCE cala o contador em silêncio. -#}
 {% macro futebol_premissas_cegas(modelo) %}
     {%- set premissas = [] -%}
     {%- for p in futebol_insumos_premissa() if p.modelo == modelo and p.tipo == 'premissa' -%}

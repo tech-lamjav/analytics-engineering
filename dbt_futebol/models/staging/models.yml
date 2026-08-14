@@ -251,6 +251,56 @@ models:
       - name: loaded_at
         description: "Timestamp ISO UTC do extractor"
 
+  - name: stg_futebol_injuries_coleta
+    description: >
+      O registro de que PERGUNTAMOS por um jogo (#42, ADR 0003). 1 linha por (fixture, dia)
+      do poll pré-jogo de /injuries?fixture, inclusive quando a resposta veio sem desfalque
+      nenhum — o vazio registrado de data-engineering#33. É o irmão do stg_futebol_injuries,
+      que descarta essa linha por desenho (`player.id IS NOT NULL`, com not_null em cima):
+      vazio não é desfalque, mas é resposta. Sem este modelo, "perguntamos e a fonte não
+      tinha" e "nunca perguntamos" são o mesmo estado, e o contador de desfalques do
+      int_futebol_premissas_1x2 não teria de onde tirar o NULL.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - snapshot_date
+      # Este modelo é TABLE por custo (ver o cabeçalho do .sql), e tabela que deixa de ser
+      # reconstruída envelhece calada: o jogo de amanhã passa a parecer nunca perguntado, o
+      # contador de desfalque vira NULL e as premissas legítimas somem do board sem erro.
+      # warn, e não error, porque o poll só cobre ligas com coverage.injuries e jogos NS
+      # dentro de 96h — numa pausa de calendário o silêncio é legítimo.
+      # tag 'guarda' porque o agendado roda `dbt test --select tag:guarda` e nada mais
+      # (data-engineering#19): teste sem a tag existe só no laptop de quem lembrar de rodá-lo.
+      # ⚠️ Mesmo tagueado, `warn` não dispara o alarme da C4, que lê ERROR — este teste é
+      # diagnóstico no resumo diário, não sentinela. Quem protege de verdade contra o
+      # envelhecimento é o modelo estar nos `--select` dos workflows.
+      - dbt_utils.recency:
+          arguments:
+            datepart: day
+            field: coletado_em
+            interval: 2
+          config:
+            severity: warn
+            tags: ['guarda']
+    columns:
+      - name: fixture_id
+        description: "ID do jogo pelo qual perguntamos (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Data (UTC) da coleta"
+        tests:
+          - not_null
+      - name: coletado_em
+        description: >
+          Instante (UTC) da PRIMEIRA coleta do dia para aquele jogo. É ele, e não o
+          snapshot_date, que decide se a resposta é pré-apito — o poll roda de hora em hora e
+          no dia do jogo há coleta antes e depois do apito.
+        tests:
+          - not_null
+
   - name: stg_futebol_predictions
     description: "Flatten do raw_futebol_predictions. 1 linha por fixture (1 previsão/jogo, sem UNNEST). predictions/comparison achatados; percentuais ('45%') e linhas de gol ('-1.5') STRING → FLOAT64 (REPLACE('%','') + SAFE_CAST). `def` escapado com crases. fact_predictions_api deriva competition/collection_date e dedup."
     columns:
