@@ -1,0 +1,79 @@
+version: 2
+
+# ==============================================================================
+# Unit tests do CONTADOR DE PREMISSAS SEM DADO (#41, ADR 0003).
+#
+# Por que unit test e não data test: os casos que importam quase não existem em
+# produção. A asserção central — "insumo PRESENTE e desfavorável não incrementa o
+# contador" — é indistinguível, num data test, de "o contador está zerado porque
+# nunca soube contar". Só linha construída separa as duas, e é ela que fica aqui.
+#
+# As três asserções, nas seis linhas esperadas abaixo:
+#
+#   1. insumo presente e desfavorável -> premissa NÃO acende e NÃO incrementa
+#      (fixture 1: todos os insumos existem, nenhum satisfaz o limiar)
+#   2. insumo ausente -> premissa NÃO acende e INCREMENTA
+#      (fixture 2: nenhuma linha de forma/tabela/xG/h2h para os times)
+#   3. premissa que não se aplica à linha não incrementa
+#      (outcome 'Draw': não há lado apostado, então nenhuma das 7 se aplica)
+#
+# A fixture 2 conta 6, e não 7, DE PROPÓSITO: `desfalque_adversario` lê s_missing
+# e o_missing, que seguem COALESCEados para zero até a #42 (que depende do vazio
+# registrado de data-engineering#33). O 6 é o contorno exato do que a #41 entrega
+# — se ele virar 7 sem a #42 ter sido feita, alguém removeu um COALESCE cuja
+# ausência ainda não tem de onde vir.
+# ==============================================================================
+unit_tests:
+  - name: premissas_1x2_contador_separa_cegueira_de_evidencia_contraria
+    model: int_futebol_premissas_1x2
+    description: >
+      O contador de premissas sem dado conta a premissa que não pôde ser avaliada e
+      não conta a que foi avaliada e não acendeu — e ignora a que não se aplica à
+      linha. Nenhuma das três muda o pts_premissas.
+    given:
+      - input: ref('fact_fixtures')
+        rows:
+          # fixture 1: tem todos os insumos. fixture 2: não tem nenhum.
+          - {fixture_id: 1, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 10, away_team_id: 20, kickoff_utc: '2026-08-01 20:00:00'}
+          - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 30, away_team_id: 40, kickoff_utc: '2026-08-01 20:00:00'}
+
+      - input: ref('int_futebol_team_form_pit')
+        rows:
+          # Só os times da fixture 1. Todos os valores existem e nenhum satisfaz o
+          # limiar da premissa: é a diferença entre "não sabemos" e "sabemos que não".
+          - {fixture_id: 1, team_id: 10, goals_for_avg_home: 0.5, goals_for_avg_away: 0.4, goals_against_avg_home: 1.0, goals_against_avg_away: 1.2, wins_home: 1, draws_home: 1, played_home: 10, wins_away: 1, draws_away: 1, played_away: 10, rank: 10, ppg: 1.0, n_wins_last5: 0, n_games_last5: 5}
+          - {fixture_id: 1, team_id: 20, goals_for_avg_home: 1.0, goals_for_avg_away: 1.0, goals_against_avg_home: 0.6, goals_against_avg_away: 0.5, wins_home: 1, draws_home: 1, played_home: 10, wins_away: 1, draws_away: 1, played_away: 10, rank: 5, ppg: 1.2, n_wins_last5: 1, n_games_last5: 5}
+
+      - input: ref('fact_fixture_stats')
+        rows:
+          # Um jogo anterior (fixture 900) dos times da fixture 1 -> xG existe e é
+          # equilibrado (diferença 0,0 < 0,3), então superioridade_xg não acende.
+          - {fixture_id: 900, team_id: 10, season: 2026, competition_id: 71, date_utc: '2026-07-01', expected_goals: 0.5}
+          - {fixture_id: 900, team_id: 20, season: 2026, competition_id: 71, date_utc: '2026-07-01', expected_goals: 0.5}
+
+      - input: ref('int_futebol_desfalques')
+        rows:
+          # Lista COLETADA e sem titular importante fora: zero legítimo dos dois lados.
+          - {fixture_id: 1, team_id: 10, injury_type: 'Questionable', is_important: false}
+          - {fixture_id: 1, team_id: 20, injury_type: 'Questionable', is_important: false}
+
+      - input: ref('fact_h2h')
+        rows:
+          # Um confronto direto anterior, vencido pelo time 20 (mandante lá).
+          - {h2h_pair_key: '10-20', fixture_id: 900, kickoff_utc: '2026-07-01 20:00:00', home_team_id: 20, away_team_id: 10, home_team_winner: true, away_team_winner: false}
+
+    expect:
+      rows:
+        # ---- fixture 1: insumo presente ----------------------------------------
+        # Home: as 7 premissas avaliadas, nenhuma acesa. Contador ZERO — é a asserção central.
+        - {fixture_id: 1, outcome: 'Home', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 0}
+        # Away: h2h_favoravel ACENDE (venceu o único confronto). Premissa acesa nunca é cega.
+        - {fixture_id: 1, outcome: 'Away', pts_premissas: 4, forma: false, h2h_favoravel: true, premissas_sem_dado: 0}
+        # Draw: não há lado apostado -> nenhuma das 7 se aplica -> contador ZERO, não 7.
+        - {fixture_id: 1, outcome: 'Draw', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 0}
+
+        # ---- fixture 2: insumo ausente -----------------------------------------
+        # 6 das 7 cegas; desfalque_adversario fica de fora até a #42 (ver cabeçalho).
+        - {fixture_id: 2, outcome: 'Home', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 6}
+        - {fixture_id: 2, outcome: 'Away', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 6}
+        - {fixture_id: 2, outcome: 'Draw', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 0}

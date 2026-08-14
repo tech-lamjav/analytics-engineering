@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S5 do Motor de Score — premissas de contexto do mercado DUPLA CHANCE (market_id 12). ⚠️ Task 0 (look-ahead): equilibrio_defensivo/adversario_limitado leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; lado_coberto_forte herda a correção via int_futebol_premissas_1x2 (era a premissa MAIS contaminada, com as duas fontes sujas). invicto_recente já era limpa. 2 linhas por fixture: 1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). DC é aposta de proteção: vale quando o mercado superprecifica a zebra do lado DESCOBERTO (O). 4 premissas (Σ34, sem clamp — bem abaixo de 55), espelha §12.5. lado_coberto_forte REUSA forca_mismatch/superioridade_tabela do int_futebol_premissas_1x2 (do lado S); adversario_limitado reusa o h2h_favoravel do 1X2. equilibrio_defensivo e invicto_recente derivam de fact_team_season_stats (gols sofridos no total) e dos jogos FINALIZADOS da MESMA season/competição anteriores ao jogo (goleados = cedeu 3+, e derrotas nos últimos 5) — o filtro de season evita sangrar a temporada passada pela pausa de off-season. O 12 (sem empate) NÃO é produzido (não casa com o padrão S/O da §12.5). Penalidade específica (odd_muito_baixa <1,20) e o gate próprio (melhor_odd >=1,25, sem odd_juice) são aplicados no mart fact_value_opportunities. Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. ⚠️ MEDIÇÃO (task [F], ADR 0007): o team_hist aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, cujo teto de 10 alcança o thrash_rate e não o last5_lost) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. lado_coberto_forte e adversario_limitado seguem o que o 1X2 fizer: leem x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados em booleano.'
+    description='S5 do Motor de Score — premissas de contexto do mercado DUPLA CHANCE (market_id 12). ⚠️ Task 0 (look-ahead): equilibrio_defensivo/adversario_limitado leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; lado_coberto_forte herda a correção via int_futebol_premissas_1x2 (era a premissa MAIS contaminada, com as duas fontes sujas). invicto_recente já era limpa. 2 linhas por fixture: 1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). DC é aposta de proteção: vale quando o mercado superprecifica a zebra do lado DESCOBERTO (O). 4 premissas (Σ34, sem clamp — bem abaixo de 55), espelha §12.5. lado_coberto_forte REUSA forca_mismatch/superioridade_tabela do int_futebol_premissas_1x2 (do lado S); adversario_limitado reusa o h2h_favoravel do 1X2. equilibrio_defensivo e invicto_recente derivam de fact_team_season_stats (gols sofridos no total) e dos jogos FINALIZADOS da MESMA season/competição anteriores ao jogo (goleados = cedeu 3+, e derrotas nos últimos 5) — o filtro de season evita sangrar a temporada passada pela pausa de off-season. O 12 (sem empate) NÃO é produzido (não casa com o padrão S/O da §12.5). Penalidade específica (odd_muito_baixa <1,20) e o gate próprio (melhor_odd >=1,25, sem odd_juice) são aplicados no mart fact_value_opportunities. Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. ⚠️ MEDIÇÃO (task [F], ADR 0007): o team_hist aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, cujo teto de 10 alcança o thrash_rate e não o last5_lost) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. lado_coberto_forte e adversario_limitado seguem o que o 1X2 fizer: leem x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados em booleano. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, s_losses_last5 vira NULL sem histórico e os x_* deixaram de ser COALESCEados: quando a premissa correspondente está na lista premissas_cegas do 1X2, o reuso chega NULL — a cegueira deixa de atravessar dois modelos sem rastro.'
 ) }}
 {#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
 
@@ -49,7 +49,10 @@ outcomes AS (
 -- e h2h_favoravel (adversario_limitado). Garante consistência com o ramo 1X2.
 reuse_1x2 AS (
     SELECT fixture_id, outcome AS x1_outcome,
-           forca_mismatch, superioridade_tabela, h2h_favoravel
+           forca_mismatch, superioridade_tabela, h2h_favoravel,
+           -- a lista de premissas do 1X2 que não puderam ser avaliadas naquele jogo: é por ela
+           -- que a cegueira de lá deixa de morrer no FALSE ao atravessar para cá (#41).
+           premissas_cegas
     FROM {{ ref('int_futebol_premissas_1x2') }}
 ),
 
@@ -155,13 +158,22 @@ metrics AS (
 
         -- invicto de S nos últimos 5 (derrotas e nº de jogos com histórico). Lê last5_lost do
         -- próprio st (team_hist já traz thrash_rate E last5_lost por (fixture,time)) — sem self-join extra.
-        (SELECT COUNT(*) FROM UNNEST(st.last5_lost) l WHERE l) AS s_losses_last5,
+        -- O IF na frente é a classe (b) do mapa (#41): COUNT sobre array VAZIO devolve 0 sem
+        -- nenhum NULL para detectar, e "não perdeu nenhum dos últimos 5" é exatamente o que a
+        -- premissa procura — o zero forjado aqui é o disfarce mais perigoso dos três modelos.
+        -- (s_games_last5 já chega NULL sozinho: ARRAY_LENGTH(NULL) é NULL.)
+        IF(st.last5_lost IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(st.last5_lost) l WHERE l)) AS s_losses_last5,
         ARRAY_LENGTH(st.last5_lost)                            AS s_games_last5,
 
-        -- reuso 1X2 (lado S)
-        COALESCE(x.forca_mismatch, FALSE)       AS x_forca_mismatch,
-        COALESCE(x.superioridade_tabela, FALSE) AS x_superioridade_tabela,
-        COALESCE(x.h2h_favoravel, FALSE)        AS x_h2h_favoravel
+        -- Reuso 1X2 (lado S) — classe (c) do mapa (#41). Estas três chegavam COALESCEadas para
+        -- FALSE, e o FALSE do 1X2 já era o colapso de "avaliada e não acendeu" com "não pôde ser
+        -- avaliada": a cegueira atravessava dois modelos sem deixar rastro. Agora chega NULL
+        -- quando a premissa correspondente está na lista de cegas do 1X2 — ou quando não há
+        -- linha de 1X2 nenhuma para o lado S. A premissa segue FALSE nos dois casos, pelo
+        -- COALESCE da CTE `flags` logo abaixo.
+        IF(x.fixture_id IS NULL OR 'forca_mismatch'       IN UNNEST(x.premissas_cegas), NULL, x.forca_mismatch)       AS x_forca_mismatch,
+        IF(x.fixture_id IS NULL OR 'superioridade_tabela' IN UNNEST(x.premissas_cegas), NULL, x.superioridade_tabela) AS x_superioridade_tabela,
+        IF(x.fixture_id IS NULL OR 'h2h_favoravel'        IN UNNEST(x.premissas_cegas), NULL, x.h2h_favoravel)        AS x_h2h_favoravel
     FROM outcomes o
     LEFT JOIN pit s        ON s.fixture_id  = o.fixture_id AND s.team_id  = o.s_team_id
     LEFT JOIN pit od       ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id
@@ -175,12 +187,13 @@ flags AS (
     SELECT
         m.*,
         -- lado coberto forte: reusa forca_mismatch/superioridade_tabela do 1X2 (lado S)
-        (m.x_forca_mismatch OR m.x_superioridade_tabela)                          AS lado_coberto_forte,
+        COALESCE(m.x_forca_mismatch OR m.x_superioridade_tabela, FALSE)           AS lado_coberto_forte,
         -- equilíbrio defensivo: os dois cedem pouco e quase não são goleados
         ( COALESCE(m.s_ga_total <= 1.3 AND m.o_ga_total <= 1.3, FALSE)
           AND COALESCE(m.s_thrash_rate < 0.30 AND m.o_thrash_rate < 0.30, FALSE) ) AS equilibrio_defensivo,
         -- adversário limitado: O com baixo aproveitamento OU retrospecto ruim vs S (h2h)
-        ( COALESCE(m.o_aproveitamento < 45, FALSE) OR m.x_h2h_favoravel )          AS adversario_limitado,
+        ( COALESCE(m.o_aproveitamento < 45, FALSE)
+          OR COALESCE(m.x_h2h_favoravel, FALSE) )                                  AS adversario_limitado,
         -- invicto recente: S sem derrota nos últimos 5 (exige >=3 jogos p/ não disparar sem dado)
         ( COALESCE(m.s_games_last5 >= 3, FALSE) AND COALESCE(m.s_losses_last5 = 0, FALSE) ) AS invicto_recente
     FROM metrics m
@@ -196,6 +209,17 @@ scored AS (
         ) AS pts_premissas,
         0 AS penalidades_dc_pts
     FROM flags f
+),
+
+-- Cegueira (#41, ADR 0003): premissas que se aplicavam a esta linha, não acenderam, e não
+-- acenderam por FALTA DE INSUMO. Gerada do mapa futebol_insumos_premissa(), nunca escrita à
+-- mão. As quatro se aplicam às duas saídas (a Dupla Chance não tem premissa por lado), e duas
+-- delas herdam do 1X2 a cegueira das premissas reusadas.
+cegueira AS (
+    SELECT
+        s.*,
+        {{ futebol_premissas_cegas('int_futebol_premissas_dc') }} AS premissas_cegas
+    FROM scored s
 )
 
 SELECT
@@ -211,6 +235,9 @@ SELECT
     -- agregados
     pts_premissas,
     penalidades_dc_pts,
+    -- cegueira: a lista é o que torna o número auditável.
+    premissas_cegas,
+    ARRAY_LENGTH(premissas_cegas) AS premissas_sem_dado,
 
     -- "por quê": premissas que dispararam, ordenadas por peso.
     ARRAY(SELECT e FROM UNNEST([
@@ -229,4 +256,4 @@ SELECT
     CAST([] AS ARRAY<STRING>) AS avisos,
 
     CURRENT_TIMESTAMP() AS dbt_loaded_at
-FROM scored
+FROM cegueira

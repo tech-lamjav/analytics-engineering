@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     cluster_by=['competition', 'fixture_id'],
-    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate (edge>0 E n_casas>=3 E de-vig válido E conjunto da Pinnacle completo pro mercado E score>=40 E — p/ Handicap asiático/Gols O/U — linha meia .5, sem push). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES). faixa Alta(>=60)/Média(40-59); abaixo de 40 não vira oportunidade. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market` — v5 liga 1X2 (market_id=1) + Gols O/U (market_id=5) + Handicap asiático (market_id=4) + Ambos Marcam/BTTS (market_id=8) + Dupla Chance (market_id=12, saídas 1X/X2). Junta int_futebol_premissas_1x2/_ou/_ah/_btts/_dc + int_futebol_odds_devig + int_futebol_corroboracao. line_value é NULL no 1X2/BTTS/DC, a linha L no O/U e o handicap (ótica do mandante, mesmo p/ Home e Away) no AH. valor_fonte = pinnacle (de-vig da Pinnacle, mercados 1/4/5; e DC, derivada do 1X2 da Pinnacle) ou consenso (de-vig da mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front). A DC tem GATE PRÓPRIO (melhor_odd >=1,25, sem odd_juice) — aplicado no ramo joined_dc; o gate >=1,25 já garante o retorno mínimo (sem penalidade específica de odd baixa).'
+    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate (edge>0 E n_casas>=3 E de-vig válido E conjunto da Pinnacle completo pro mercado E score>=40 E — p/ Handicap asiático/Gols O/U — linha meia .5, sem push). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES). faixa Alta(>=60)/Média(40-59); abaixo de 40 não vira oportunidade. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market` — v5 liga 1X2 (market_id=1) + Gols O/U (market_id=5) + Handicap asiático (market_id=4) + Ambos Marcam/BTTS (market_id=8) + Dupla Chance (market_id=12, saídas 1X/X2). Junta int_futebol_premissas_1x2/_ou/_ah/_btts/_dc + int_futebol_odds_devig + int_futebol_corroboracao. line_value é NULL no 1X2/BTTS/DC, a linha L no O/U e o handicap (ótica do mandante, mesmo p/ Home e Away) no AH. valor_fonte = pinnacle (de-vig da Pinnacle, mercados 1/4/5; e DC, derivada do 1X2 da Pinnacle) ou consenso (de-vig da mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front). A DC tem GATE PRÓPRIO (melhor_odd >=1,25, sem odd_juice) — aplicado no ramo joined_dc; o gate >=1,25 já garante o retorno mínimo (sem penalidade específica de odd baixa). Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. premissas_sem_dado é propagado dos cinco modelos de premissas e sai também como aviso em avisos[], SEM pontos entre parênteses: ele não desconta nada, diz que a nota está incompleta e não contrária (#41, ADR 0003).'
 ) }}
 
 WITH prem_1x2 AS (
@@ -70,6 +70,7 @@ joined_1x2 AS (
         d.pen_odd_juice,
 
         p.pts_premissas,
+        p.premissas_sem_dado,
         p.penalidades_1x2_pts                   AS penalidades_especificas_pts,
         p.evidencias                            AS evidencias_premissas,
         p.avisos                                AS avisos_especificos,
@@ -119,6 +120,7 @@ joined_ou AS (
         d.pen_odd_juice,
 
         p.pts_premissas,
+        p.premissas_sem_dado,
         p.penalidades_ou_pts                    AS penalidades_especificas_pts,
         p.evidencias                            AS evidencias_premissas,
         p.avisos                                AS avisos_especificos,
@@ -172,6 +174,7 @@ joined_ah AS (
         d.pen_odd_juice,
 
         p.pts_premissas,
+        p.premissas_sem_dado,
         p.penalidades_ah_pts                    AS penalidades_especificas_pts,
         p.evidencias                            AS evidencias_premissas,
         p.avisos                                AS avisos_especificos,
@@ -225,6 +228,7 @@ joined_btts AS (
         d.pen_odd_juice,
 
         p.pts_premissas,
+        p.premissas_sem_dado,
         p.penalidades_btts_pts                  AS penalidades_especificas_pts,
         p.evidencias                            AS evidencias_premissas,
         p.avisos                                AS avisos_especificos,
@@ -281,6 +285,7 @@ joined_dc AS (
         FALSE                                   AS pen_odd_juice,  -- DC nunca aplica juice
 
         p.pts_premissas,
+        p.premissas_sem_dado,
         -- DC não tem penalidade específica: o gate de odd próprio (melhor_odd >= 1,25) já
         -- barra o retorno baixo. A antiga penalidade odd_muito_baixa (<1,20) era código morto
         -- — inalcançável sob o gate >=1,25 (best_odd<1,20 sempre FALSE) -> removida (#8).
@@ -340,6 +345,10 @@ SELECT
     edge,
     pts_valor,
     pts_premissas,
+    -- quantas premissas do mercado se aplicavam a esta linha, não acenderam, e não acenderam
+    -- por falta de insumo (#41). Não entra na conta do score: é o que o score NÃO pôde levar
+    -- em conta. Filtrar por ela é o que permite medir a base por completude.
+    premissas_sem_dado,
     pts_corroboracao,
     penalidades,
     score,
@@ -358,14 +367,20 @@ SELECT
         ]) AS x WHERE x IS NOT NULL)
     ) AS evidencias,
 
-    -- avisos: penalidades específicas do mercado + penalidades globais de odds.
+    -- avisos: penalidades específicas do mercado + penalidades globais de odds + cegueira.
+    -- O aviso de cegueira NÃO leva pontos entre parênteses como os outros, e é de propósito
+    -- (#41, ADR 0003): ele não desconta nada. Ele diz que a nota saiu de menos informação —
+    -- incompleta, não contrária. Vem por último porque é o único que não é red flag do preço.
     ARRAY_CONCAT(
         avisos_especificos,
         ARRAY(SELECT y FROM UNNEST([
             IF(pen_odd_outlier,  '⚠ odd fora da média — provável linha mole/erro (−30)', NULL),
             IF(pen_poucas_casas, '⚠ poucas casas cobrindo o mercado (−12)', NULL),
             IF(pen_odd_longshot, '⚠ odd muito alta / longshot (−15)', NULL),
-            IF(pen_odd_juice,    '⚠ retorno baixo / juice (−10)', NULL)
+            IF(pen_odd_juice,    '⚠ retorno baixo / juice (−10)', NULL),
+            IF(premissas_sem_dado > 0,
+               FORMAT('⚠ %d premissa(s) sem dado — a nota está incompleta, não contrária',
+                      premissas_sem_dado), NULL)
         ]) AS y WHERE y IS NOT NULL)
     ) AS avisos,
 

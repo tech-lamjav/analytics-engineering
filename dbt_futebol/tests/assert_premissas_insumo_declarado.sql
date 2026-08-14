@@ -23,6 +23,13 @@
 -- essa a direção 1. O LIKE cobre modelo de premissas NOVO sem precisar editar esta guarda —
 -- mercado novo entra e as premissas dele já são exigidas no mapa.
 --
+-- A QUARTA direção — premissa declarada SEM condição de aplicabilidade (`aplicavel`) — não
+-- está aqui de propósito: ela é cobrada mais cedo e mais forte, como erro de COMPILAÇÃO em
+-- futebol_premissas_cegas(), que é antes de existir dado para consultar. Repeti-la como teste
+-- de dados criaria uma guarda que nunca pode ficar vermelha (o modelo nem compila para ser
+-- materializado), e guarda infalsificável ensina a ignorar as outras. Entrada com `modelo`
+-- errado, que o gerador nunca vê, cai na direção 2 acima.
+--
 -- ⚠️ VERDE POR VACUIDADE hoje, igual à assert_devig_conjunto_declarado: o mapa nasce
 -- casando com a realidade, e a guarda é infalsificável em produção até o dia em que alguém
 -- mexer num modelo — que é exatamente o dia em que precisamos confiar nela. Por isso foi

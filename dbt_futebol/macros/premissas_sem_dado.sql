@@ -1,29 +1,83 @@
-{#- Gera a expressão do contador de PREMISSAS SEM DADO de um modelo, derivada do mapa
-    futebol_insumos_premissa(). Chamado dentro do modelo, onde as colunas da CTE `metrics`
-    ainda existem — no SELECT final elas já viraram booleano e a informação sumiu.
+{#- Gera a lista de PREMISSAS CEGAS de um modelo — as que se aplicavam à linha, não acenderam,
+    e não acenderam porque faltou insumo. Derivada do mapa futebol_insumos_premissa(), e
+    chamada de dentro do modelo, onde as colunas da CTE `metrics` ainda existem: no SELECT
+    final elas já viraram booleano e a informação sumiu.
+
+    O contador do board é o tamanho desta lista (premissas_sem_dado = ARRAY_LENGTH). A lista em
+    si fica exposta porque é o que torna o número auditável — e porque a Dupla Chance a lê do
+    1X2 para herdar a cegueira das premissas que reusa, em vez de herdar só o FALSE delas.
 
     Por que gerado e não escrito à mão: o contador manual fica correto no dia em que é escrito
     e apodrece na premissa seguinte, e esquecer é silencioso (ADR 0003). Gerando do mapa, uma
     premissa nova só precisa ser declarada — e se não for, a guarda
     assert_premissas_insumo_declarado fica vermelha antes de o contador mentir.
 
+    TRÊS CONDIÇÕES por premissa, e nenhuma das três é decorativa:
+
+      aplicável        — premissa do outro lado da linha (favorito/azarão, Over/Under, Yes/No)
+                         não está cega, está fora de jogo. Sem esta condição toda linha de
+                         Handicap contaria 3 ou 4, sempre, e o contador viraria ruído.
+      não acesa        — premissa que ACENDEU não pode ser contada como sem dado, e sem esta
+                         condição ela seria: `lado_coberto_forte` é um OR de dois insumos, e
+                         acende com um só. Também é a rede de segurança do resto — enquanto
+                         ela estiver aqui, o contador não consegue contradizer o score.
+      insumo NULL      — qualquer um dos insumos declarados. É o critério certo, e não "todos
+                         NULL": forca_mismatch compara o ataque de um time com a defesa do
+                         outro, e faltando um dos dois a comparação não existe. Meio insumo não
+                         é meia premissa. Insumo condicional ({'col', 'quando'}) só é cobrado
+                         quando a condição dele vale — é o `mando`, que lê uma coluna mandando
+                         e outra jogando fora.
+
     Conta só `tipo = 'premissa'`. Penalidade não entra: ela não é conhecimento faltando, é
     ponto sendo subtraído, e somá-la ao contador diria ao leitor que sabemos menos do que
     sabemos. Marcador também não — ele nem soma nem subtrai.
 
-    A premissa conta como sem dado quando QUALQUER um dos insumos dela é NULL. É o critério
-    certo e não o "todos NULL": `forca_mismatch` compara o ataque de um time com a defesa do
-    outro, e faltando um dos dois a comparação não existe — meio insumo não é meia premissa.
-
-    ⚠️ SÓ FUNCIONA ONDE A AUSÊNCIA CHEGA COMO NULL. Insumo COALESCEado antes daqui é
-    indistinguível de valor real e o contador o dá por presente. Depois de #41 isso vale para
+    ⚠️ SÓ ENXERGA A AUSÊNCIA QUE CHEGA COMO NULL. Insumo COALESCEado antes daqui é
+    indistinguível de valor real e o contador o dá por presente. Depois da #41 isso vale para
     UMA premissa: `desfalque_adversario`, cujos s_missing/o_missing seguem COALESCEados para
     zero até a #42 (que espera o vazio registrado de data-engineering#33). As outras 38 têm
-    insumo capaz de expressar ausência. -#}
-{% macro futebol_premissas_sem_dado(modelo, alias='f') %}
-    (
-    {%- for p in futebol_insumos_premissa() if p.modelo == modelo and p.tipo == 'premissa' %}
-        {{ "  " if loop.first else "+ " }}CAST({% for i in p.insumos %}{{ alias }}.{{ i }} IS NULL{{ " OR " if not loop.last }}{% endfor %} AS INT64)  -- {{ p.nome }}
+    insumo capaz de expressar ausência. As três classes de disfarce estão no cabeçalho do
+    macros/premissas_insumos.sql. -#}
+{% macro futebol_premissas_cegas(modelo) %}
+    {%- set premissas = [] -%}
+    {%- for p in futebol_insumos_premissa() if p.modelo == modelo and p.tipo == 'premissa' -%}
+        {%- do premissas.append(p) -%}
+    {%- endfor -%}
+
+    {#- Fail-closed em toda direção: chave faltando no mapa vira string vazia em Jinja, não
+        erro, e o contador nasceria com um pedaço mudo. Erro de compilação é barulhento. -#}
+    {%- if premissas | length == 0 -%}
+        {{ exceptions.raise_compiler_error(
+            "futebol_premissas_cegas: nenhuma premissa declarada para o modelo '" ~ modelo ~
+            "' em futebol_insumos_premissa(). Nome do modelo errado ou mapa incompleto.") }}
+    {%- endif -%}
+    {%- for p in premissas -%}
+        {%- if not p.get('aplicavel') -%}
+            {{ exceptions.raise_compiler_error(
+                "futebol_premissas_cegas: a premissa '" ~ p.nome ~ "' (" ~ modelo ~
+                ") não declara 'aplicavel'. Sem a condição de aplicabilidade o contador soma "
+                "'sem dado' com 'não se aplica'.") }}
+        {%- endif -%}
+        {%- if p.get('insumos') | length == 0 -%}
+            {{ exceptions.raise_compiler_error(
+                "futebol_premissas_cegas: a premissa '" ~ p.nome ~ "' (" ~ modelo ~
+                ") não declara insumo nenhum. Ela nunca incrementaria o contador — é a "
+                "podridão por dentro do mapa, que a guarda de nome não pega.") }}
+        {%- endif -%}
+    {%- endfor -%}
+
+    ARRAY(SELECT premissa FROM UNNEST([
+    {%- for p in premissas %}
+        IF(COALESCE(({{ p.aplicavel }})
+           AND NOT COALESCE({{ p.nome }}, FALSE)
+           AND ({% for i in p.insumos -%}
+                    {%- if i is mapping -%}
+                        (({{ i.quando }}) AND {{ i.col }} IS NULL)
+                    {%- else -%}
+                        {{ i }} IS NULL
+                    {%- endif -%}
+                    {{ " OR " if not loop.last }}
+                {%- endfor %}), FALSE), '{{ p.nome }}', NULL){{ "," if not loop.last }}
     {%- endfor %}
-    )
+    ]) AS premissa WHERE premissa IS NOT NULL)
 {%- endmacro %}

@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     description='S3 do Motor de Score — premissas de contexto do mercado HANDICAP ASIATICO (market_id 4). ⚠️ Task 0 (look-ahead): supremacia/tende_golear/adversario_fragil_fora/mando_forte/sem_rodizio/defesa_fora_solida leem int_futebol_team_form_pit (point-in-time por fixture) — o lado FAVORITO era 100% contaminado. raramente_perde_por_2 e favorito_irregular já eram limpos (margin_stats com kickoff_utc <) e não mudaram. 2 linhas por (fixture, line_value): outcome_side Home e Away. Convenção dos dados (API-Football, confirmada 2026-06-24): line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ os dois lados — "Home -1.5" e "Away -1.5" são o PAR complementar (de-vig soma ~1.03, pin_n_outcomes=2). Logo o handicap NA ÓTICA DO LADO = IF(side=Home, line_value, -line_value): side_handicap<0 => FAVORITO (dá handicap), >0 => AZARÃO (recebe), =0 => pick (nenhuma premissa dispara). Favorito: 5 premissas (Σ40, §12.3); Azarão: 3 (Σ30). Penalidade específica: handicap_alto (-12, |line_value|>=2.5). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. Gate/edge/Score saem no mart fact_value_opportunities (gate de completude Pinnacle = par >=2, igual O/U).
-    ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura. ⚠️ MEDIÇÃO (task [F], ADR 0007): o margin_stats aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. supremacia e sem_rodizio NÃO seguem o eixo (rank/ppg/n_teams vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008). ⚠️ O margin_stats não tem filtro de season nem no default — ele já atravessa temporada hoje —, então sob `todas` ele passa a contar todas as competições E todo o tempo coletado.'
+    ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura. ⚠️ MEDIÇÃO (task [F], ADR 0007): o margin_stats aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. supremacia e sem_rodizio NÃO seguem o eixo (rank/ppg/n_teams vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008). ⚠️ O margin_stats não tem filtro de season nem no default — ele já atravessa temporada hoje —, então sob `todas` ele passa a contar todas as competições E todo o tempo coletado. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. A aplicabilidade aqui é o LADO (is_favorito/is_azarao) — sem ela toda linha contaria 3 ou 5 cegas por desenho. A lista de ligas de pontos corridos do sem_rodizio saiu para futebol_ligas_pontos_corridos(), lida também pelo mapa.'
 ) }}
 {#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
 
@@ -228,7 +228,9 @@ flags AS (
         -- Champions League -> FALSE pelo mesmo motivo: fase de liga (36 times, 8 jogos) vira
         -- mata-mata em fevereiro e a tabela congela; G6/Z3 não modela a dinâmica top-8/9-24.
         -- TODO: refinar com rodada/congestionamento de calendário.
-        m.is_favorito AND m.competition IN ('brasileirao', 'serie_b', 'la_liga', 'premier_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga')
+        -- A lista sai de futebol_ligas_pontos_corridos(): ela é lida também pela chave de
+        -- aplicabilidade desta premissa no mapa de insumos, e duas cópias divergem em silêncio.
+        m.is_favorito AND m.competition IN {{ futebol_ligas_pontos_corridos_sql() }}
             AND COALESCE(m.s_rank <= 6 OR m.s_rank >= m.n_teams - 3, FALSE)     AS sem_rodizio,
         -- Azarão (Σ30)
         m.is_azarao AND COALESCE(m.s_n_games >= 5 AND m.s_lost2 / m.s_n_games < 0.30, FALSE) AS raramente_perde_por_2,
@@ -254,6 +256,18 @@ scored AS (
         ) AS pts_premissas,
         12 * CAST(f.handicap_alto AS INT64) AS penalidades_ah_pts
     FROM flags f
+),
+
+-- Cegueira (#41, ADR 0003): premissas que se aplicavam a esta linha, não acenderam, e não
+-- acenderam por FALTA DE INSUMO. Gerada do mapa futebol_insumos_premissa(), nunca escrita à
+-- mão. Aqui a aplicabilidade é o LADO — sem ela toda linha de Handicap contaria as 3 do azarão
+-- ou as 5 do favorito, sempre e por desenho, e um contador que diz o mesmo número em toda
+-- linha é ignorado exatamente como guarda que nasce vermelha.
+cegueira AS (
+    SELECT
+        s.*,
+        {{ futebol_premissas_cegas('int_futebol_premissas_ah') }} AS premissas_cegas
+    FROM scored s
 )
 
 SELECT
@@ -278,6 +292,9 @@ SELECT
     -- agregados
     pts_premissas,
     penalidades_ah_pts,
+    -- cegueira: a lista é o que torna o número auditável.
+    premissas_cegas,
+    ARRAY_LENGTH(premissas_cegas) AS premissas_sem_dado,
 
     -- "por quê": premissas que dispararam, em linguagem de gente, ordenadas por peso.
     ARRAY(SELECT e FROM UNNEST([
@@ -304,4 +321,4 @@ SELECT
     ]) AS a WHERE a IS NOT NULL) AS avisos,
 
     CURRENT_TIMESTAMP() AS dbt_loaded_at
-FROM scored
+FROM cegueira
