@@ -271,6 +271,11 @@ models:
       # contador de desfalque vira NULL e as premissas legítimas somem do board sem erro.
       # warn, e não error, porque o poll só cobre ligas com coverage.injuries e jogos NS
       # dentro de 96h — numa pausa de calendário o silêncio é legítimo.
+      # tag 'guarda' porque o agendado roda `dbt test --select tag:guarda` e nada mais
+      # (data-engineering#19): teste sem a tag existe só no laptop de quem lembrar de rodá-lo.
+      # ⚠️ Mesmo tagueado, `warn` não dispara o alarme da C4, que lê ERROR — este teste é
+      # diagnóstico no resumo diário, não sentinela. Quem protege de verdade contra o
+      # envelhecimento é o modelo estar nos `--select` dos workflows.
       - dbt_utils.recency:
           arguments:
             datepart: day
@@ -278,6 +283,7 @@ models:
             interval: 2
           config:
             severity: warn
+            tags: ['guarda']
     columns:
       - name: fixture_id
         description: "ID do jogo pelo qual perguntamos (FK p/ fact_fixtures)"
