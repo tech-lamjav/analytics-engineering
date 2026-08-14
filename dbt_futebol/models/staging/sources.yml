@@ -503,3 +503,188 @@ sources:
               STRUCT com 7 métricas de comparação home vs away {form, att, def,
               poisson_distribution, h2h, goals, total}, cada uma STRUCT<home STRING, away STRING>
               (percentuais "45%"). Cast em stg. (def é keyword SQL — crases no stg.)
+
+  # Artefatos CONGELADOS da medição da task [F] (issue #49, ADR 0007). Não são modelos e nenhum
+  # `dbt run` os reconstrói: foram criados uma vez pelo analyses/taskf_congela_baseline.sql, ANTES
+  # de as vars pit_escopo/pit_recorte entrarem no int_futebol_team_form_pit, e é essa anterioridade
+  # que dá valor a eles. O schema é fixo em `futebol_taskF` de propósito — o baseline não segue o
+  # target, senão a Costura A compararia produção contra ela mesma rodada com --target dev/prod.
+  # Exceção consciente ao "só modelo de staging lê source": os consumidores são o teste singular da
+  # Costura A (sobre os baselines) e a análise de reconciliação da #51 (sobre o taskf_teste2), e
+  # `source()` é o único handle do dbt para uma tabela que não é modelo. Nenhum MODELO lê daqui —
+  # se um dia ler, a medição terá vazado para o caminho que o board serve.
+  - name: futebol_taskF
+    description: >
+      Dataset de medição da task [F] (ADR 0007). Guarda o baseline de equivalência da Costura A.
+    database: smartbetting-dados
+    schema: futebol_taskF
+    tables:
+      - name: baseline_int_futebol_team_form_pit
+        description: >
+          A saída do int_futebol_team_form_pit no código anterior às vars de escopo/recorte,
+          sem dbt_loaded_at (que muda a cada build por construção e não é comportamento).
+          Lado esquerdo da igualdade de assert_taskf_pit_default_igual_baseline.
+
+      - name: baseline_pit_fingerprint
+        description: >
+          Impressão digital do INSUMO do modelo por (competition_id, season) no instante do
+          congelamento — contagem e BIT_XOR(FARM_FINGERPRINT) dos fixtures e do team_group já
+          resolvido. É o que deixa a Costura A ser exata sem ser frágil: fixture novo, resultado
+          que entra e jogo remarcado mudam legitimamente a saída de uma competição, e a guarda
+          compara só as partições cujo insumo é idêntico ao congelado. Produzida pela macro
+          taskf_fingerprint_insumo_pit(), a MESMA que o teste usa — se as duas divergirem, nenhuma
+          partição casa.
+        columns:
+          - name: competition_id
+            description: "ID da competição (a mesma chave de escopo do join do modelo)"
+          - name: season
+            description: "Rótulo de temporada"
+          - name: n_fixtures
+            description: "Quantos fixtures a partição tinha no congelamento"
+          - name: fp_fixtures
+            description: >
+              BIT_XOR(FARM_FINGERPRINT(...)) sobre os campos de fixture que o modelo lê
+              (fixture_id, competition, times, kickoff, status, gols). Independente de ordem.
+          - name: n_grupos
+            description: "Quantos times tinham grupo resolvido na partição"
+          - name: fp_standings
+            description: >
+              BIT_XOR(FARM_FINGERPRINT(...)) sobre (team_id, group_name) do team_group JÁ
+              RESOLVIDO — não do snapshot cru, que ganha uma linha por dia e jogaria todas as
+              competições fora da comparação.
+
+      - name: baseline_pit_meta
+        description: >
+          Quando o baseline foi congelado, de qual commit, e com quantas linhas/partições.
+          Uma linha só.
+
+      - name: taskf_teste2_54
+        description: >
+          As quatro células como a #54 as mediu (execução de 12/08 18:29–18:32, commit d40634d),
+          copiadas ANTES de a #55 dropar a acumulativa para acrescentar `odds_loaded_at`. Não tem
+          essa coluna, e é a única diferença de schema.
+
+          Existe porque a #54 aprendeu a lição do jeito caro: ela fez a mesma comparação com uma
+          cópia tratada como rascunho, removida em seguida, e os números daquele parágrafo do doc
+          de resultados não são re-deriváveis de `analyses/` até hoje. Declarada aqui, a
+          comparação da re-medição (analyses/taskf_remedicao.sql) continua rodando amanhã.
+
+          ⚠️ É um registro histórico, como os baselines acima: não se escreve nela. Quando uma
+          mudança de schema futura exigir outra re-medição, o caminho é copiar a acumulativa para
+          uma tabela nova com o número do ticket, não sobrescrever esta.
+
+      - name: taskf_teste2_55
+        description: >
+          As quatro células como a #55 as mediu (execução de 12/08 19:55–20:05, commit b535130),
+          copiadas ANTES de a #58 dropar a acumulativa para acrescentar a coluna `universo`. Não
+          tem essa coluna, e é a única diferença de schema — o que ela contém equivale ao universo
+          `completo` de hoje, que é contra o que a re-medição a compara.
+
+          Mesmo papel e mesmas regras da taskf_teste2_54 acima: registro histórico, não se escreve
+          nela, e a próxima mudança de schema cria a sua própria cópia com o número do ticket.
+
+      - name: taskf_teste2
+        description: >
+          A saída do Teste 2 da medição, uma linha por (célula, UNIVERSO, mercado, premissa,
+          benchmark).
+          Acumulativa: cada execução de analyses/taskf_teste2.sql substitui SÓ a sua célula
+          (DELETE + INSERT), com os quatro universos dentro dela, e as quatro células convivem —
+          é sobre esta tabela que a Costura B (#55) verifica as suas invariantes. Também não é modelo, pelo mesmo motivo dos baselines
+          acima: o destino está escrito no SQL e fixo em futebol_taskF, então um `dbt build`
+          distraído não tem como publicá-la no dataset do board.
+        columns:
+          - name: celula
+            description: >
+              base | escopo | recorte | ambos. DERIVADA dos dois eixos por taskf_celula(), nunca
+              digitada — uma célula não tem como ser gravada com o nome de outra.
+          - name: pit_escopo
+            description: "O eixo de escopo que produziu a linha (da_competicao | todas)"
+          - name: pit_recorte
+            description: "O eixo de recorte que produziu a linha (temporada | ultimos_10)"
+          - name: universo
+            description: >
+              QUAIS JOGOS entram na conta desta linha (#58): completo | sem_copa_mundo |
+              estendido | estendido_sem_champions_classif. É um eixo ORTOGONAL à célula — a célula
+              diz qual HISTÓRICO cada jogo carrega, o universo diz quais jogos são medidos —, e
+              não tem relação nenhuma com `janela`, que neste repositório é a janela de coleta de
+              odds. Os quatro universos de uma célula saem do MESMO INSERT, para que a diferença
+              entre dois deles não carregue uma reconstrução dos modelos dentro de si. Definições
+              e predicados em macros/taskf_universos.sql.
+
+              ⚠️ TODO consumidor precisa recortar o universo. Sem o filtro, cada premissa aparece
+              quatro vezes e `jogos_no_universo` tem quatro valores. O default de quem lê é
+              `completo`, que é o universo congelado da [0.1] e o primário da medição.
+          - name: medido_em
+            description: >
+              Quando a célula foi materializada. Existe porque a spec exige que as quatro rodem na
+              MESMA execução — `linha_subindo`/`linha_descendo` leem odds ao vivo e viram sozinhas
+              entre builds. Com o carimbo, "mesma execução" é conferível; sem ele, é confiança.
+          - name: git_sha
+            description: "Commit de onde a célula foi medida (var taskf_git_sha)"
+          - name: odds_loaded_at
+            description: >
+              O `dbt_loaded_at` do fact_odds_snapshot que ESTA célula leu — qual construção dos
+              fatos alimentou a medição. Carimbado na linha, e não conferido ao vivo depois, por
+              duas razões: lido ao vivo ele decai (um rebuild posterior no dataset de medição
+              deixaria a conferência vermelha sem que as quatro células tivessem deixado de ser
+              comparáveis), e um ref() penduraria a guarda no grafo do fact_odds_snapshot, que a
+              arrastaria para dentro dos builds da medição por seleção indireta. Com ele, a
+              primeira invariante da Costura B cobra as duas pontas: idêntico nas quatro (mesma
+              construção) e anterior ao `medido_em` de cada uma (os fatos vieram antes).
+          - name: jogos_no_universo
+            description: >
+              Jogos distintos do universo DESTA LINHA. Desde a #58 ele é por universo — 169 no
+              `completo`, 90 no `sem_copa_mundo`, e os dois estendidos crescem com a construção
+              dos fatos. O que continua idêntico por construção, e é a primeira invariante da
+              Costura B, é o valor entre as QUATRO CÉLULAS de um MESMO universo.
+          - name: usado_para_peso
+            description: >
+              A linha está no benchmark PREFERIDO do mercado (sharp p/ 1X2, Handicap e Gols;
+              derivada p/ Dupla Chance; consenso p/ BTTS). As de consenso do Handicap e do Gols
+              vêm FALSE: não pesam, mas ficam visíveis porque o ROI muito pior delas é informação
+              sobre quais jogos a Pinnacle escolhe precificar.
+          - name: jogos_medios_disp
+            description: >
+              Média do `min_jogos` DISPONÍVEL (sem teto) nas linhas em que a premissa acendeu. É a
+              contagem que o piso corta, e a que a [0.1] publicou como `jogos_medios` — nas
+              células de recorte `temporada` as duas contagens são o mesmo número.
+          - name: jogos_medios_usado
+            description: >
+              Média do `min_jogos` USADO — o que de fato alimentou as médias das premissas. Sob
+              recorte de contagem ele satura em 10, e a diferença para o `_disp` é exatamente
+              quanto de histórico o teto deixou de fora.
+
+      - name: taskf_pit_por_celula
+        description: >
+          A contagem de partidas anteriores do int_futebol_team_form_pit, uma linha por (célula,
+          fixture, time). Acumulativa como o taskf_teste2: cada execução de
+          analyses/taskf_pit_por_celula.sql substitui SÓ a sua célula. Existe porque o PIT é uma
+          tabela só no dataset de medição — cada célula sobrescreve a anterior —, e a invariante
+          de monotonicidade da #53 ("escopo >= base em todo par") é uma comparação ENTRE células.
+          Guarda o PIT inteiro, sem recorte de universo: fan-out e perda de linha são defeitos do
+          mecanismo e não se limitam à janela medida.
+        columns:
+          - name: celula
+            description: >
+              base | escopo | recorte | ambos. DERIVADA dos eixos por taskf_celula() em tempo de
+              compilação. ⚠️ O rótulo vem das vars e o DADO vem do que está materializado: o
+              carimbo tem de rodar DEPOIS do build da mesma célula. Rodar fora de ordem é pego
+              pelo veredito de não-vacuidade da analyses/taskf_monotonicidade_escopo.sql.
+          - name: played_total
+            description: >
+              A contagem USADA: partidas anteriores que ALIMENTARAM as médias, no escopo/recorte
+              da célula e no instante do kickoff. Sob recorte de contagem ela satura no tamanho do
+              recorte.
+          - name: played_total_disponivel
+            description: >
+              A contagem DISPONÍVEL: quantas partidas anteriores EXISTEM no escopo da célula, sem
+              teto. Nas células de recorte `temporada` é o próprio played_total (sem teto, as duas
+              são a mesma coisa) e o modelo nem emite a coluna — a projeção acontece no carimbo.
+              É desta que sai o `min_jogos` do jogo (o MENOR entre os dois times) que o piso de
+              amostra corta, para o piso significar a mesma coisa nas quatro células.
+              ⚠️ A identidade `usado = LEAST(disponível, N)` é CONFERIDA em
+              analyses/taskf_saturacao_recorte.sql nas células com teto, onde as duas colunas vêm
+              de contas diferentes do modelo. Nas células de recorte `temporada` ela é verdade por
+              construção — a projeção acima —, e ali a mesma conferência checa o RÓTULO, não o
+              dado: uma célula de `temporada` gravada como `ultimos_10` cairia na identidade com
+              teto.

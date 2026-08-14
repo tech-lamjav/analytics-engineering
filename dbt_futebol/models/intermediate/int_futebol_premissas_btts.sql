@@ -1,7 +1,26 @@
 {{ config(
     materialized='table',
-    description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). ⚠️ Task 0 (look-ahead): ambos_marcam/defesa_forte/ataque_trava/ataque_dos_dois/defesas_vazaveis leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats. historico_btts/historico_seco já eram limpos (last5 com kickoff <). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso).'
+    description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). ⚠️ Task 0 (look-ahead): ambos_marcam/defesa_forte/ataque_trava/ataque_dos_dois/defesas_vazaveis leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats. historico_btts/historico_seco já eram limpos (last5 com kickoff <). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso). ⚠️ MEDIÇÃO (task [F], ADR 0007): o last5 de BTTS aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que aqui é só a saída do filtro de season, porque o last5 já é janela de contagem de 5) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF.'
 ) }}
+{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
+
+    Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
+    própria: o `last5` de BTTS, que alimenta `historico_btts` e `historico_seco`. Ela responde ao
+    mesmo eixo, senão a célula sai MISTURADA — `defesa_forte` com histórico juntado e
+    `historico_btts` sem —, e um número assim não responde a pergunta da spec.
+
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
+    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes destas vars.
+
+    O eixo de RECORTE (`pit_recorte`) alcança a MESMA fonte desde a #54, e aqui ele é MESMO uma
+    linha: o `last5` já é uma janela de contagem de 5, e 5 é subconjunto de 10 em qualquer ordem
+    — sob `ultimos_10` os cinco jogos mais recentes do time são os mesmos com ou sem o teto de
+    10. O que muda é só o filtro de season sair, e com ele o zeramento da virada de temporada.
+    (Nos sites de MÉDIA — o spine de Gols e o `margin_stats` do Handicap — o teto é necessário e
+    custa um nível a mais de agregação.) -#}
+{%- set eixos       = taskf_eixos() %}
+{%- set pit_escopo  = eixos.escopo %}
+{%- set pit_recorte = eixos.recorte %}
 
 WITH fixtures AS (
     SELECT
@@ -58,8 +77,12 @@ last5 AS (
     FROM fixture_teams ft
     JOIN team_fixtures_long h
         ON h.team_id        = ft.team_id
+       {%- if pit_escopo == 'da_competicao' %}
        AND h.competition_id = ft.competition_id
+       {%- endif %}
+       {%- if pit_recorte == 'temporada' %}
        AND h.season         = ft.season
+       {%- endif %}
        AND h.kickoff_utc    < ft.kickoff_utc
     GROUP BY ft.fixture_id, ft.team_id
 ),

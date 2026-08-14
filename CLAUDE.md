@@ -134,6 +134,30 @@ All game times are stored in UTC and converted to Brasília (UTC-3) for display.
 
 GitHub Actions (`.github/workflows/deploy-dbt-docs.yml`) deploys static dbt docs to GitHub Pages on push to master when files under `dbt_nba/` change. Requires `BIGQUERY_SA_KEY` secret with a service account JSON.
 
+### ⚠️ Deploy dos modelos: mergear NÃO é deployar
+
+Os modelos rodam de uma **imagem Docker pré-buildada**, não do master. Depois de todo merge
+que toca as paths comportamentais de um projeto dbt:
+
+```bash
+./build-and-push.sh dbt_futebol   # ou dbt_nba
+```
+
+Esse comando agora faz build + push + `gcloud run jobs update` (digest **e** carimbo de
+procedência) num passo só. Não existe mais um segundo comando manual — foi o segundo passo
+esquecido que deixou o fix do de-vig 2 dias fora de produção e o `dbt_nba` 6 semanas atrás
+do master.
+
+**A fase de guardas dbt não pega isso**: ela roda da mesma imagem, então imagem velha causa o
+bug e apaga o detector. Quem pega é `.github/workflows/deriva-imagem.yml`, de hora em hora,
+de fora da imagem. Para conferir na hora:
+
+```bash
+./scripts/checa_deriva.sh
+```
+
+Ver `docs/adr/0001-carimbo-de-procedencia-da-imagem-dbt.md`.
+
 ## Agent skills
 
 ### Issue tracker

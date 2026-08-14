@@ -40,4 +40,18 @@ dbt_futebol:
       threads: 4
       location: us-east1
 
+    # Dataset de MEDICAO da task [F] (issue #49). Existe porque dev e prod apontam ambos para o
+    # dataset de producao `futebol` e dev e o default: um `dbt run` sem --target publicaria
+    # historico juntado no board. Nada agendado usa este target. Ver ADR 0007.
+    taskF:
+      type: bigquery
+      method: oauth
+      project: smartbetting-dados
+      dataset: futebol_taskF
+      threads: 4
+      location: us-east1
+      job_execution_timeout_seconds: 900
+      job_retries: 1
+      priority: interactive
+
   target: dev

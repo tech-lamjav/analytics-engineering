@@ -4,6 +4,14 @@ Pre-match value betting for football (Brasileirão-first, plus cups and European
 leagues): a deterministic rules engine rates every fixture x market x outcome with a
 reliability score and explains why.
 
+> ⚠️ **Antes de mudar o grão ou as colunas de qualquer modelo sincronizado para o
+> Postgres, leia `docs/contrato-serving-rpcs.md`.** O `check_schema_parity` do sync
+> responde "o sync sobrevive?", não "os leitores sobrevivem?" — as RPCs
+> `public.get_futebol_*` assumem o grão de várias dessas tabelas, e mudá-lo passa o
+> parity inteiro e ainda entrega dado errado ao app. Isso já custou duas vezes, em
+> 07/08 e 10/08. O documento traz a matriz de quem lê o quê, com o estado de cada
+> ponto de leitura verificado no banco vivo.
+
 ## Language
 
 ### The score engine
@@ -270,3 +278,110 @@ first from the second requires an out-of-sample control (ADR 0001).
 A fixture whose teams have played too few matches for a season aggregate to mean
 anything — structural in knockout competitions, and an established cause of fabricated
 signal.
+
+**Escopo do PIT**:
+Which competitions a PIT aggregate counts. Today it is *da competição*: only fixtures of the
+same competition as the one being rated. It is **not one join** — `int_futebol_team_form_pit`
+holds one, and each of the five premissa models holds its own local history besides (the `last5`
+of Gols, BTTS and Dupla Chance, the Handicap's `margin_stats`, the xG/ritmo spine). Nine
+predicates over six models; the axis reaches all of them or the cell comes out mixed. Table sheet
+in ADR 0007.
+_Avoid_: "juntar os campeonatos" (silent about whether escopo, recorte, or both is changing)
+
+**Recorte do PIT**:
+Which stretch of past fixtures a PIT aggregate counts. Today it is season-to-date. A counting
+recorte ("the last N") crosses the season boundary by construction; a season recorte does not.
+_Avoid_: janela — that word is taken by the odds collection window, and the two are unrelated
+
+**Célula de medição**:
+One combination of escopo and recorte under which the whole premissa layer is rematerialised
+and remeasured. Two cells are comparable only if computed in the same run over the same frozen
+universe — since #55 that condition is a guard, not a discipline: `dbt test --target taskF
+--select tag:costura_b` fails if the cells read different builds of `fact_odds_snapshot` (each
+cell stamps the one it read in `odds_loaded_at`) or if any of the four is missing. The four are
+`base`, `escopo`, `recorte` and `ambos`, named for the axis each releases.
+_Avoid_: C1–C4 (C1, C2 and C3 already name subtasks of the [C] Coleta task)
+
+**Universo de medição**:
+Which fixtures enter the count. Since #58 it is a **third axis**, orthogonal to the célula: the
+célula decides what history each fixture carries, the universo decides which fixtures are
+measured at all. Four of them, defined once in `taskf_universos()`: `completo` (the frozen 169),
+`sem_copa_mundo`, `estendido` (no ceiling — it reaches whatever the facts construction contains)
+and `estendido_sem_champions_classif`. All four of a célula are emitted by the **same INSERT**, so
+the difference between two of them cannot carry a rebuild of the models inside it. Every consumer
+of `taskf_teste2` must filter one; without the filter each premissa appears four times.
+_Avoid_: treating a universo as a fifth célula — they answer different questions, and only cells
+within the same universo are comparable as a 2×2.
+
+**Universo congelado**:
+The `completo` universo, and the primary one: the fixed set of fixtures every célula is measured
+over — the [0.1]'s published window, 169 fixtures. Its ceiling is an **instant**, not a date: the [0.1] ran mid-day with no frozen cutoff,
+so `DATE(kickoff) <= '2026-08-04'` returns 178 and only `kickoff < 04/08 12:00 UTC` returns the
+published 169. Written once in `taskf_universo()`; see `docs/TASKF_RESULTADOS.md`.
+_Avoid_: janela in prose — that word already names the odds collection window and its two
+derivatives, and this is a third unrelated thing. Say "universo congelado" or "o corte".
+The `janela_ini` / `janela_fim` **columns** are the one exception, and deliberate: they are the
+[0.1]'s own column names, carried over so the measured output lines up with the published table
+field for field. Renaming them would buy vocabulary hygiene at the cost of the reconciliation
+being eyeball-checkable against the doc.
+
+**min_jogos**:
+The smaller of the two teams' prior-fixture counts for a rated fixture, under the escopo and
+recorte in force. It is the number the piso de amostra cuts on, and what makes a fixture an
+amostra curta.
+_Avoid_: jogos disputados (ambiguous between the two teams)
+
+**min_jogos disponível / usado**:
+*Disponível* is how many prior fixtures exist in the escopo; *usado* is how many fed the average.
+They diverge only under a counting recorte, which saturates. The piso always cuts on disponível,
+so that it means the same thing in every célula.
+
+**Piso de amostra**:
+The minimum min_jogos for a line to enter a measurement. A parameter of the measurement, never
+of the Motor in production.
+
+**Premissa de tabela**:
+A premissa whose input is the team's standing — rank, ppg, or the size of the league. There are
+four. A league table exists inside one competition, so these have no juntado escopo and their
+numbers are identical across células by construction. See ADR 0008.
+
+**Família de competição**:
+How a competition labels its seasons: *ano-calendário* (Brasileirão, Série B, the cups, Copa do
+Mundo) or *split-year* (the European leagues and the Champions, where season N means N/N+1). A
+team belongs to one family, and the family decides whether releasing escopo without releasing
+recorte does anything for it.
+
+**Diagnóstico de 180 dias**:
+The four-row table that opens the [F] source ticket — prior fixtures per team in Copa do Brasil,
+Sudamericana, Copa do Mundo and Champions. Reproduced from `fact_fixtures` in
+`analyses/taskf_reconciliacao_180d.sql`, 15 of its 16 fields exactly.
+⚠️ Its first two columns do **not** count the same stretch of the past: column 1 is the team's
+whole history in that competition, every season, unbounded; column 2 is every competition but only
+180 days back. That is why the Champions row reads 4,0 against 1,0, which no common window could
+produce — and why the two columns must never be compared to each other.
+
+**Adversário fora da base**:
+An opponent no collected points-corridos league reaches, so nothing in our data says how good it
+is. It is a **category, never an imputation** — no competition average, no percentile stands in
+for the missing `ppg`. Two distinct populations fall in it: the Série C/D club a Copa do Brasil
+early round throws up, and the South American club of the Libertadores and the Sudamericana whose
+national league we do not collect. The second is the larger of the two. A **seleção** is counted
+apart: it has no league to collect, which is the shape of international football and not a limit
+of ours.
+_Avoid_: adversário desconhecido (suggests a gap to fill; the absence is the finding)
+
+**Rodízio de elenco (medido)**:
+How much of a team's starting eleven carries over between two consecutive fixtures — distinct from
+the `sem_rodizio` premissa, which reads the standings and never looks at a lineup. It only means
+something against its control: 8,34 of 11 repeat between two league fixtures, and 6,88 between a
+league and a cup fixture, so the cup costs 1,46 starters *beyond* ordinary week-to-week churn. Read
+without the control, the 6,88 alone says nothing.
+
+**ppg de liga**:
+An opponent's points per game restricted to points-corridos fixtures, computed point-in-time. It
+exists because the PIT `ppg` is not comparable across competitions: in a knockout cup the losers
+stop playing, so the survivors' average climbs — 2,609 in the Copa do Brasil against 1,364 in the
+Brasileirão. The ppg de liga removes that survivorship, but it still measures position **within**
+the opponent's own league and so never measures level between leagues. Level is only observable as
+the league the opponent belongs to.
+_Avoid_: força do adversário as if it were one number (no single number in this base carries it)
