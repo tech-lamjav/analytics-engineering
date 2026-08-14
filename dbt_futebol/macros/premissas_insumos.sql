@@ -50,9 +50,12 @@
     registradas aqui porque quem acrescentar premissa nova vai recriá-las sem perceber:
 
       (a) COALESCE para ZERO na própria `metrics`. Era o caso de n_wins_last5 e h2h_total
-          (removidos na #41) e ainda é o de s_missing/o_missing, que só a #42 alcança —
-          ela depende do vazio registrado (data-engineering#33) para ter de onde tirar o NULL.
-          Enquanto isso, `desfalque_adversario` é a ÚNICA das 39 que o contador não enxerga.
+          (removidos na #41) e de s_missing/o_missing (removido na #42, que dependia do vazio
+          registrado de data-engineering#33 para ter de onde tirar o NULL). Nenhuma das 39
+          está fora do alcance do contador hoje. ⚠️ O zero de desfalque agora é MERECIDO —
+          contagem real do time OU registro de coleta pré-apito (stg_futebol_injuries_coleta).
+          Repor um COALESCE ali não deixa nada vermelho por si: devolve a cegueira ao estado
+          de "premissa avaliada", que é o disfarce que esta classe descreve.
       (b) CONTAGEM sobre array vazio ou NULL — os `(SELECT COUNT(*) FROM UNNEST(last5_*))` de
           Gols, BTTS e Dupla Chance, e o n_wins_last5 que vem do team_form_pit. Devolvem 0 sem
           nenhum NULL para detectar, e o zero é indistinguível de "cinco jogos, nenhum deles

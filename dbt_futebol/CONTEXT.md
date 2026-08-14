@@ -116,6 +116,16 @@ answered "nothing". The two are indistinguishable downstream unless the asking i
 recorded, and the Motor then reports the second while in fact holding the first.
 _Avoid_: dado faltante (silent about which of the two it is)
 
+**Registro de coleta** (vazio registrado):
+The record that we *asked* the source about a fixture, kept even when the answer was
+empty. It is what lets a counter be zero on purpose: a desfalque count of zero is earned
+either by a real list for that team or by a pre-kickoff record for that fixture — the
+poll returns the whole match in one call. Without a record and without a list, the count
+is NULL, and NULL neither fires the opponent-desfalque premissa nor certifies our side as
+complete. The record is per (fixture, day) and lives apart from the injury rows, since an
+empty answer is a fact about the asking, not about a player.
+_Avoid_: linha vazia (it is not a row of the injury list; it is the receipt of the call)
+
 ### Odds and value
 
 **Edge**:
@@ -208,6 +218,12 @@ A player missing a fixture. Only a desfalque of a titular importante fires premi
 roughly two to three days out and not before — so on the earlier part of the board the
 premissa has **no input**, which is not the same as a negative one.
 _Avoid_: injury (a desfalque may be suspension or other absence)
+
+Catalogue decision (#42, for whoever runs the Limpeza): **desfalque_adversario stays**.
+The hypothesis that its −24,9 in Teste 2 was this bug is **falsified** — that number was
+measured on the nine best-informed lines in the base, every one of them with a real list
+for the backed side, not on the blind ones. What survives is that its n is too small to
+measure anything, which is a reason to keep it and re-measure, not a reason to cut it.
 
 **Escalação confirmada**:
 The starting eleven as announced before kickoff, roughly forty minutes out — distinct

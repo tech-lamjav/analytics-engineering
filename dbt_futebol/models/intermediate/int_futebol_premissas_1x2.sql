@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S1 do Motor de Score — premissas de contexto do mercado RESULTADO (1X2). 3 linhas por fixture (outcome Home/Draw/Away). S = lado apostado, O = adversário. ⚠️ Task 0 (look-ahead): forca_mismatch/mando/superioridade_tabela/forma leem int_futebol_team_form_pit (point-in-time por fixture), NÃO mais fact_team_season_stats + standings_latest — que em 24/25 entregavam a temporada fechada e a tabela final a jogos da rodada 1. Cada premissa é um booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.1 do épico MOTOR_SCORE_CONFIABILIDADE.md). Penalidades específicas: pick_empate (-10), desfalque_proprio (-15). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/injuries). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que troca o filtro de season por um teto de 10 partidas) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. superioridade_tabela NÃO segue o eixo (rank/ppg vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008), e o h2h_favoravel também não, por motivo oposto: o fact_h2h já cruza campeonatos hoje, e restringi-lo seria mudar premissa. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, n_wins_last5 e h2h_total/s_wins perderam o COALESCE de entrada (a ausência chega NULL), e n_wins_last5 vira NULL sem histórico nenhum. s_missing/o_missing seguem COALESCEados para zero até a #42 — desfalque_adversario é a única das 39 que o contador ainda não enxerga.'
+    description='S1 do Motor de Score — premissas de contexto do mercado RESULTADO (1X2). 3 linhas por fixture (outcome Home/Draw/Away). S = lado apostado, O = adversário. ⚠️ Task 0 (look-ahead): forca_mismatch/mando/superioridade_tabela/forma leem int_futebol_team_form_pit (point-in-time por fixture), NÃO mais fact_team_season_stats + standings_latest — que em 24/25 entregavam a temporada fechada e a tabela final a jogos da rodada 1. Cada premissa é um booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.1 do épico MOTOR_SCORE_CONFIABILIDADE.md). Penalidades específicas: pick_empate (-10), desfalque_proprio (-15). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/injuries). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que troca o filtro de season por um teto de 10 partidas) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. superioridade_tabela NÃO segue o eixo (rank/ppg vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008), e o h2h_favoravel também não, por motivo oposto: o fact_h2h já cruza campeonatos hoje, e restringi-lo seria mudar premissa. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, n_wins_last5 e h2h_total/s_wins perderam o COALESCE de entrada (a ausência chega NULL), e n_wins_last5 vira NULL sem histórico nenhum. Desfalque (#42): s_missing/o_missing perderam o COALESCE para zero e passam a ser NULL onde não perguntamos pelo jogo antes do apito (o registro vem de stg_futebol_injuries_coleta, o vazio registrado de data-engineering#33). O zero agora é merecido — contagem real do time OU registro de coleta pré-apito —, e com isso a cegueira deixa de ser CONDIÇÃO para desfalque_adversario acender e deixa de eximir a penalidade desfalque_proprio, que também chega NULL onde não se sabe (a aritmética das penalidades COALESCEa; a coluna não). Nenhuma linha da base muda: as 13 em que a premissa acende e as 73 em que a penalidade pesa têm todas registro de coleta pré-apito (medido 2026-08-14). Com isso o contador enxerga as 39 premissas.'
 ) }}
 {#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
 
@@ -144,6 +144,20 @@ desf AS (
     GROUP BY fixture_id, team_id
 ),
 
+-- #42 (ADR 0003): o REGISTRO DE QUE PERGUNTAMOS pelo jogo antes do apito. Sem ele, "a fonte
+-- respondeu e não havia desfalque" e "nunca perguntamos por este jogo" chegavam aqui como o
+-- mesmo zero — e o zero do nosso lado é CONDIÇÃO para desfalque_adversario acender, de modo
+-- que a cegueira habilitava a premissa em vez de impedi-la.
+-- Mesma âncora do int_futebol_desfalques (coleta ANTES do apito, e não no dia do apito): o
+-- poll roda de hora em hora, então no dia do jogo há coleta dos dois lados do apito, e a de
+-- depois explicaria um jogo que já aconteceu.
+coleta AS (
+    SELECT DISTINCT c.fixture_id
+    FROM {{ ref('stg_futebol_injuries_coleta') }} c
+    JOIN fixtures f USING (fixture_id)
+    WHERE c.coletado_em < f.kickoff_utc
+),
+
 -- H2H: confrontos diretos ANTERIORES ao jogo; conta vitórias de S (só Home/Away).
 h2h AS (
     SELECT
@@ -181,9 +195,19 @@ metrics AS (
         sx.xg_for_avg      AS s_xg_for,
         ox.xg_against_avg  AS o_xg_against,
 
-        -- desfalques pesados por importância (S7): só titular importante fora conta
-        COALESCE(si.missing_important_count, 0) AS s_missing,
-        COALESCE(oi.missing_important_count, 0) AS o_missing,
+        -- Desfalques pesados por importância (S7): só titular importante fora conta.
+        -- SEM COALESCE PARA ZERO (#42): o zero passa a ter de ser MERECIDO, e são dois os
+        -- jeitos de merecê-lo. (1) O time tem linha de desfalque, e aí a contagem é real —
+        -- pode ser zero porque só há 'Questionable' ou reserva na lista. (2) Não tem linha,
+        -- mas perguntamos pelo jogo antes do apito: o poll devolve a partida inteira, então
+        -- "perguntamos e não veio nada deste time" é zero de verdade.
+        -- Fora desses dois, o contador é NULL — e o NULL é o que impede a nossa cegueira de
+        -- habilitar `desfalque_adversario` e de eximir a penalidade de desfalque próprio.
+        -- A ordem dos dois braços importa e protege o CASO ASSIMÉTRICO: quando a fonte
+        -- devolveu um lado só, o lado com linha mantém a contagem real e o outro fica NULL,
+        -- em vez de o fixture inteiro virar zero (antes) ou NULL (se o registro mandasse).
+        COALESCE(si.missing_important_count, IF(cl.fixture_id IS NULL, NULL, 0)) AS s_missing,
+        COALESCE(oi.missing_important_count, IF(cl.fixture_id IS NULL, NULL, 0)) AS o_missing,
 
         -- tabela do campeonato NO INSTANTE DO JOGO (superioridade_tabela)
         s.rank    AS s_rank,
@@ -215,6 +239,7 @@ metrics AS (
     LEFT JOIN xg ox   ON ox.fixture_id = o.fixture_id AND ox.team_id = o.o_team_id
     LEFT JOIN desf si  ON si.fixture_id = o.fixture_id AND si.team_id = o.s_team_id
     LEFT JOIN desf oi  ON oi.fixture_id = o.fixture_id AND oi.team_id = o.o_team_id
+    LEFT JOIN coleta cl ON cl.fixture_id = o.fixture_id
     LEFT JOIN h2h hh  ON hh.fixture_id = o.fixture_id AND hh.outcome = o.outcome
 ),
 
@@ -236,6 +261,12 @@ flags AS (
         COALESCE(m.h2h_total >= 1 AND m.s_wins * 2 >= m.h2h_total, FALSE)  AS h2h_favoravel,
         -- penalidades específicas 1X2
         (m.outcome = 'Draw')                                              AS pick_empate,
+        -- SEM COALESCE (#42), e este é o ponto da mudança: com o zero forjado, a penalidade
+        -- nunca punia um time do qual não sabíamos nada — a coluna afirmava "está completo".
+        -- Agora ela chega NULL onde não sabemos. Não vira −15 (não sabemos que há desfalque,
+        -- e inventá-lo puniria 99% do board): deixa de AFIRMAR a isenção. Quem consome sabe
+        -- separar as duas coisas — a aritmética logo abaixo COALESCEa, e o contador de
+        -- cegueira já marca a linha pela premissa que lê o mesmo insumo.
         (m.s_missing >= 1)                                                AS desfalque_proprio
     FROM metrics m
 ),
@@ -255,7 +286,11 @@ scored AS (
         ) AS pts_premissas,
         (
             10 * CAST(f.pick_empate       AS INT64)
-          + 15 * CAST(f.desfalque_proprio AS INT64)
+          -- COALESCE aqui, e não na origem (#42): o NULL de desfalque_proprio é informação
+          -- na coluna e ruído na soma. Sem ele, TODA linha de empate zeraria as penalidades
+          -- inteiras — no 'Draw' não há lado apostado, logo não há s_missing, logo o NULL é
+          -- permanente e contaminaria os −10 do pick_empate.
+          + 15 * CAST(COALESCE(f.desfalque_proprio, FALSE) AS INT64)
         ) AS penalidades_1x2_pts
     FROM flags f
 ),

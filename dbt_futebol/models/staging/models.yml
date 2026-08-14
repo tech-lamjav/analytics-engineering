@@ -251,6 +251,38 @@ models:
       - name: loaded_at
         description: "Timestamp ISO UTC do extractor"
 
+  - name: stg_futebol_injuries_coleta
+    description: >
+      O registro de que PERGUNTAMOS por um jogo (#42, ADR 0003). 1 linha por (fixture, dia)
+      do poll pré-jogo de /injuries?fixture, inclusive quando a resposta veio sem desfalque
+      nenhum — o vazio registrado de data-engineering#33. É o irmão do stg_futebol_injuries,
+      que descarta essa linha por desenho (`player.id IS NOT NULL`, com not_null em cima):
+      vazio não é desfalque, mas é resposta. Sem este modelo, "perguntamos e a fonte não
+      tinha" e "nunca perguntamos" são o mesmo estado, e o contador de desfalques do
+      int_futebol_premissas_1x2 não teria de onde tirar o NULL.
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - snapshot_date
+    columns:
+      - name: fixture_id
+        description: "ID do jogo pelo qual perguntamos (FK p/ fact_fixtures)"
+        tests:
+          - not_null
+      - name: snapshot_date
+        description: "Data (UTC) da coleta"
+        tests:
+          - not_null
+      - name: coletado_em
+        description: >
+          Instante (UTC) da PRIMEIRA coleta do dia para aquele jogo. É ele, e não o
+          snapshot_date, que decide se a resposta é pré-apito — o poll roda de hora em hora e
+          no dia do jogo há coleta antes e depois do apito.
+        tests:
+          - not_null
+
   - name: stg_futebol_predictions
     description: "Flatten do raw_futebol_predictions. 1 linha por fixture (1 previsão/jogo, sem UNNEST). predictions/comparison achatados; percentuais ('45%') e linhas de gol ('-1.5') STRING → FLOAT64 (REPLACE('%','') + SAFE_CAST). `def` escapado com crases. fact_predictions_api deriva competition/collection_date e dedup."
     columns:

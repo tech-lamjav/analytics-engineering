@@ -21,11 +21,11 @@ version: 2
 #      colidem exatamente aqui, e a decisão — "meio insumo não é meia premissa",
 #      registrada no gerador — só vira fato asserido nesta linha.
 #
-# A fixture 2 conta 6, e não 7, DE PROPÓSITO: `desfalque_adversario` lê s_missing
-# e o_missing, que seguem COALESCEados para zero até a #42 (que depende do vazio
-# registrado de data-engineering#33). O 6 é o contorno exato do que a #41 entrega
-# — se ele virar 7 sem a #42 ter sido feita, alguém removeu um COALESCE cuja
-# ausência ainda não tem de onde vir.
+# A fixture 2 conta 7 — as SETE premissas do 1X2 — desde a #42, que tirou o último
+# COALESCE (s_missing/o_missing) e ligou `desfalque_adversario` ao contador. Enquanto
+# a #41 era a entrega mais nova, este número era 6 de propósito: sem o vazio registrado
+# (data-engineering#33) não havia de onde tirar o NULL do desfalque. Se ele voltar a 6,
+# alguém repôs o COALESCE ou o registro de coleta parou de chegar.
 # ==============================================================================
 unit_tests:
   - name: premissas_1x2_contador_separa_cegueira_de_evidencia_contraria
@@ -65,6 +65,12 @@ unit_tests:
           - {fixture_id: 1, team_id: 10, injury_type: 'Questionable', is_important: false}
           - {fixture_id: 1, team_id: 20, injury_type: 'Questionable', is_important: false}
 
+      - input: ref('stg_futebol_injuries_coleta')
+        rows:
+          # Só a fixture 1 foi perguntada antes do apito — é o que torna o zero dela
+          # legítimo. As fixtures 2 e 3 nunca foram, e por isso o desfalque delas é cego.
+          - {fixture_id: 1, snapshot_date: '2026-08-01', coletado_em: '2026-08-01 08:00:00'}
+
       - input: ref('fact_h2h')
         rows:
           # Um confronto direto anterior, vencido pelo time 20 (mandante lá).
@@ -81,19 +87,20 @@ unit_tests:
         - {fixture_id: 1, outcome: 'Draw', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 0}
 
         # ---- fixture 2: insumo ausente -----------------------------------------
-        # 6 das 7 cegas; desfalque_adversario fica de fora até a #42 (ver cabeçalho).
-        - {fixture_id: 2, outcome: 'Home', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 6}
-        - {fixture_id: 2, outcome: 'Away', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 6}
+        # As 7 cegas — nunca perguntamos por este jogo, então o desfalque entra junto.
+        - {fixture_id: 2, outcome: 'Home', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 7}
+        - {fixture_id: 2, outcome: 'Away', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 7}
         - {fixture_id: 2, outcome: 'Draw', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 0}
 
         # ---- fixture 3: insumo pela metade ---------------------------------------
         # Home (S=50, o lado que TEM dados): forca_mismatch tem s_gf_venue presente e
         # desfavorável (0,5) e o_ga_venue ausente -> CEGA, não "avaliada e não acendeu".
-        # Cegas: forca_mismatch, superioridade_xg, superioridade_tabela, h2h_favoravel = 4.
-        # mando e forma NÃO contam: o insumo que importa do lado mandante existe.
-        - {fixture_id: 3, outcome: 'Home', pts_premissas: 0, forma: false, mando: false, premissas_sem_dado: 4}
-        # Away (S=60, o lado sem nada): as mesmas 6 da fixture 2.
-        - {fixture_id: 3, outcome: 'Away', pts_premissas: 0, forma: false, mando: false, premissas_sem_dado: 6}
+        # Cegas: forca_mismatch, superioridade_xg, superioridade_tabela, h2h_favoravel e
+        # desfalque_adversario (sem registro de coleta dos dois lados) = 5. mando e forma
+        # NÃO contam: o insumo que importa do lado mandante existe.
+        - {fixture_id: 3, outcome: 'Home', pts_premissas: 0, forma: false, mando: false, premissas_sem_dado: 5}
+        # Away (S=60, o lado sem nada): as mesmas 7 da fixture 2.
+        - {fixture_id: 3, outcome: 'Away', pts_premissas: 0, forma: false, mando: false, premissas_sem_dado: 7}
         - {fixture_id: 3, outcome: 'Draw', pts_premissas: 0, forma: false, mando: false, premissas_sem_dado: 0}
 
   # ============================================================================
@@ -150,3 +157,95 @@ unit_tests:
         # Sobram as duas de histórico. Contador 2, e o score é o mesmo 0 do jogo cego.
         - {fixture_id: 2, outcome: '1X', pts_premissas: 0, lado_coberto_forte: false, adversario_limitado: false, premissas_sem_dado: 2}
         - {fixture_id: 2, outcome: 'X2', pts_premissas: 0, lado_coberto_forte: false, adversario_limitado: false, premissas_sem_dado: 2}
+
+  # ============================================================================
+  # A CEGUEIRA DE DESFALQUE (#42, ADR 0003). O contador do lado apostado era forçado a
+  # zero, e zero é o que `desfalque_adversario` EXIGE do nosso lado — a nossa cegueira
+  # era condição para a premissa acender. É a única das três ausências que a ADR 0003
+  # chama de número FABRICADO, e não só suprimido.
+  #
+  # Por que unit test: das 8.355 fixtures do Motor, as que têm lista pré-apito são
+  # dezenas. O caso assimétrico — a fonte devolveu um lado só — existe em 1 fixture de
+  # 8.661, e nenhum data test sobre produção distingue "não acendeu porque medimos e não
+  # havia" de "não acendeu porque o modelo nunca soube". Linha construída distingue.
+  #
+  # As quatro asserções:
+  #   1. lado apostado CEGO não acende a premissa, mesmo com o adversário desfalcado
+  #      (fixture 10 Home) — o caso assimétrico, e a razão de a guarda existir;
+  #   2. lado apostado cego não EXIME a penalidade: `desfalque_proprio` chega NULL, não
+  #      FALSE (fixture 10 Home). FALSE afirmaria "o time está completo", que é
+  #      exatamente o que não sabemos. O score não muda — a aritmética COALESCEa o NULL
+  #      —, mas a coluna deixa de mentir;
+  #   3. registro de coleta PÓS-APITO não vale como registro (fixture 10): a âncora é a
+  #      mesma do int_futebol_desfalques, e sem ela o poll do dia seguinte "explicaria"
+  #      um jogo que já aconteceu;
+  #   4. zero LEGÍTIMO — perguntamos e não havia titular importante fora — acende como
+  #      sempre acendeu (fixture 11) e não conta como cegueira (fixture 12).
+  #
+  # O contador vale 7 nas linhas cegas e 6 nas demais porque só desfalques e coleta
+  # entram como insumo aqui: as outras seis premissas ficam cegas nas três fixtures, de
+  # propósito, para que a única coisa que se move entre as linhas seja o desfalque.
+  # ============================================================================
+  - name: premissas_1x2_desfalque_cego_nao_acende_nem_exime
+    model: int_futebol_premissas_1x2
+    description: >
+      Sem registro de coleta pré-apito o contador de desfalques é NULL: a premissa do
+      adversário não acende, a penalidade própria deixa de ser eximida por omissão, e o
+      contador de premissas sem dado passa a enxergar a cegueira. Com registro, o zero é
+      real e tudo se comporta como antes.
+    given:
+      - input: ref('fact_fixtures')
+        rows:
+          # 10: NUNCA perguntamos antes do apito. 11 e 12: perguntamos.
+          - {fixture_id: 10, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 100, away_team_id: 200, kickoff_utc: '2026-08-01 20:00:00'}
+          - {fixture_id: 11, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 110, away_team_id: 210, kickoff_utc: '2026-08-01 20:00:00'}
+          - {fixture_id: 12, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 120, away_team_id: 220, kickoff_utc: '2026-08-01 20:00:00'}
+
+      - input: ref('int_futebol_desfalques')
+        rows:
+          # O ADVERSÁRIO do mandante tem titular importante fora nas fixtures 10 e 11. A
+          # diferença entre as duas não está aqui — está no registro de coleta.
+          - {fixture_id: 10, team_id: 200, injury_type: 'Missing Fixture', is_important: true}
+          - {fixture_id: 11, team_id: 210, injury_type: 'Missing Fixture', is_important: true}
+
+      - input: ref('stg_futebol_injuries_coleta')
+        rows:
+          # Fixture 10: perguntamos DEPOIS do apito — não conta (asserção 3).
+          - {fixture_id: 10, snapshot_date: '2026-08-01', coletado_em: '2026-08-01 22:00:00'}
+          - {fixture_id: 11, snapshot_date: '2026-08-01', coletado_em: '2026-08-01 08:00:00'}
+          - {fixture_id: 12, snapshot_date: '2026-08-01', coletado_em: '2026-08-01 08:00:00'}
+
+      # As outras fontes ficam vazias de propósito: o que se mede aqui é só o desfalque.
+      - input: ref('int_futebol_team_form_pit')
+        rows: []
+      - input: ref('fact_fixture_stats')
+        rows: []
+      - input: ref('fact_h2h')
+        rows: []
+
+    expect:
+      rows:
+        # ---- fixture 10: cega dos dois lados (o caso assimétrico) ----------------
+        # Home (S=100 sem lista e sem registro -> NULL; O=200 com 1 titular fora):
+        # a premissa NÃO acende, e a penalidade própria chega NULL em vez de FALSE.
+        - {fixture_id: 10, outcome: 'Home', desfalque_adversario: false, desfalque_proprio: , pts_premissas: 0, penalidades_1x2_pts: 0, premissas_sem_dado: 7}
+        # Away (S=200 tem lista real -> 1): a penalidade própria é REAL e continua valendo
+        # −15; o adversário (100) é que está cego, então a premissa não acende.
+        - {fixture_id: 10, outcome: 'Away', desfalque_adversario: false, desfalque_proprio: true, pts_premissas: 0, penalidades_1x2_pts: 15, premissas_sem_dado: 7}
+        # Draw: sem lado apostado, nenhuma das 7 se aplica. A penalidade de empate segue
+        # inteira — é a linha que prova que o NULL do desfalque não zera as penalidades.
+        - {fixture_id: 10, outcome: 'Draw', desfalque_adversario: false, desfalque_proprio: , pts_premissas: 0, penalidades_1x2_pts: 10, premissas_sem_dado: 0}
+
+        # ---- fixture 11: zero legítimo do lado apostado --------------------------
+        # Perguntamos antes do apito e o mandante não tinha ninguém fora: a premissa
+        # acende (+8) exatamente como acendia antes da #42, e não conta como cegueira.
+        - {fixture_id: 11, outcome: 'Home', desfalque_adversario: true, desfalque_proprio: false, pts_premissas: 8, penalidades_1x2_pts: 0, premissas_sem_dado: 6}
+        - {fixture_id: 11, outcome: 'Away', desfalque_adversario: false, desfalque_proprio: true, pts_premissas: 0, penalidades_1x2_pts: 15, premissas_sem_dado: 6}
+        - {fixture_id: 11, outcome: 'Draw', desfalque_adversario: false, desfalque_proprio: false, pts_premissas: 0, penalidades_1x2_pts: 10, premissas_sem_dado: 0}
+
+        # ---- fixture 12: perguntamos e não havia ninguém fora --------------------
+        # Os dois contadores valem zero de verdade: nada acende, nada penaliza, e o
+        # desfalque NÃO entra no contador de cegueira.
+        - {fixture_id: 12, outcome: 'Home', desfalque_adversario: false, desfalque_proprio: false, pts_premissas: 0, penalidades_1x2_pts: 0, premissas_sem_dado: 6}
+        - {fixture_id: 12, outcome: 'Away', desfalque_adversario: false, desfalque_proprio: false, pts_premissas: 0, penalidades_1x2_pts: 0, premissas_sem_dado: 6}
+        - {fixture_id: 12, outcome: 'Draw', desfalque_adversario: false, desfalque_proprio: false, pts_premissas: 0, penalidades_1x2_pts: 10, premissas_sem_dado: 0}
