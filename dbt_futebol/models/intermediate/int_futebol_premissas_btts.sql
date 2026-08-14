@@ -196,8 +196,14 @@ SELECT
            FORMAT('defesas vazáveis: os dois sofrem gol com frequência (clean sheet %.0f%% e %.0f%%)', home_cs_pct, away_cs_pct), NULL),
         IF(historico_btts,
            FORMAT('%d e %d dos últimos 5 de cada tiveram os dois marcando', home_btts_cnt, away_btts_cnt), NULL),
+        -- historico_seco é um OR: acende com UM lado só. Se o outro não tem histórico, a
+        -- contagem dele chega NULL (#41) e um %d sobre NULL faria o FORMAT inteiro virar NULL
+        -- — o bullet SUMIRIA de uma premissa que acendeu. Aconteceu em 32 linhas, e é por isso
+        -- que o lado sem histórico é escrito por extenso em vez de virar um zero que não medimos.
         IF(historico_seco,
-           FORMAT('%d e %d dos últimos 5 de cada SEM os dois marcando', home_no_btts_cnt, away_no_btts_cnt), NULL)
+           FORMAT('%s e %s dos últimos 5 de cada SEM os dois marcando',
+                  IFNULL(CAST(home_no_btts_cnt AS STRING), 'sem histórico'),
+                  IFNULL(CAST(away_no_btts_cnt AS STRING), 'sem histórico')), NULL)
     ]) AS e WHERE e IS NOT NULL) AS evidencias,
 
     -- avisos: BTTS não tem penalidade específica (só as globais de odds, anexadas no mart).
