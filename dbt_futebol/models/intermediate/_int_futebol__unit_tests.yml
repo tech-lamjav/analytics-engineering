@@ -77,3 +77,58 @@ unit_tests:
         - {fixture_id: 2, outcome: 'Home', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 6}
         - {fixture_id: 2, outcome: 'Away', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 6}
         - {fixture_id: 2, outcome: 'Draw', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 0}
+
+  # ============================================================================
+  # A cegueira ATRAVESSA MODELOS (classe (c)). A Dupla Chance reusa três premissas do
+  # 1X2 e as recebia colapsadas em booleano: um FALSE de lá era indistinguível de "não
+  # pôde ser avaliada lá". A herança pela lista premissas_cegas é o conserto, e é
+  # invisível numa comparação antes/depois — o score é o mesmo nas duas versões. Só
+  # linha construída mostra o mecanismo.
+  # ============================================================================
+  - name: premissas_dc_herda_a_cegueira_do_1x2
+    model: int_futebol_premissas_dc
+    description: >
+      Premissa do 1X2 listada como cega chega NULL na Dupla Chance e é contada lá; a
+      mesma premissa avaliada e FALSE chega FALSE e não é contada. Em nenhum dos dois
+      casos a premissa da DC acende.
+    given:
+      - input: ref('fact_fixtures')
+        rows:
+          - {fixture_id: 1, competition: 'copa_do_brasil', competition_id: 73, season: 2026, home_team_id: 10, away_team_id: 20, kickoff_utc: '2026-08-01 20:00:00', status_short: 'NS', goals_home: , goals_away: }
+          - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 30, away_team_id: 40, kickoff_utc: '2026-08-01 20:00:00', status_short: 'NS', goals_home: , goals_away: }
+
+      # format: sql porque premissas_cegas é ARRAY<STRING>, e o formato de dicionário
+      # entrega todo valor como escalar (o cast de STRING para ARRAY falha).
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          -- fixture 1: as três premissas reusadas estão CEGAS no 1X2.
+          SELECT 1 AS fixture_id, 'Home' AS outcome, FALSE AS forca_mismatch,
+                 FALSE AS superioridade_tabela, FALSE AS h2h_favoravel,
+                 ['forca_mismatch','superioridade_tabela','h2h_favoravel'] AS premissas_cegas
+          UNION ALL SELECT 1, 'Away', FALSE, FALSE, FALSE,
+                 ['forca_mismatch','superioridade_tabela','h2h_favoravel']
+          -- fixture 2: avaliadas de verdade lá, e nenhuma acendeu.
+          UNION ALL SELECT 2, 'Home', FALSE, FALSE, FALSE, CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 2, 'Away', FALSE, FALSE, FALSE, CAST([] AS ARRAY<STRING>)
+
+      - input: ref('int_futebol_team_form_pit')
+        rows:
+          # Insumos próprios da DC presentes e desfavoráveis nos dois jogos: assim o que
+          # sobra de diferença entre eles é SÓ a herança do 1X2.
+          - {fixture_id: 1, team_id: 10, goals_against_avg_total: 2.0, wins_total: 8, draws_total: 2, played_total: 10}
+          - {fixture_id: 1, team_id: 20, goals_against_avg_total: 2.0, wins_total: 8, draws_total: 2, played_total: 10}
+          - {fixture_id: 2, team_id: 30, goals_against_avg_total: 2.0, wins_total: 8, draws_total: 2, played_total: 10}
+          - {fixture_id: 2, team_id: 40, goals_against_avg_total: 2.0, wins_total: 8, draws_total: 2, played_total: 10}
+
+    expect:
+      rows:
+        # fixture 1: lado_coberto_forte e adversario_limitado ficam cegas (as duas herdam do
+        # 1X2); equilibrio_defensivo e invicto_recente também, por não haver histórico
+        # (team_hist vazio: nenhum jogo FINALIZADO nas entradas). Contador 4, score 0.
+        - {fixture_id: 1, outcome: '1X', pts_premissas: 0, lado_coberto_forte: false, adversario_limitado: false, premissas_sem_dado: 4}
+        - {fixture_id: 1, outcome: 'X2', pts_premissas: 0, lado_coberto_forte: false, adversario_limitado: false, premissas_sem_dado: 4}
+        # fixture 2: as duas herdadas foram AVALIADAS no 1X2 e não acenderam -> não contam.
+        # Sobram as duas de histórico. Contador 2, e o score é o mesmo 0 do jogo cego.
+        - {fixture_id: 2, outcome: '1X', pts_premissas: 0, lado_coberto_forte: false, adversario_limitado: false, premissas_sem_dado: 2}
+        - {fixture_id: 2, outcome: 'X2', pts_premissas: 0, lado_coberto_forte: false, adversario_limitado: false, premissas_sem_dado: 2}
