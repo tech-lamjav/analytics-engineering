@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). ⚠️ Task 0 (look-ahead): ambos_marcam/defesa_forte/ataque_trava/ataque_dos_dois/defesas_vazaveis leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats. historico_btts/historico_seco já eram limpos (last5 com kickoff <). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso). ⚠️ MEDIÇÃO (task [F], ADR 0007): o last5 de BTTS aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que aqui é só a saída do filtro de season, porque o last5 já é janela de contagem de 5) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF.'
+    description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). ⚠️ Task 0 (look-ahead): ambos_marcam/defesa_forte/ataque_trava/ataque_dos_dois/defesas_vazaveis leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats. historico_btts/historico_seco já eram limpos (last5 com kickoff <). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso). ⚠️ MEDIÇÃO (task [F], ADR 0007): o last5 de BTTS aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que aqui é só a saída do filtro de season, porque o last5 já é janela de contagem de 5) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, as contagens de last5 viram NULL sem histórico nenhum; a aplicabilidade é o lado (Yes/No).'
 ) }}
 {#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
 
@@ -102,11 +102,15 @@ metrics AS (
         SAFE_DIVIDE(h.failed_to_score_total, h.played_total) * 100 AS home_fts_pct,
         SAFE_DIVIDE(a.failed_to_score_total, a.played_total) * 100 AS away_fts_pct,
 
-        -- histórico BTTS: quantos dos últimos 5 de cada tiveram (ou não) os dois marcando
-        (SELECT COUNT(*) FROM UNNEST(hl.last5_btts) b WHERE b)     AS home_btts_cnt,
-        (SELECT COUNT(*) FROM UNNEST(al.last5_btts) b WHERE b)     AS away_btts_cnt,
-        (SELECT COUNT(*) FROM UNNEST(hl.last5_btts) b WHERE NOT b) AS home_no_btts_cnt,
-        (SELECT COUNT(*) FROM UNNEST(al.last5_btts) b WHERE NOT b) AS away_no_btts_cnt
+        -- histórico BTTS: quantos dos últimos 5 de cada tiveram (ou não) os dois marcando.
+        -- O IF na frente é a classe (b) do mapa (#41): COUNT sobre array VAZIO devolve 0 sem
+        -- nenhum NULL para detectar, e esse zero é indistinguível de "cinco jogos, em nenhum
+        -- deles os dois marcaram". Sem histórico nenhum a contagem é desconhecida. O corte é em
+        -- ZERO jogo, não em cinco: 1 a 4 jogos é medição real de amostra curta.
+        IF(hl.last5_btts IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(hl.last5_btts) b WHERE b))     AS home_btts_cnt,
+        IF(al.last5_btts IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(al.last5_btts) b WHERE b))     AS away_btts_cnt,
+        IF(hl.last5_btts IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(hl.last5_btts) b WHERE NOT b)) AS home_no_btts_cnt,
+        IF(al.last5_btts IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(al.last5_btts) b WHERE NOT b)) AS away_no_btts_cnt
     FROM outcomes o
     LEFT JOIN pit h    ON h.fixture_id = o.fixture_id AND h.team_id = o.home_team_id
     LEFT JOIN pit a    ON a.fixture_id = o.fixture_id AND a.team_id = o.away_team_id
@@ -123,11 +127,11 @@ flags AS (
         (m.outcome = 'Yes') AND COALESCE(m.home_fts_pct < 30 AND m.away_fts_pct < 30, FALSE) AS ambos_marcam,
         (m.outcome = 'Yes') AND COALESCE(m.home_gf >= 1.2 AND m.away_gf >= 1.2, FALSE)        AS ataque_dos_dois,
         (m.outcome = 'Yes') AND COALESCE(m.home_cs_pct < 35 AND m.away_cs_pct < 35, FALSE)    AS defesas_vazaveis,
-        (m.outcome = 'Yes') AND (m.home_btts_cnt >= 3 AND m.away_btts_cnt >= 3)               AS historico_btts,
+        (m.outcome = 'Yes') AND COALESCE(m.home_btts_cnt >= 3 AND m.away_btts_cnt >= 3, FALSE) AS historico_btts,
         -- Não (espelho, Σ28): basta UM lado travar -> "de um dos times" => OR
         (m.outcome = 'No')  AND COALESCE(m.home_cs_pct >= 45 OR m.away_cs_pct >= 45, FALSE)   AS defesa_forte,
         (m.outcome = 'No')  AND COALESCE(m.home_fts_pct >= 35 OR m.away_fts_pct >= 35, FALSE) AS ataque_trava,
-        (m.outcome = 'No')  AND (m.home_no_btts_cnt >= 3 OR m.away_no_btts_cnt >= 3)          AS historico_seco
+        (m.outcome = 'No')  AND COALESCE(m.home_no_btts_cnt >= 3 OR m.away_no_btts_cnt >= 3, FALSE) AS historico_seco
     FROM metrics m
 ),
 
@@ -144,6 +148,17 @@ scored AS (
         ) AS pts_premissas,
         0 AS penalidades_btts_pts
     FROM flags f
+),
+
+-- Cegueira (#41, ADR 0003): premissas que se aplicavam a esta linha, não acenderam, e não
+-- acenderam por FALTA DE INSUMO. Gerada do mapa futebol_insumos_premissa(), nunca escrita à
+-- mão. Aqui a aplicabilidade é o lado: numa linha 'No' as 4 premissas do 'Yes' não estão
+-- cegas, estão fora de jogo.
+cegueira AS (
+    SELECT
+        s.*,
+        {{ futebol_premissas_cegas('int_futebol_premissas_btts') }} AS premissas_cegas
+    FROM scored s
 )
 
 SELECT
@@ -162,6 +177,9 @@ SELECT
     -- agregados
     pts_premissas,
     penalidades_btts_pts,
+    -- cegueira: a lista é o que torna o número auditável.
+    premissas_cegas,
+    ARRAY_LENGTH(premissas_cegas) AS premissas_sem_dado,
 
     -- "por quê": premissas que dispararam, em linguagem de gente, ordenadas por peso.
     -- Só o lado do outcome pode disparar, então os bullets do outro lado nunca aparecem.
@@ -178,12 +196,18 @@ SELECT
            FORMAT('defesas vazáveis: os dois sofrem gol com frequência (clean sheet %.0f%% e %.0f%%)', home_cs_pct, away_cs_pct), NULL),
         IF(historico_btts,
            FORMAT('%d e %d dos últimos 5 de cada tiveram os dois marcando', home_btts_cnt, away_btts_cnt), NULL),
+        -- historico_seco é um OR: acende com UM lado só. Se o outro não tem histórico, a
+        -- contagem dele chega NULL (#41) e um %d sobre NULL faria o FORMAT inteiro virar NULL
+        -- — o bullet SUMIRIA de uma premissa que acendeu. Aconteceu em 32 linhas, e é por isso
+        -- que o lado sem histórico é escrito por extenso em vez de virar um zero que não medimos.
         IF(historico_seco,
-           FORMAT('%d e %d dos últimos 5 de cada SEM os dois marcando', home_no_btts_cnt, away_no_btts_cnt), NULL)
+           FORMAT('%s e %s dos últimos 5 de cada SEM os dois marcando',
+                  IFNULL(CAST(home_no_btts_cnt AS STRING), 'sem histórico'),
+                  IFNULL(CAST(away_no_btts_cnt AS STRING), 'sem histórico')), NULL)
     ]) AS e WHERE e IS NOT NULL) AS evidencias,
 
     -- avisos: BTTS não tem penalidade específica (só as globais de odds, anexadas no mart).
     CAST([] AS ARRAY<STRING>) AS avisos,
 
     CURRENT_TIMESTAMP() AS dbt_loaded_at
-FROM scored
+FROM cegueira

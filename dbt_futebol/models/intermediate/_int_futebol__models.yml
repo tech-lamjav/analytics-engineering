@@ -351,6 +351,23 @@ models:
                 values: ['Home', 'Draw', 'Away']
       - name: pts_premissas
         tests: [not_null]
+      - name: premissas_cegas
+        description: >
+          Nomes das premissas que se aplicavam a esta linha, não acenderam, e não acenderam
+          por FALTA DE INSUMO (#41, ADR 0003) — a lista que torna o contador auditável.
+          Gerada do mapa futebol_insumos_premissa(); ARRAY, então o sync BQ->Postgres a pula,
+          como já pula evidencias/avisos.
+      - name: premissas_sem_dado
+        description: >
+          Tamanho de premissas_cegas. É o contador que o board exibe junto do score: quantas
+          premissas o score NÃO pôde levar em conta. Não entra na conta da nota — dado
+          faltante diagnostica, não elimina (ADR 0003).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -392,6 +409,23 @@ models:
         tests: [not_null]
       - name: pts_premissas
         tests: [not_null]
+      - name: premissas_cegas
+        description: >
+          Nomes das premissas que se aplicavam a esta linha, não acenderam, e não acenderam
+          por FALTA DE INSUMO (#41, ADR 0003) — a lista que torna o contador auditável.
+          Gerada do mapa futebol_insumos_premissa(); ARRAY, então o sync BQ->Postgres a pula,
+          como já pula evidencias/avisos.
+      - name: premissas_sem_dado
+        description: >
+          Tamanho de premissas_cegas. É o contador que o board exibe junto do score: quantas
+          premissas o score NÃO pôde levar em conta. Não entra na conta da nota — dado
+          faltante diagnostica, não elimina (ADR 0003).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -431,6 +465,23 @@ models:
         tests: [not_null]
       - name: pts_premissas
         tests: [not_null]
+      - name: premissas_cegas
+        description: >
+          Nomes das premissas que se aplicavam a esta linha, não acenderam, e não acenderam
+          por FALTA DE INSUMO (#41, ADR 0003) — a lista que torna o contador auditável.
+          Gerada do mapa futebol_insumos_premissa(); ARRAY, então o sync BQ->Postgres a pula,
+          como já pula evidencias/avisos.
+      - name: premissas_sem_dado
+        description: >
+          Tamanho de premissas_cegas. É o contador que o board exibe junto do score: quantas
+          premissas o score NÃO pôde levar em conta. Não entra na conta da nota — dado
+          faltante diagnostica, não elimina (ADR 0003).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -467,6 +518,23 @@ models:
                 values: ['Yes', 'No']
       - name: pts_premissas
         tests: [not_null]
+      - name: premissas_cegas
+        description: >
+          Nomes das premissas que se aplicavam a esta linha, não acenderam, e não acenderam
+          por FALTA DE INSUMO (#41, ADR 0003) — a lista que torna o contador auditável.
+          Gerada do mapa futebol_insumos_premissa(); ARRAY, então o sync BQ->Postgres a pula,
+          como já pula evidencias/avisos.
+      - name: premissas_sem_dado
+        description: >
+          Tamanho de premissas_cegas. É o contador que o board exibe junto do score: quantas
+          premissas o score NÃO pôde levar em conta. Não entra na conta da nota — dado
+          faltante diagnostica, não elimina (ADR 0003).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -505,6 +573,23 @@ models:
                 values: ['1X', 'X2']
       - name: pts_premissas
         tests: [not_null]
+      - name: premissas_cegas
+        description: >
+          Nomes das premissas que se aplicavam a esta linha, não acenderam, e não acenderam
+          por FALTA DE INSUMO (#41, ADR 0003) — a lista que torna o contador auditável.
+          Gerada do mapa futebol_insumos_premissa(); ARRAY, então o sync BQ->Postgres a pula,
+          como já pula evidencias/avisos.
+      - name: premissas_sem_dado
+        description: >
+          Tamanho de premissas_cegas. É o contador que o board exibe junto do score: quantas
+          premissas o score NÃO pôde levar em conta. Não entra na conta da nota — dado
+          faltante diagnostica, não elimina (ADR 0003).
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

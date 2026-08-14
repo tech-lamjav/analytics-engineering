@@ -94,7 +94,16 @@ claim, not a degraded one. See ADR 0003.
 **Premissas sem dado**:
 The count, per rated line, of premissas whose declared input was unavailable. It is
 diagnosis, never penalty: it does not move the score. It is what makes a low score
-readable as *little evidence* instead of *evidence against*.
+readable as *little evidence* instead of *evidence against*. It counts only premissas
+that were **aplicáveis** to that line and did not fire — see below.
+
+**Premissa aplicável**:
+Most premissas are gated by side: only the favorito's fire on a favorito line, only the
+Over's on an Over line, and the 1X2's need a backed team, which the Draw has not got. A
+premissa of the other side is not blind — it is not in play, and counting it would put
+the same number on every line and drown the real blindness in noise. So applicability is
+declared per premissa, next to its inputs, and **premissas sem dado** counts
+*aplicável and blind*.
 
 **Insumo declarado**:
 The inputs a premissa depends on, declared per premissa in one place — the same idiom as

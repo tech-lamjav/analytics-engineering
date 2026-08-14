@@ -55,6 +55,22 @@ models:
           - accepted_values:
               arguments:
                 values: ['Alta', 'Média']
+      - name: premissas_sem_dado
+        description: >
+          Quantas premissas do mercado se aplicavam a esta linha, não acenderam, e não
+          acenderam por FALTA DE INSUMO (#41, ADR 0003). NÃO entra na conta do score: é o que
+          o score não pôde levar em conta, e o aviso correspondente sai em `avisos` sem
+          pontos entre parênteses, porque não desconta nada. Premissa do outro lado da linha
+          (Under numa linha de Over, azarão numa de favorito) não conta — ela não está cega,
+          está fora de jogo. Contador maior = nota mais incompleta, não nota contrária; é por
+          ele que a base de medição pode ser filtrada por completude. ⚠️ Ampliar o horizonte
+          do board o aumenta POR CONSTRUÇÃO: o board mais cedo é o board que sabe menos.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
       - name: edge
         description: "EV/edge = best_odd * prob_justa − 1. Gate garante > 0 nas linhas materializadas. É a MEDIDA DE VALOR/EV — ranqueie por `edge` p/ tamanho de vantagem; `score`/`faixa` são índice de CONFIABILIDADE (não monotônicos no edge)."
     tests:

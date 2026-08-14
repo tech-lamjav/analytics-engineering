@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S1 do Motor de Score — premissas de contexto do mercado RESULTADO (1X2). 3 linhas por fixture (outcome Home/Draw/Away). S = lado apostado, O = adversário. ⚠️ Task 0 (look-ahead): forca_mismatch/mando/superioridade_tabela/forma leem int_futebol_team_form_pit (point-in-time por fixture), NÃO mais fact_team_season_stats + standings_latest — que em 24/25 entregavam a temporada fechada e a tabela final a jogos da rodada 1. Cada premissa é um booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.1 do épico MOTOR_SCORE_CONFIABILIDADE.md). Penalidades específicas: pick_empate (-10), desfalque_proprio (-15). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/injuries). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que troca o filtro de season por um teto de 10 partidas) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. superioridade_tabela NÃO segue o eixo (rank/ppg vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008), e o h2h_favoravel também não, por motivo oposto: o fact_h2h já cruza campeonatos hoje, e restringi-lo seria mudar premissa.'
+    description='S1 do Motor de Score — premissas de contexto do mercado RESULTADO (1X2). 3 linhas por fixture (outcome Home/Draw/Away). S = lado apostado, O = adversário. ⚠️ Task 0 (look-ahead): forca_mismatch/mando/superioridade_tabela/forma leem int_futebol_team_form_pit (point-in-time por fixture), NÃO mais fact_team_season_stats + standings_latest — que em 24/25 entregavam a temporada fechada e a tabela final a jogos da rodada 1. Cada premissa é um booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.1 do épico MOTOR_SCORE_CONFIABILIDADE.md). Penalidades específicas: pick_empate (-10), desfalque_proprio (-15). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/injuries). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que troca o filtro de season por um teto de 10 partidas) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. superioridade_tabela NÃO segue o eixo (rank/ppg vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008), e o h2h_favoravel também não, por motivo oposto: o fact_h2h já cruza campeonatos hoje, e restringi-lo seria mudar premissa. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, n_wins_last5 e h2h_total/s_wins perderam o COALESCE de entrada (a ausência chega NULL), e n_wins_last5 vira NULL sem histórico nenhum. s_missing/o_missing seguem COALESCEados para zero até a #42 — desfalque_adversario é a única das 39 que o contador ainda não enxerga.'
 ) }}
 {#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
 
@@ -57,7 +57,7 @@ pit AS (
         goals_against_avg_home, goals_against_avg_away,
         wins_home, draws_home, played_home,
         wins_away, draws_away, played_away,
-        rank, ppg, n_wins_last5
+        rank, ppg, n_wins_last5, n_games_last5
     FROM {{ ref('int_futebol_team_form_pit') }}
 ),
 
@@ -192,11 +192,22 @@ metrics AS (
         od.ppg    AS o_ppg,
 
         -- forma: vitórias nos 5 jogos ANTERIORES ao kickoff (antes: 'W' no form do último snapshot)
-        COALESCE(s.n_wins_last5, 0) AS n_wins_last5,
+        -- SEM COALESCE (#41): time sem linha de forma tem que chegar NULL, senão o zero
+        -- forjado é indistinguível de "jogou 5 e não venceu nenhuma" e o contador de
+        -- premissas sem dado nasce zerado. A premissa segue FALSE nos dois casos — o
+        -- COALESCE(..., FALSE) da CTE `flags` é quem garante isso.
+        -- O n_games_last5 na frente é a classe (b) do mapa: o n_wins_last5 do team_form_pit já
+        -- é um COUNT sobre UNNEST, e devolve 0 sobre histórico VAZIO sem nenhum NULL para
+        -- detectar. Sem histórico nenhum a forma é desconhecida, não é zero. (O corte é em
+        -- ZERO jogo, não em cinco: 1 a 4 jogos é medição real de amostra curta, e contá-la
+        -- acenderia o contador em toda rodada 2 de toda liga.)
+        IF(s.n_games_last5 > 0, s.n_wins_last5, NULL) AS n_wins_last5,
 
-        -- h2h
-        COALESCE(hh.h2h_total, 0) AS h2h_total,
-        COALESCE(hh.s_wins, 0)    AS s_wins
+        -- h2h — SEM COALESCE pelo mesmo motivo: sem confronto direto registrado o total é
+        -- NULL, não zero. "Nunca se enfrentaram" e "não sabemos se se enfrentaram" eram o
+        -- mesmo 0 antes desta mudança.
+        hh.h2h_total AS h2h_total,
+        hh.s_wins    AS s_wins
     FROM outcomes o
     LEFT JOIN pit s   ON s.fixture_id  = o.fixture_id AND s.team_id  = o.s_team_id
     LEFT JOIN pit od  ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id
@@ -247,6 +258,17 @@ scored AS (
           + 15 * CAST(f.desfalque_proprio AS INT64)
         ) AS penalidades_1x2_pts
     FROM flags f
+),
+
+-- Cegueira (#41, ADR 0003): quais premissas se aplicavam a esta linha, não acenderam, e não
+-- acenderam por FALTA DE INSUMO — separadas das que foram avaliadas e não estavam lá. Gerada
+-- do mapa futebol_insumos_premissa(), nunca escrita à mão. Depois de `scored` porque `mando`
+-- só existe a partir dela.
+cegueira AS (
+    SELECT
+        s.*,
+        {{ futebol_premissas_cegas('int_futebol_premissas_1x2') }} AS premissas_cegas
+    FROM scored s
 )
 
 SELECT
@@ -269,6 +291,10 @@ SELECT
     -- agregados
     pts_premissas,
     penalidades_1x2_pts,
+    -- cegueira: a lista é o que torna o número auditável (e é dela que a Dupla Chance herda a
+    -- cegueira das premissas do 1X2 que ela reusa).
+    premissas_cegas,
+    ARRAY_LENGTH(premissas_cegas) AS premissas_sem_dado,
 
     -- "por quê": premissas que dispararam, em linguagem de gente, ordenadas por peso.
     ARRAY(SELECT e FROM UNNEST([
@@ -299,4 +325,4 @@ SELECT
     ]) AS a WHERE a IS NOT NULL) AS avisos,
 
     CURRENT_TIMESTAMP() AS dbt_loaded_at
-FROM scored
+FROM cegueira
