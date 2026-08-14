@@ -171,9 +171,9 @@ metrics AS (
         -- quando a premissa correspondente está na lista de cegas do 1X2 — ou quando não há
         -- linha de 1X2 nenhuma para o lado S. A premissa segue FALSE nos dois casos, pelo
         -- COALESCE da CTE `flags` logo abaixo.
-        IF(x.fixture_id IS NULL OR 'forca_mismatch'       IN UNNEST(x.premissas_cegas), NULL, x.forca_mismatch)       AS x_forca_mismatch,
-        IF(x.fixture_id IS NULL OR 'superioridade_tabela' IN UNNEST(x.premissas_cegas), NULL, x.superioridade_tabela) AS x_superioridade_tabela,
-        IF(x.fixture_id IS NULL OR 'h2h_favoravel'        IN UNNEST(x.premissas_cegas), NULL, x.h2h_favoravel)        AS x_h2h_favoravel
+        IF(x.fixture_id IS NULL OR {{ futebol_premissa_esta_cega('x', 'int_futebol_premissas_1x2', 'forca_mismatch') }},       NULL, x.forca_mismatch)       AS x_forca_mismatch,
+        IF(x.fixture_id IS NULL OR {{ futebol_premissa_esta_cega('x', 'int_futebol_premissas_1x2', 'superioridade_tabela') }}, NULL, x.superioridade_tabela) AS x_superioridade_tabela,
+        IF(x.fixture_id IS NULL OR {{ futebol_premissa_esta_cega('x', 'int_futebol_premissas_1x2', 'h2h_favoravel') }},        NULL, x.h2h_favoravel)        AS x_h2h_favoravel
     FROM outcomes o
     LEFT JOIN pit s        ON s.fixture_id  = o.fixture_id AND s.team_id  = o.s_team_id
     LEFT JOIN pit od       ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id

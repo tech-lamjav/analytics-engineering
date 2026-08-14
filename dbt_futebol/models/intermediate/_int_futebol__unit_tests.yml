@@ -16,6 +16,10 @@ version: 2
 #      (fixture 2: nenhuma linha de forma/tabela/xG/h2h para os times)
 #   3. premissa que não se aplica à linha não incrementa
 #      (outcome 'Draw': não há lado apostado, então nenhuma das 7 se aplica)
+#   4. insumo pela METADE incrementa (fixture 3): premissa de AND com um insumo
+#      presente e desfavorável e o outro ausente conta como cega. As asserções 1 e 2
+#      colidem exatamente aqui, e a decisão — "meio insumo não é meia premissa",
+#      registrada no gerador — só vira fato asserido nesta linha.
 #
 # A fixture 2 conta 6, e não 7, DE PROPÓSITO: `desfalque_adversario` lê s_missing
 # e o_missing, que seguem COALESCEados para zero até a #42 (que depende do vazio
@@ -36,6 +40,8 @@ unit_tests:
           # fixture 1: tem todos os insumos. fixture 2: não tem nenhum.
           - {fixture_id: 1, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 10, away_team_id: 20, kickoff_utc: '2026-08-01 20:00:00'}
           - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 30, away_team_id: 40, kickoff_utc: '2026-08-01 20:00:00'}
+          # fixture 3: só o mandante tem insumo — o caso do MEIO insumo.
+          - {fixture_id: 3, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 50, away_team_id: 60, kickoff_utc: '2026-08-01 20:00:00'}
 
       - input: ref('int_futebol_team_form_pit')
         rows:
@@ -43,6 +49,8 @@ unit_tests:
           # limiar da premissa: é a diferença entre "não sabemos" e "sabemos que não".
           - {fixture_id: 1, team_id: 10, goals_for_avg_home: 0.5, goals_for_avg_away: 0.4, goals_against_avg_home: 1.0, goals_against_avg_away: 1.2, wins_home: 1, draws_home: 1, played_home: 10, wins_away: 1, draws_away: 1, played_away: 10, rank: 10, ppg: 1.0, n_wins_last5: 0, n_games_last5: 5}
           - {fixture_id: 1, team_id: 20, goals_for_avg_home: 1.0, goals_for_avg_away: 1.0, goals_against_avg_home: 0.6, goals_against_avg_away: 0.5, wins_home: 1, draws_home: 1, played_home: 10, wins_away: 1, draws_away: 1, played_away: 10, rank: 5, ppg: 1.2, n_wins_last5: 1, n_games_last5: 5}
+          # fixture 3: o MANDANTE tem tudo (e desfavorável); o visitante não tem linha nenhuma.
+          - {fixture_id: 3, team_id: 50, goals_for_avg_home: 0.5, goals_for_avg_away: 0.4, goals_against_avg_home: 1.0, goals_against_avg_away: 1.2, wins_home: 1, draws_home: 1, played_home: 10, wins_away: 1, draws_away: 1, played_away: 10, rank: 10, ppg: 1.0, n_wins_last5: 0, n_games_last5: 5}
 
       - input: ref('fact_fixture_stats')
         rows:
@@ -77,6 +85,16 @@ unit_tests:
         - {fixture_id: 2, outcome: 'Home', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 6}
         - {fixture_id: 2, outcome: 'Away', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 6}
         - {fixture_id: 2, outcome: 'Draw', pts_premissas: 0, forma: false, h2h_favoravel: false, premissas_sem_dado: 0}
+
+        # ---- fixture 3: insumo pela metade ---------------------------------------
+        # Home (S=50, o lado que TEM dados): forca_mismatch tem s_gf_venue presente e
+        # desfavorável (0,5) e o_ga_venue ausente -> CEGA, não "avaliada e não acendeu".
+        # Cegas: forca_mismatch, superioridade_xg, superioridade_tabela, h2h_favoravel = 4.
+        # mando e forma NÃO contam: o insumo que importa do lado mandante existe.
+        - {fixture_id: 3, outcome: 'Home', pts_premissas: 0, forma: false, mando: false, premissas_sem_dado: 4}
+        # Away (S=60, o lado sem nada): as mesmas 6 da fixture 2.
+        - {fixture_id: 3, outcome: 'Away', pts_premissas: 0, forma: false, mando: false, premissas_sem_dado: 6}
+        - {fixture_id: 3, outcome: 'Draw', pts_premissas: 0, forma: false, mando: false, premissas_sem_dado: 0}
 
   # ============================================================================
   # A cegueira ATRAVESSA MODELOS (classe (c)). A Dupla Chance reusa três premissas do

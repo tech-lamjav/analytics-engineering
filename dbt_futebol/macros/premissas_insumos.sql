@@ -67,8 +67,9 @@
           horizonte novo que o contador precisa falar); e a Dupla Chance passou a herdar a
           cegueira do 1X2 pela lista premissas_cegas de lá, em vez de herdar só o FALSE.
 
-    A guarda não pega nenhuma das três — ela valida nome, aplicabilidade e não-vazio, não a
-    semântica do insumo. Quem acrescentar premissa tem de olhar as três.
+    Nada disso é pego por guarda de declaração: a assert_premissas_insumo_declarado compara
+    NOMES contra o catálogo, e `aplicavel`/insumo vazio são erro de compilação no gerador —
+    nenhum dos dois olha a SEMÂNTICA do insumo. Quem acrescentar premissa tem de olhar as três.
     Ver docs/adr/0003-dado-faltante-diagnostica-nao-elimina.md. -#}
 {% macro futebol_insumos_premissa() %}
     {%- set ligas_pontos_corridos = 'competition IN ' ~ futebol_ligas_pontos_corridos_sql() %}

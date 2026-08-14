@@ -81,3 +81,26 @@
     {%- endfor %}
     ]) AS premissa WHERE premissa IS NOT NULL)
 {%- endmacro %}
+
+{#- Testa se uma premissa de OUTRO modelo ficou cega, contra a lista premissas_cegas dele.
+
+    Existe para que o nome da premissa não seja um literal solto dentro do modelo que a
+    reusa. A Dupla Chance lê três premissas do 1X2 pelo nome; escritos à mão, um `rename` no
+    1X2 deixaria a guarda do mapa VERDE (lá o nome novo casa com a coluna nova) e mataria a
+    herança de cegueira da DC em silêncio — o modo de falha exato que esta entrega existe
+    para fechar, reaparecendo uma camada acima. Aqui o par (modelo, nome) é conferido contra
+    o mapa em tempo de COMPILAÇÃO. -#}
+{% macro futebol_premissa_esta_cega(alias, modelo, nome) -%}
+    {%- set nomes = [] -%}
+    {%- for p in futebol_insumos_premissa() if p.modelo == modelo and p.tipo == 'premissa' -%}
+        {%- do nomes.append(p.nome) -%}
+    {%- endfor -%}
+    {%- if nome not in nomes -%}
+        {{ exceptions.raise_compiler_error(
+            "futebol_premissa_esta_cega: '" ~ nome ~ "' não é premissa declarada de '" ~ modelo ~
+            "' em futebol_insumos_premissa(). Renomeada ou removida lá? Quem a reusa herdaria "
+            "cegueira de uma premissa que não existe mais — em silêncio, porque a guarda do mapa "
+            "fica verde com o nome novo.") }}
+    {%- endif -%}
+    '{{ nome }}' IN UNNEST({{ alias }}.premissas_cegas)
+{%- endmacro %}
