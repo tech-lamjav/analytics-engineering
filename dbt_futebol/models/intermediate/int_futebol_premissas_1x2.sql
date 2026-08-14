@@ -151,6 +151,14 @@ desf AS (
 -- Mesma âncora do int_futebol_desfalques (coleta ANTES do apito, e não no dia do apito): o
 -- poll roda de hora em hora, então no dia do jogo há coleta dos dois lados do apito, e a de
 -- depois explicaria um jogo que já aconteceu.
+-- ⚠️ QUALQUER registro pré-apito conta, inclusive o das 96h — que é o horizonte do poll,
+-- enquanto a fonte só publica a lista a ~53–70h. Ou seja, um jogo distante pode ter registro
+-- de uma resposta vazia que só significa "ainda não publicaram". Estreitar isto para uma
+-- janela de publicação é a HEURÍSTICA DE JANELA que a ADR 0003 rejeitou explicitamente — é o
+-- mesmo conhecimento fabricado com outro nome, derivado de 28 fixtures observados. O erro que
+-- sobra é conservador e se cura sozinho: nessa faixa os dois lados valem zero, então a
+-- premissa do adversário não acende por falta do adversário desfalcado, e o poll do dia
+-- seguinte substitui o registro assim que a fonte publica.
 coleta AS (
     SELECT DISTINCT c.fixture_id
     FROM {{ ref('stg_futebol_injuries_coleta') }} c
