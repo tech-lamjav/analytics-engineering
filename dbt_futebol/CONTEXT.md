@@ -70,6 +70,35 @@ it exists, it just lost its fair probability.
 _Avoid_: counting every premissa row (they are generated for canonical lines with no
 market at all, and are unbounded)
 
+**Board**:
+The window of what is **still bettable**: the value opportunities of fixtures that have
+not kicked off. It is a live surface, not an archive — a fixture that has been played,
+called off or is in progress has left the window, and the board stops emitting its
+lines.
+_Avoid_: reading the board as a record of what was published
+
+**Expurgo**:
+The act of the board no longer emitting a line that left the window. Nothing is deleted:
+the board is rebuilt whole every run, and the departing line is closed and kept in the
+**histórico no apito**. So expurgo is a boundary of the board, never an exclusion of
+data — and it is deliberately the opposite of what the funil does, which keeps the
+played fixture because that is the only thing that can say what the discarded faixa
+would have returned.
+_Avoid_: reading it as a delete, or applying it to the funil by analogy
+
+**Histórico no apito** (point-in-time):
+What was bettable **at kickoff**: the version of each opportunity that was live when the
+whistle blew, and no other. A line that only came into existence after the match was
+never an opportunity and never becomes history — counting it as a hit or a miss scores a
+bet nobody could have placed. The reading is strict, so its error is always on the
+conservative side: an older photo, never a score born after the ball was rolling.
+_Avoid_: histórico (bare — the score keeps moving for weeks after the match, so "the
+current row of a past fixture" is a different and dishonest thing)
+
+**Registro pós-jogo**:
+The product surface that shows, on a played fixture, what the Motor was saying about it.
+Its content is the **histórico no apito** — the promise the name already makes.
+
 **Evidência**:
 A fired premissa surfaced to the user as a "why" bullet, ordered by weight.
 
