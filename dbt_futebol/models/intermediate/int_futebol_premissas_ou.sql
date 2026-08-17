@@ -100,6 +100,28 @@ fixture_team_spine AS (
         {%- endif %}
         AND st.date_utc       < DATE(sp.kickoff_utc)
 {%- endset %}
+{#- ⚠️ NENHUMA MÉDIA DESTE MODELO USA `AVG()` — todas são `SAFE_DIVIDE(SUM(...), COUNT(...))` (#78).
+
+    A causa está explicada por extenso no int_futebol_premissas_1x2, junto do `superioridade_xg`.
+    Resumo: `AVG()` no BigQuery não é bit-reproduzível entre execuções, porque funde as médias
+    parciais dos shards em ponto flutuante e a ordem da fusão muda. Vale para insumo fracionário
+    E para inteiro — foram as duas medidas.
+
+    Aqui o defeito aparecia em TRÊS premissas, por dois caminhos:
+
+      xg_combinado_alto /    o xG entra num limiar fixo (`line_value ± 0.3`). Acendeu em 11411
+      xg_baixo_combinado     linhas em 11 execuções e 11410 na décima segunda, com 16 linhas Over
+                             e 9 Under a menos de 1e-12 do limiar. Consertadas com SUM/COUNT em
+                             NUMERIC, exatamente como no 1X2 — o limiar também virou NUMERIC, ou o
+                             supertipo da comparação puxaria tudo de volta para FLOAT64.
+
+      ritmo_alto             o pior dos três, e o último a cair: 16684–16702 linhas, ±15 por build.
+                             `total_shots + corner_kicks` são INTEIROS, e a primeira suspeita
+                             (`APPROX_QUANTILES` na mediana da liga, ver o CTE league_pace_median)
+                             explicava só parte — trocada a mediana pela exata, ainda flapava.
+                             Era o `AVG` do próprio `pace_avg`. Fica em FLOAT64 mesmo: aqui não há
+                             literal decimal na comparação (`pace_both >= pace_median`, os dois
+                             calculados), então o que faltava era só a construção determinística. -#}
 {%- if pit_recorte == 'ultimos_10' %}
 -- MEDIÇÃO — recorte de contagem. O filtro de season sai e no lugar dele os pares (jogo-alvo,
 -- time) × partida anterior são ranqueados, sobrevivendo só os N mais recentes — contagem móvel,
@@ -121,7 +143,7 @@ spine_pares AS (
     ) <= {{ tamanho_do_recorte }}
 ),
 xg AS (
-    SELECT fixture_id, team_id, AVG(expected_goals) AS xg_for_avg
+    SELECT fixture_id, team_id, SAFE_DIVIDE(SUM(CAST(expected_goals AS NUMERIC)), COUNT(expected_goals)) AS xg_for_avg
     FROM spine_pares
     GROUP BY fixture_id, team_id
 ),
@@ -129,13 +151,13 @@ xg AS (
 -- Ritmo: finalizações+escanteios por time-jogo -> média do time ATÉ o jogo.
 pace_team AS (
     SELECT fixture_id, team_id, competition_id, season,
-           AVG(total_shots + corner_kicks) AS pace_avg
+           SAFE_DIVIDE(SUM(total_shots + corner_kicks), COUNT(total_shots + corner_kicks)) AS pace_avg
     FROM spine_pares
     GROUP BY fixture_id, team_id, competition_id, season
 ),
 {%- else %}
 xg AS (
-    SELECT sp.fixture_id, sp.team_id, AVG(st.expected_goals) AS xg_for_avg
+    SELECT sp.fixture_id, sp.team_id, SAFE_DIVIDE(SUM(CAST(st.expected_goals AS NUMERIC)), COUNT(st.expected_goals)) AS xg_for_avg
 {{- spine_from }}
     GROUP BY sp.fixture_id, sp.team_id
 ),
@@ -143,7 +165,7 @@ xg AS (
 -- Ritmo: finalizações+escanteios por time-jogo -> média do time ATÉ o jogo.
 pace_team AS (
     SELECT sp.fixture_id, sp.team_id, sp.competition_id, sp.season,
-           AVG(st.total_shots + st.corner_kicks) AS pace_avg
+           SAFE_DIVIDE(SUM(st.total_shots + st.corner_kicks), COUNT(st.total_shots + st.corner_kicks)) AS pace_avg
 {{- spine_from }}
     GROUP BY sp.fixture_id, sp.team_id, sp.competition_id, sp.season
 ),
@@ -172,15 +194,28 @@ pace_team AS (
             {%- endif %}
             AND st.date_utc       < DATE(sp.kickoff_utc)
 {%- endset %}
+-- ⚠️ A MEDIANA É `taskf_mediana`, E NÃO `APPROX_QUANTILES` (#78). Achado ao fechar a correção de
+-- reprodutibilidade do xG: `ritmo_alto` acendeu em 16687/16690/16696/16699/16702 linhas em oito
+-- execuções do MESMO SQL sobre o MESMO insumo — oscilação de ±15 linhas, ~5× a do xG, e por
+-- MECANISMO DIFERENTE. Não é ponto flutuante: `APPROX_QUANTILES` é um SKETCH, e o resultado
+-- depende de como a execução foi paralelizada. Este repositório já tinha medido isso na #57 (a
+-- mediana de ppg do Brasileirão saiu 1,313 e depois 1,294 em execuções seguidas) e já tinha
+-- escrito a cura — `macros/taskf_mediana.sql`, mediana exata por ordenação. O que faltava era
+-- aplicá-la aqui: a cura ficou nas análises da task [F] e a produção seguiu com o sketch.
+-- O `pace_avg` que entra aqui é determinístico (soma de INTEIROS em FLOAT64 é exata em qualquer
+-- ordem); a instabilidade era toda da mediana. Custo da troca: ordena o pool por fixture em vez
+-- de esboçá-lo, irrelevante no tamanho deste pool. Contrapartida declarada: para contagem par a
+-- mediana passa a ser a INFERIOR dos dois centrais, e o valor é arredondado (o macro arredonda em
+-- 3 casas por padrão) — as duas coisas declaradas, não descobertas.
 league_pace_median AS (
     SELECT fixture_id,
-           APPROX_QUANTILES(pace_avg, 2)[OFFSET(1)] AS pace_median
+           {{ taskf_mediana('pace_avg') }} AS pace_median
     FROM (
     {%- if pit_recorte == 'ultimos_10' %}
         -- MEDIÇÃO — o corte desce um nível: o histórico de CADA time do pool é recortado nas N
         -- partidas mais recentes antes de virar média, exatamente como o do time avaliado no
         -- `spine_pares`. Os dois lados da comparação medidos igual é o que a mediana exige.
-        SELECT fixture_id, team_id, AVG(total_shots + corner_kicks) AS pace_avg
+        SELECT fixture_id, team_id, SAFE_DIVIDE(SUM(total_shots + corner_kicks), COUNT(total_shots + corner_kicks)) AS pace_avg
         FROM (
             SELECT sp.fixture_id, lt.team_id, st.total_shots, st.corner_kicks
     {{- pool_from }}
@@ -192,7 +227,7 @@ league_pace_median AS (
         GROUP BY fixture_id, team_id
     {%- else %}
         SELECT sp.fixture_id, lt.team_id,
-               AVG(st.total_shots + st.corner_kicks) AS pace_avg
+               SAFE_DIVIDE(SUM(st.total_shots + st.corner_kicks), COUNT(st.total_shots + st.corner_kicks)) AS pace_avg
     {{- pool_from }}
         GROUP BY sp.fixture_id, lt.team_id
     {%- endif %}
@@ -248,8 +283,18 @@ last5 AS (
 line_move AS (
     SELECT
         fixture_id, line_value, outcome_side AS outcome,
-        AVG(IF(collection_window = 't24h', 1.0 / odd_decimal, NULL)) AS prob_t24h,
-        AVG(IF(collection_window = 't15m', 1.0 / odd_decimal, NULL)) AS prob_t15m
+        -- Mesma regra do resto do modelo (#78): sem `AVG`, e a soma em NUMERIC. Aqui a soma
+        -- PRECISA ser em ponto fixo — `1.0 / odd_decimal` é fracionário, então somá-lo em FLOAT64
+        -- voltaria a depender da ordem mesmo com SUM/COUNT no lugar de AVG (é por isso que o
+        -- `pace_avg` pôde ficar em FLOAT64 e este não: lá a soma é de INTEIROS, e essa é exata).
+        -- O CAST arredonda cada probabilidade implícita em 9 casas, folga de sobra p/ um número
+        -- que vive perto de 0,5 e é comparado contra outro igual.
+        SAFE_DIVIDE(
+            SUM(  IF(collection_window = 't24h', CAST(1.0 / odd_decimal AS NUMERIC), NULL)),
+            COUNT(IF(collection_window = 't24h', odd_decimal, NULL))) AS prob_t24h,
+        SAFE_DIVIDE(
+            SUM(  IF(collection_window = 't15m', CAST(1.0 / odd_decimal AS NUMERIC), NULL)),
+            COUNT(IF(collection_window = 't15m', odd_decimal, NULL))) AS prob_t15m
     FROM {{ ref('fact_odds_snapshot') }}
     WHERE market_id = 5 AND outcome_side IN ('Over', 'Under') AND odd_decimal > 0
     GROUP BY fixture_id, line_value, outcome_side
@@ -318,7 +363,7 @@ flags AS (
         -- Over (Σ56)
         (m.outcome = 'Over') AND COALESCE(m.gf_comb  >= m.line_value + 0.5, FALSE) AS ataque_combinado,
         (m.outcome = 'Over') AND COALESCE(m.ga_comb  >= m.line_value,       FALSE) AS defesas_vazaveis,
-        (m.outcome = 'Over') AND COALESCE(m.xg_comb  >= m.line_value + 0.3, FALSE) AS xg_combinado_alto,
+        (m.outcome = 'Over') AND COALESCE(m.xg_comb  >= CAST(m.line_value AS NUMERIC) + NUMERIC '0.3', FALSE) AS xg_combinado_alto,
         (m.outcome = 'Over') AND COALESCE(m.pace_both >= m.pace_median,     FALSE) AS ritmo_alto,
         (m.outcome = 'Over') AND COALESCE(m.home_cs_pct < 35 AND m.away_cs_pct < 35, FALSE) AS ambos_vazam,
         (m.outcome = 'Over') AND COALESCE(m.home_over_cnt >= 3 AND m.away_over_cnt >= 3, FALSE) AS historico_over,
@@ -326,7 +371,7 @@ flags AS (
         -- Under (Σ52)
         (m.outcome = 'Under') AND COALESCE(m.ga_comb <= m.line_value - 0.3, FALSE) AS defesas_firmes,
         (m.outcome = 'Under') AND COALESCE(m.home_cs_pct >= 40 AND m.away_cs_pct >= 40, FALSE) AS clean_sheets_altos,
-        (m.outcome = 'Under') AND COALESCE(m.xg_comb <= m.line_value - 0.3, FALSE) AS xg_baixo_combinado,
+        (m.outcome = 'Under') AND COALESCE(m.xg_comb <= CAST(m.line_value AS NUMERIC) - NUMERIC '0.3', FALSE) AS xg_baixo_combinado,
         (m.outcome = 'Under') AND COALESCE(m.home_fts_pct >= 35 OR m.away_fts_pct >= 35, FALSE) AS ataques_fracos,
         (m.outcome = 'Under') AND COALESCE(m.home_under_cnt >= 3 AND m.away_under_cnt >= 3, FALSE) AS historico_under,
         (m.outcome = 'Under') AND COALESCE(m.linha_caiu, FALSE)                    AS linha_descendo,
