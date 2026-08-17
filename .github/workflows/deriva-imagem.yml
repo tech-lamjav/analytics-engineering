@@ -14,11 +14,39 @@
 # POR QUE DE HORA EM HORA, e não uma vez por dia:
 # o job `dbt-futebol` roda ~96×/dia (workflow-futebol-odds é */15 e chama o job três vezes
 # por ciclo). Imagem velha não causa um dano diário, causa dano contínuo. Cadência horária
-# limita a ~4 execuções ruins. Não gera spam: o GitHub notifica na primeira falha de um
-# workflow agendado e na recuperação, não a cada execução. Repo público = Actions ilimitado.
+# limita a ~4 execuções ruins. Repo público = Actions ilimitado.
+#
+# POR QUE UM JOB POR ALVO (matrix), e não um job que checa os dois:
+# entre 12/08 e 17/08/2026 este workflow ficou vermelho em 104 execuções seguidas. A causa
+# era o `dbt_nba`: o commit 80d9c61 acrescentou 14 linhas ao `profiles.yml`, que é path
+# COMPARTILHADA no carimbo dos dois projetos, então o hash do NBA mudou sem uma única linha
+# de código NBA ter mudado — e ninguém rebuildou, porque a NBA está dormente (último
+# `dbt-nba` executado em 25/05). O `dbt_futebol` estava verde o tempo todo.
+# O problema não era o falso alarme; era que, com os dois alvos num job só, uma deriva NOVA
+# no futebol não teria produzido MUDANÇA de estado — já estava vermelho. Um alvo dormente
+# permanentemente vermelho anestesia o alvo que importa. Um job por alvo separa os estados.
+#
+# ⚠️ `fail-fast: false` é LOAD-BEARING. Com o default (`true`), a falha de um alvo cancela o
+# outro no meio da execução — o que reintroduz exatamente o mascaramento que a matrix existe
+# para eliminar, e de forma pior, porque o alvo cancelado nem aparece como checado.
+#
+# ⚠️ LIMITE CONHECIDO: o GitHub notifica por EXECUÇÃO do workflow, não por job. A matrix
+# separa o diagnóstico (você vê QUAL alvo derivou, e o histórico de cada um é independente na
+# aba Actions), mas a execução inteira continua contando como falha se qualquer alvo falhar.
+# Enquanto um alvo estiver vermelho de forma permanente, uma deriva nova no outro continua
+# não gerando notificação nova. A correção completa disso é um workflow POR alvo (arquivos
+# separados), não uma matrix. Decisão consciente: a matrix resolve o diagnóstico agora; a
+# separação em arquivos fica para quando um alvo voltar a ficar vermelho por muitos dias.
+#
+# ⚠️ NÃO é verdade que o GitHub notifica só na primeira falha e na recuperação — este
+# arquivo afirmava isso e foi FALSIFICADO em 17/08/2026: as 104 falhas consecutivas geraram
+# "cem e poucos" e-mails, um por execução. Cadência horária com alvo vermelho = ~24 e-mails
+# por dia. Some-se a isso que a notificação de workflow agendado vai APENAS para quem criou
+# o workflow (ou alterou a linha do `cron:` por último) — o time não recebe nada.
 #
 # ⚠️ Em repositório público, workflow agendado é desativado após 60 dias sem atividade no
-# repo. Se este detector parar de rodar sem explicação, é a primeira coisa a conferir.
+# repo. Só COMMIT reseta o contador — issue, release, tag e merge de PR não contam. Se este
+# detector parar de rodar sem explicação, é a primeira coisa a conferir.
 
 name: Deriva de imagem dbt
 
@@ -30,10 +58,21 @@ on:
 
 jobs:
   checa-deriva:
+    # Aparece na aba Actions como "deriva dbt_futebol" e "deriva dbt_nba", com estado
+    # verde/vermelho próprio para cada um.
+    name: deriva ${{ matrix.alvo }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write
+
+    strategy:
+      # Ver o bloco LOAD-BEARING no cabeçalho antes de mexer nisto.
+      fail-fast: false
+      matrix:
+        # Acrescentar um alvo aqui exige que `scripts/procedencia.sh` conheça as paths dele
+        # — é a mesma porta de entrada da tabela ALVOS do checa_deriva.sh.
+        alvo: [dbt_futebol, dbt_nba]
 
     steps:
       - name: Checkout
@@ -53,4 +92,6 @@ jobs:
           project_id: smartbetting-dados
 
       - name: Checar deriva
-        run: ./scripts/checa_deriva.sh
+        # O script já aceita alvo por argumento; sem argumento ele checa a tabela inteira,
+        # que é justamente o que esta matrix substitui.
+        run: ./scripts/checa_deriva.sh ${{ matrix.alvo }}
