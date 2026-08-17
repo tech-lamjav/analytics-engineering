@@ -304,6 +304,28 @@ A fixture whose teams have played too few matches for a season aggregate to mean
 anything — structural in knockout competitions, and an established cause of fabricated
 signal.
 
+**Prova de identidade de mart**:
+The evidence that a change moved no rows. It is the **count per premissa**, never
+`SUM(pts_premissas)` — an aggregate sum hides offsetting moves, and #42 had to retract
+evidence stated that way. Since #78 the rule carries a second half: a count from **one
+build** proves identity only for premissas whose inputs are reproducible. Where they are
+not, the count is a sample and not a measurement, and the comparison has to compute both
+sides in the same query.
+
+**Média reproduzível**:
+`SAFE_DIVIDE(SUM(x), COUNT(x))` with an exact sum — integer, or fixed point via NUMERIC
+when the input is fractional. **Never `AVG(x)`**: BigQuery parallelises the aggregation
+and merges the shards' *partial averages* in floating point, so the last bit follows the
+merge order and changes between runs. This is not a property of fractional data — over
+15,556 integers `AVG` returned five distinct values in six runs while
+`SAFE_DIVIDE(SUM, COUNT)` returned one. `APPROX_QUANTILES` is unreproducible for the
+sibling reason (it is a sketch); the exact form is `taskf_mediana`. A premissa comparing
+such a mean against a threshold changes its own row count between builds of identical
+code over frozen input — measured at ±1 row for `superioridade_xg`, ±15 for `ritmo_alto`,
+and as 71 outright false positives for `linha_subindo`/`linha_descendo`, which were
+reading tied windows as movement. Guarded by `assert_premissas_sem_agregado_instavel`.
+_Avoid_: "a média" unqualified, when the question is whether two builds can be compared
+
 **Escopo do PIT**:
 Which competitions a PIT aggregate counts. Today it is *da competição*: only fixtures of the
 same competition as the one being rated. It is **not one join** — `int_futebol_team_form_pit`

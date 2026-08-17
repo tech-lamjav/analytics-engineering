@@ -71,6 +71,32 @@
 -- se cair, é empate. `analyses/taskf_remedicao.sql` faz essa comparação entre duas medições e é
 -- onde o caso se confirma.
 --
+-- ⚠️ CORREÇÃO DE DUAS COISAS DITAS ACIMA, MEDIDAS NA #78 — leia antes de usar este parágrafo.
+--
+--   1. "a ordem depende do layout físico da tabela, que muda quando os modelos são reconstruídos"
+--      é MAIS BENIGNO do que a realidade. A ordem muda entre EXECUÇÕES, sobre a MESMA tabela, sem
+--      reconstrução nenhuma: o `AVG` funde as médias PARCIAIS dos shards em ponto flutuante e o
+--      particionamento varia sozinho. Seis execuções da mesma SQL sobre insumo congelado deram
+--      quatro valores distintos de `superioridade_xg`. Não é preciso reconstruir nada para a
+--      guarda virar.
+--   2. A régua acima diz que as 37 premissas fora de `linha_subindo`/`linha_descendo` leem
+--      "insumos determinísticos sobre um universo congelado". Isso era FALSO para quatro delas —
+--      `superioridade_xg`, `xg_combinado_alto`, `xg_baixo_combinado` e `ritmo_alto` —, e uma das
+--      16 linhas de borda do 1X2 cai dentro da janela publicada da [0.1]. A guarda tinha uma linha
+--      capaz de virar sozinha a cada remedição.
+--
+-- A #78 tornou a afirmação VERDADEIRA na produção (nenhum modelo de premissa usa mais `AVG` nem
+-- `APPROX_QUANTILES` — ver tests/assert_premissas_sem_agregado_instavel.sql). A contrapartida é
+-- que os números de `macros/taskf_publicado_01.sql` foram medidos sob a regra antiga:
+--
+--   ⚠️ NA PRÓXIMA RECONSTRUÇÃO DAS CÉLULAS DA [F] ESTA GUARDA FICA VERMELHA DE PROPÓSITO,
+--      em `superioridade_xg`, `xg_combinado_alto`, `xg_baixo_combinado` e `ritmo_alto`.
+--
+-- Não é bug e não é o empate de arredondamento descrito acima: é a correção chegando à medição.
+-- O rebaseline dos quatro exige remedir as células (um `dbt run --target taskF`) e ficou FORA da
+-- #78 por isso — está no ticket de follow-up. Enquanto ele não roda, a guarda segue verde, porque
+-- as células materializadas hoje são as da regra antiga.
+--
 -- ────────────────────────────────────────────────────────────────────────────────
 -- O QUE É COMPARÁVEL. O doc da [0.1] publica três recortes diferentes (ver
 -- macros/taskf_publicado_01.sql), então nem toda linha tem todo campo — NULL ali significa NÃO

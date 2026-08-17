@@ -71,6 +71,36 @@ fixture_team_spine AS (
 -- DATE(kickoff)) — time-bounded igual ao h2h/last5, sem look-ahead em fixtures já jogadas. P/ jogos
 -- FUTUROS == média da season (todos os jogos com stats são anteriores). Brasileirão preenchido;
 -- Copa ~vazio -> NULL -> premissa de xG não dispara.
+-- ⚠️ NÃO USE `AVG()` AQUI — É `SAFE_DIVIDE(SUM(...), COUNT(...))`, E EM NUMERIC (#78).
+--
+-- `AVG()` no BigQuery NÃO é bit-reproduzível entre execuções. A agregação é paralelizada e as
+-- médias PARCIAIS de cada shard são fundidas em ponto flutuante; a ordem da fusão muda de
+-- execução para execução e leva o último bit junto. Medido com o insumo CONGELADO, sem join
+-- nenhum, 9 linhas: `AVG` devolveu 1.4766666666666667 em três execuções e 1.4766666666666665 em
+-- outras três, enquanto a mesma média em BIGNUMERIC saiu byte-idêntica nas seis.
+--
+-- ⚠️ E ISSO NÃO É PRIVILÉGIO DE COLUNA FRACIONÁRIA — foi a primeira explicação e ela é FALSA.
+-- Sobre 15.556 linhas de `total_shots + corner_kicks`, que são INTEIROS, `AVG` deu cinco valores
+-- distintos em seis execuções (17.530213422473619 a …661) enquanto
+-- `SAFE_DIVIDE(SUM(...), COUNT(...))` sobre os MESMOS inteiros saiu idêntico nas seis. O
+-- discriminante é a CONSTRUÇÃO, não o tipo: `SUM` é exato (inteiro, ou ponto fixo em NUMERIC) e
+-- independe da ordem, e depois há UMA divisão só. É, aliás, por isso que as outras oito premissas
+-- do 1X2 ficam cravadas build após build — o `int_futebol_team_form_pit` já as calcula com
+-- `SAFE_DIVIDE(SUM(...), COUNTIF(...))`. Elas não são estáveis por serem de inteiro; são estáveis
+-- por não passarem por `AVG`.
+--
+-- Sozinho o ruído seria inofensivo. O estrago vem do limiar fixo da premissa logo abaixo, contra
+-- o qual 16 linhas estão a UM ULP: o delta delas vale 0,30 em decimal, e o `0.3` binário é
+-- 0,29999999999999998889…, de modo que nenhuma margem real separa os dois lados. Elas trocavam de
+-- lado sozinhas a cada build — `superioridade_xg` acendeu em 4019/4020/4021/4022 linhas em seis
+-- execuções do MESMO SQL sobre o MESMO insumo.
+--
+-- O NUMERIC resolve a segunda metade: é ponto FIXO, então `1,4 − 1,1 >= 0,3` é TRUE, que é o que
+-- a premissa quis dizer. As alternativas medidas e recusadas: `ROUND(delta, 2) >= 0.3` NÃO
+-- corrige (só muda a borda de faca de 0,300 para 0,295, região mais densa, e segue flapando em
+-- 4061/4062/4063); tolerância (`>= 0.3 - 1e-9`) chega ao mesmo número mas exige épsilon com o
+-- sinal certo em cada call-site, para sempre. `expected_goals` tem 2 casas na fonte, e NUMERIC
+-- (escala 9) as representa exatamente.
 {#- O FROM/JOIN existe UMA vez e é renderizado nas duas formas do CTE `xg` (média direta no
     default, pares ranqueados sob recorte de contagem). É aqui que os DOIS eixos entram, e é por
     isso que ele não pode ser escrito duas vezes: duas cópias de um predicado de eixo não ficam
@@ -112,8 +142,8 @@ xg_pares AS (
 xg AS (
     SELECT
         fixture_id, team_id,
-        AVG(xg_for)     AS xg_for_avg,
-        AVG(xg_against) AS xg_against_avg
+        SAFE_DIVIDE(SUM(CAST(xg_for     AS NUMERIC)), COUNT(xg_for))     AS xg_for_avg,
+        SAFE_DIVIDE(SUM(CAST(xg_against AS NUMERIC)), COUNT(xg_against)) AS xg_against_avg
     FROM xg_pares
     GROUP BY fixture_id, team_id
 ),
@@ -121,8 +151,8 @@ xg AS (
 xg AS (
     SELECT
         sp.fixture_id, sp.team_id,
-        AVG(st.expected_goals)  AS xg_for_avg,
-        AVG(opp.expected_goals) AS xg_against_avg
+        SAFE_DIVIDE(SUM(CAST(st.expected_goals  AS NUMERIC)), COUNT(st.expected_goals))  AS xg_for_avg,
+        SAFE_DIVIDE(SUM(CAST(opp.expected_goals AS NUMERIC)), COUNT(opp.expected_goals)) AS xg_against_avg
 {{- xg_from }}
     GROUP BY sp.fixture_id, sp.team_id
 ),
@@ -256,7 +286,10 @@ flags AS (
     SELECT
         m.*,
         COALESCE(m.s_gf_venue >= 1.4 AND m.o_ga_venue >= 1.3, FALSE)        AS forca_mismatch,
-        COALESCE(m.s_xg_for - m.o_xg_against >= 0.3, FALSE)                 AS superioridade_xg,
+        -- O limiar é NUMERIC casado com a média NUMERIC (#78): se um dos lados fosse FLOAT64, o
+        -- supertipo da comparação viraria FLOAT64 e o NUMERIC da CTE seria convertido de volta,
+        -- reintroduzindo exatamente o ruído que ele existe para tirar.
+        COALESCE(m.s_xg_for - m.o_xg_against >= NUMERIC '0.3', FALSE)       AS superioridade_xg,
         CASE
             WHEN m.s_is_home       AND m.pct_pts_home >= 55 THEN 8
             WHEN m.s_is_home = FALSE AND m.aprov_fora  >= 45 THEN 4
