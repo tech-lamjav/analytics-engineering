@@ -30,6 +30,10 @@ aplicação não os consulta" (falso, ver abaixo) e a **C5** não a mencionou.
 `fact_value_opportunities_hist` não são lidas por nenhuma** — mudança de grão nelas não alcança o
 app (o `hist` é consumido só por análise).
 
+⚠️ **A segunda metade dessa frase morre com a ADR 0009.** Quando o board passar a expurgar jogo
+encerrado, o passado do app passa a ser servido pelo `hist`, em leitura point-in-time no apito —
+e ele deixa de ser tabela de análise para virar fonte de duas telas.
+
 | Tabela sincronizada | RPCs que leem | Suposição de grão | Estado |
 |---|---|---|---|
 | `fact_fixtures` | 9 (incl. `_futebol_team_form`) | 1 linha por `fixture_id` | ✅ |
@@ -41,7 +45,8 @@ app (o `hist` é consumido só por análise).
 | `fact_injuries_snapshot` | 1 | `distinct on (player_id)` + `order by snapshot_date desc` | ✅ desempate correto e semântico |
 | 5 × `int_futebol_premissas_*` | 2 cada | join por (fixture, outcome[, line]) | ✅ hoje; ⚠️ #41 pode adicionar coluna |
 | `fact_h2h`, `fact_predictions_api`, `fact_standings_snapshot`, `fact_team_season_stats`, `fact_fixture_stats`, `fact_fixture_events`, `fact_fixture_player_stats` | 1–2 cada | leitura direta, sem suposição de unicidade além da chave natural | ✅ |
-| `dim_leagues`, `fact_value_opportunities_hist` | **nenhuma** | — | ✅ fora do alcance do app |
+| `fact_value_opportunities_hist` | **nenhuma hoje**; passa a ter 1 (`get_futebol_value_history`) | leitura **point-in-time no apito**: 1 linha por `opportunity_key`, a versão viva quando o jogo começou | ⚠️ o grão dele vira **contrato de serving** com o expurgo do board (ADR 0009) |
+| `dim_leagues` | **nenhuma** | — | ✅ fora do alcance do app |
 
 ## ⛔ Defeito vivo: o desempate de janela das RPCs de odds não conhece a `daily`
 
@@ -88,3 +93,4 @@ Antes de mudar **grão** ou **colunas** de qualquer tabela da allowlist:
 | **#41** (C3b) | Contador de premissas sem dado | Coluna nova → migration antes do deploy |
 | **A1** | Remove `pts_valor`/`pts_corroboracao`/`penalidades` do mart | Colunas removidas **e** declaradas no `RETURNS TABLE` das duas RPCs → `DROP FUNCTION` + recriar |
 | **A7** | Tabela nova de funil | Livre — fora da allowlist |
+| **Expurgo do board** (ADR 0009) | Mart para de emitir linha de jogo encerrado; passado vem do `hist` | **Nenhuma coluna muda** — o filtro é por join com `fact_fixtures`, de propósito. O risco aqui é o outro: o parity passa, as RPCs devolvem 200 e o Histórico esvazia em silêncio. Por isso a RPC nova (`get_futebol_value_history`) e o front vão **antes** do expurgo, e `get_futebol_value_board` **não é alterada**. `get_futebol_fixture_value` muda só o corpo (assinatura idêntica → `CREATE OR REPLACE`) |
