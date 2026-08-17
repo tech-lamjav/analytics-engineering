@@ -66,8 +66,11 @@ então a tela diz de que momento é a foto em vez de fingir que é sempre o fech
 tolerância de N minutos recuperaria algumas linhas e abriria, pela mesma fresta, a porta que
 esta decisão inteira existe para fechar.
 
-O preço é visível e precisa ser dito antes de mexer: **o Histórico encolhe para 31 fixtures e
-45 linhas** em todo o período. As 128 chaves de jogo anterior à estreia do snapshot (27/07) não
+O preço é visível e precisa ser dito antes de mexer: **o Histórico encolhe muito**. Medido em
+17/08 sobre **todo** o `hist`, sobram **31 fixtures e 45 linhas** — e esse número é uma foto,
+não o aceite: o aceite mede o que a RPC devolve na **janela de 30 dias do dia da entrega**, que
+é outro conjunto. Reaproveitar o 45 seria repetir, dentro da correção, o vício que ela existe
+para matar. As 128 chaves de jogo anterior à estreia do snapshot (27/07) não
 têm PIT e não voltam. Carimbar o board de hoje como se fosse histórico foi considerado e
 **rejeitado** — seria gravar como registro justamente as 37 linhas que nasceram depois do jogo,
 transformando o defeito em fonte.
@@ -136,7 +139,7 @@ declarado de **zero versão nova pós-apito**.
 existiu. Retenção declarada só quando houver número — a mesma regra que a ADR 0006 aplicou ao
 funil.
 
-**Não cria histórico onde não houve.** O produto vai mostrar menos: 31 fixtures. É a primeira
+**Não cria histórico onde não houve.** O produto vai mostrar bem menos. É a primeira
 vez que ele mostra a verdade.
 
 ## A armadilha de validação
