@@ -1,0 +1,99 @@
+version: 2
+
+# ==============================================================================
+# Unit test da JANELA DE DETECÇÃO (#40, ADR 0004).
+#
+# Por que unit test e não data test: as três situações que a coluna existe para
+# distinguir — detectada cedo e ainda viva, detectada cedo e já morta, nascida na
+# janela corrente — são indistinguíveis numa contagem sobre produção. Um board em
+# que toda `janela_deteccao` é igual a `janela_usada` é compatível tanto com "a
+# coluna está certa e nenhuma oportunidade sobreviveu duas janelas" quanto com "a
+# coluna está copiando janela_usada". Só linha construída separa as duas.
+#
+# Cada fixture isola um caso e muda UMA COISA SÓ em relação ao caso base:
+#
+#   1  passou em t24h e segue passando em t15m -> publica com deteccao=t24h
+#   2  passou em t24h e NÃO passa em t15m (o edge virou negativo) -> fora do board
+#   3  falhou em t24h (poucas casas) e só passou em t15m -> deteccao=t15m
+#   4  passou em t24h e a t15m veio com o conjunto da Pinnacle INCOMPLETO
+#      (pin_n_outcomes=2) -> fora do board
+#
+# A fixture 4 é a que não é óbvia, e é a razão de `janela_e_corrente` ser carimbado
+# no macro sobre o de-vig CRU em vez de calculado dentro do mart. A t15m dela é
+# descartada pelo filtro de completude do ramo 1X2; se o "qual é a janela corrente"
+# fosse tirado DEPOIS desse filtro, a t24h passaria a ser a corrente e a linha
+# continuaria no board exibindo o preço de ontem. Com o flag vindo de cima, ela
+# simplesmente não tem janela corrente publicável — que é o que a ADR 0004 decidiu.
+#
+# As linhas do de-vig são deliberadamente idênticas fora do que cada caso move:
+# pts_valor 30 + pts_premissas 15 = score 45 (faixa Média), a folga mínima confortável
+# sobre o gate de 40. Se alguém mexer nesses pesos e o teste ficar vermelho por score,
+# é o número daqui que se ajusta — não é o caso de teste que está errado.
+# ==============================================================================
+unit_tests:
+  - name: value_opportunities_janela_deteccao_e_a_mais_cedo_que_passou
+    model: fact_value_opportunities
+    description: >
+      A janela de detecção é a janela mais cedo em que a linha passou no gate, e nunca
+      é posterior à janela avaliada. Linha que passou cedo e não passa na janela
+      corrente — por preço ou por conjunto incompleto — não aparece no board.
+    given:
+      # format: sql porque evidencias/avisos são ARRAY<STRING>, e o formato de
+      # dicionário entrega todo valor como escalar (o cast de STRING p/ ARRAY falha).
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT 1 AS fixture_id, 'Home' AS outcome, 'brasileirao' AS competition,
+                 2026 AS season, 15 AS pts_premissas, 0 AS premissas_sem_dado,
+                 0 AS penalidades_1x2_pts,
+                 CAST([] AS ARRAY<STRING>) AS evidencias,
+                 CAST([] AS ARRAY<STRING>) AS avisos
+          UNION ALL SELECT 2, 'Home', 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 3, 'Home', 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 4, 'Home', 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+
+      - input: ref('int_futebol_odds_devig')
+        rows:
+          # -- fixture 1: passou nas duas. A t15m é a corrente; a t24h é a detecção. ---
+          - {fixture_id: 1, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 1, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.08, pts_valor: 30, best_odd: 2.15, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- fixture 2: o mercado corrigiu até o fechamento — edge virou negativo. ---
+          - {fixture_id: 2, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 2, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.05, pts_valor: 30, best_odd: 1.90, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- fixture 3: em t24h o mercado ainda não estava líquido (2 casas). --------
+          - {fixture_id: 3, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 3, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- fixture 4: a t15m existe, mas com o conjunto 1X2 da Pinnacle incompleto.
+          # O ramo 1X2 a descarta (pin_n_outcomes >= 3). A t24h NÃO herda o posto de
+          # janela corrente por isso — é a asserção que protege o carimbo no macro.
+          - {fixture_id: 4, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 4, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+      # Os outros quatro mercados e a corroboração ficam vazios de propósito: o que se
+      # mede aqui é só a janela, e o 1X2 é o ramo com o gate de completude mais estrito.
+      - input: ref('int_futebol_premissas_ou')
+        rows: []
+      - input: ref('int_futebol_premissas_ah')
+        rows: []
+      - input: ref('int_futebol_premissas_btts')
+        rows: []
+      - input: ref('int_futebol_premissas_dc')
+        rows: []
+      - input: ref('int_futebol_corroboracao')
+        rows: []
+
+    expect:
+      rows:
+        # fixture 1: publica a t15m (o preço que dá para pegar) e conta que a
+        # oportunidade está no board desde a t24h.
+        - {fixture_id: 1, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't24h', score: 45}
+        # fixture 3: nasceu na janela corrente — detecção e avaliação coincidem.
+        - {fixture_id: 3, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't15m', score: 45}
+        # As fixtures 2 e 4 não aparecem. São as duas formas de morrer na janela
+        # corrente: a 2 por preço, a 4 por conjunto incompleto.

@@ -22,6 +22,19 @@
 -- então check_cols='all' quebraria a SQL compilada. dbt_loaded_at também fica de fora (muda a
 -- cada run, geraria versão nova sempre). opportunity_key é NULL-safe (line_value é NULL em
 -- match_winner/btts/double_chance) — mesmo padrão do line_key usado no resto do Motor de Score.
+--
+-- `janela_deteccao` (#40) fica FORA do check_cols de propósito, e a chave não muda por causa
+-- dela. Duas razões:
+--   · o histórico já publicado é preservado: as linhas vivas hoje têm a coluna NULL, e um
+--     check sobre ela fecharia TODAS elas e abriria uma versão nova de cada uma no primeiro
+--     run depois do deploy — um pico de churn fabricado pelo deploy, bem no meio da medição
+--     de churn da ADR 0009 (issue #80);
+--   · a coluna não precisa do check para chegar ao histórico: o snapshot grava a linha
+--     INTEIRA a cada versão nova, e `janela_usada`/`edge` mudam a cada janela antes do apito,
+--     então toda oportunidade viva ganha versão com a coluna preenchida sozinha.
+-- Se um dia a janela de detecção mudar SEM que nada em check_cols mude, a transição não vira
+-- versão — troca aceita: isso só acontece quando a nota de uma janela antiga cruza o gate de
+-- 40 por mudança de PREMISSA, não por mudança de preço.
 SELECT
     CONCAT(
       CAST(fixture_id AS STRING), '|', market, '|', outcome, '|',

@@ -12,6 +12,9 @@ models:
       `market` — v5: 1X2 (match_winner) + Gols O/U (goals_over_under) + Handicap asiático
       (asian_handicap) + Ambos Marcam/BTTS (btts, via de-vig de consenso) + Dupla Chance
       (double_chance, saídas 1X/X2, prob derivada do 1X2 da Pinnacle, gate próprio). valor_fonte distingue.
+      ⚠️ Desde a #40 o gate é avaliado em TODAS as janelas coletadas e só depois reduzido a uma
+      linha: é o que permite dizer, em `janela_deteccao`, há quanto tempo a oportunidade está no
+      board. O grão não muda; o custo por build sim (os joins abrem ~4x antes do filtro final).
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -71,9 +74,53 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
+      - name: janela_usada
+        description: >
+          Janela de coleta da avaliação PUBLICADA — a mais recente disponível para a linha
+          (daily < t24h < t1h < t15m). É a janela de onde saem best_odd, edge e as penalidades
+          de preço: o que o board mostra é o preço que ainda dá para pegar.
+        tests: [not_null]
+      - name: janela_deteccao
+        description: >
+          Janela mais cedo em que ESTA linha passou no gate (#40, ADR 0004) — o "há quanto tempo
+          está no board", para o apostador julgar se o mercado já teve chance de corrigir a
+          oportunidade. Igual a `janela_usada` quando a linha nasceu na janela corrente; mais
+          cedo quando ela já vinha passando. NUNCA posterior a `janela_usada` — guarda
+          assert_janela_deteccao_nao_posterior. ⚠️ Não é "quando o alerta saiu": linha que passou
+          em t24h e não passa mais na janela corrente sai do board inteira (preço que não dá mais
+          para pegar não é oportunidade); o registro do que já foi anunciado vive no snapshot
+          fact_value_opportunities_hist.
+        tests:
+          # Sem tag de propósito, e sem buraco no agendado: o caso NULL desta coluna é a
+          # primeira das duas condições de assert_janela_deteccao_nao_posterior, que é
+          # `tag:guarda`. Aqui o not_null serve o `dbt build` local e o CI.
+          - not_null
+          # Mesma lista, mesmo motivo e MESMA TAG do accepted_values de
+          # int_futebol_odds_devig.janela_usada: a ordem das janelas vive no macro
+          # futebol_janela_prioridade e janela fora da lista cai no ELSE 0 dele. Aqui a guarda
+          # também REPORTA em vez de prevenir — no agendado o `dbt run` é a fase 2 e o
+          # `dbt test --select tag:guarda` a 4, sem gate. Sem a tag ela não rodaria em lugar
+          # nenhum (o agendado só executa `tag:guarda`) e o comentário acima descreveria um
+          # caminho que o teste não teria como percorrer.
+          - accepted_values:
+              arguments:
+                values: ['daily', 't24h', 't1h', 't15m']
+              config:
+                severity: error
+                tags: ['guarda']
       - name: edge
         description: "EV/edge = best_odd * prob_justa − 1. Gate garante > 0 nas linhas materializadas. É a MEDIDA DE VALOR/EV — ranqueie por `edge` p/ tamanho de vantagem; `score`/`faixa` são índice de CONFIABILIDADE (não monotônicos no edge)."
     tests:
+      # O GRÃO NÃO MUDOU com a #40 — a janela NÃO entra nele. Depois que o gate passou a ser
+      # avaliado por (linha × janela), esta guarda é o que prova que a redução final continua
+      # devolvendo uma linha só: sem ela, a mesma oportunidade sairia no board uma vez por
+      # janela e o front não teria como saber qual mostrar.
+      #
+      # `tag:guarda` acrescentada na #40, e não é enfeite: até aqui a unicidade era garantida
+      # pelo QUALIFY do macro, ANTES dos joins, e este teste era confirmação de algo que a
+      # forma da consulta já impunha. Agora ela depende do `WHERE janela_e_corrente` do próprio
+      # mart — passou a ser a única coisa que separa o board de uma linha por janela, e uma
+      # guarda dessas que não roda no agendado é uma guarda que ninguém lê.
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns:
@@ -81,3 +128,5 @@ models:
               - market
               - outcome
               - line_value
+          config:
+            tags: ['guarda']

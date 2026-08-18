@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     cluster_by=['competition', 'fixture_id'],
-    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate (edge>0 E n_casas>=3 E de-vig válido E conjunto da Pinnacle completo pro mercado E score>=40 E — p/ Handicap asiático/Gols O/U — linha meia .5, sem push). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES). faixa Alta(>=60)/Média(40-59); abaixo de 40 não vira oportunidade. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market` — v5 liga 1X2 (market_id=1) + Gols O/U (market_id=5) + Handicap asiático (market_id=4) + Ambos Marcam/BTTS (market_id=8) + Dupla Chance (market_id=12, saídas 1X/X2). Junta int_futebol_premissas_1x2/_ou/_ah/_btts/_dc + int_futebol_odds_devig + int_futebol_corroboracao. line_value é NULL no 1X2/BTTS/DC, a linha L no O/U e o handicap (ótica do mandante, mesmo p/ Home e Away) no AH. valor_fonte = pinnacle (de-vig da Pinnacle, mercados 1/4/5; e DC, derivada do 1X2 da Pinnacle) ou consenso (de-vig da mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front). A DC tem GATE PRÓPRIO (melhor_odd >=1,25, sem odd_juice) — aplicado no ramo joined_dc; o gate >=1,25 já garante o retorno mínimo (sem penalidade específica de odd baixa). Contador de cegueira (#41, ADR 0003): premissas_sem_dado diz QUANTAS premissas aplicáveis àquela linha não puderam ser avaliadas por falta de insumo — gerado do mapa futebol_insumos_premissa(), nunca escrito à mão. QUAIS foram fica nos modelos de premissas (premissas_cegas[]), de onde este número vem: o mart carrega a contagem, que é o que o board exibe. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. premissas_sem_dado é propagado dos cinco modelos de premissas e sai também como aviso em avisos[], SEM pontos entre parênteses: ele não desconta nada, diz que a nota está incompleta e não contrária (#41, ADR 0003).'
+    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate (edge>0 E n_casas>=3 E de-vig válido E conjunto da Pinnacle completo pro mercado E score>=40 E — p/ Handicap asiático/Gols O/U — linha meia .5, sem push). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES). faixa Alta(>=60)/Média(40-59); abaixo de 40 não vira oportunidade. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market` — v5 liga 1X2 (market_id=1) + Gols O/U (market_id=5) + Handicap asiático (market_id=4) + Ambos Marcam/BTTS (market_id=8) + Dupla Chance (market_id=12, saídas 1X/X2). Junta int_futebol_premissas_1x2/_ou/_ah/_btts/_dc + int_futebol_odds_devig + int_futebol_corroboracao. line_value é NULL no 1X2/BTTS/DC, a linha L no O/U e o handicap (ótica do mandante, mesmo p/ Home e Away) no AH. valor_fonte = pinnacle (de-vig da Pinnacle, mercados 1/4/5; e DC, derivada do 1X2 da Pinnacle) ou consenso (de-vig da mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front). A DC tem GATE PRÓPRIO (melhor_odd >=1,25, sem odd_juice) — aplicado no ramo joined_dc; o gate >=1,25 já garante o retorno mínimo (sem penalidade específica de odd baixa). Contador de cegueira (#41, ADR 0003): premissas_sem_dado diz QUANTAS premissas aplicáveis àquela linha não puderam ser avaliadas por falta de insumo — gerado do mapa futebol_insumos_premissa(), nunca escrito à mão. QUAIS foram fica nos modelos de premissas (premissas_cegas[]), de onde este número vem: o mart carrega a contagem, que é o que o board exibe. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. premissas_sem_dado é propagado dos cinco modelos de premissas e sai também como aviso em avisos[], SEM pontos entre parênteses: ele não desconta nada, diz que a nota está incompleta e não contrária (#41, ADR 0003). JANELA DE DETECÇÃO (#40, ADR 0004): janela_deteccao é a janela mais cedo (daily<t24h<t1h<t15m) em que ESTA linha passou no gate; janela_usada continua sendo a janela corrente, a que dá o preço publicado. Nunca posterior a janela_usada (guarda assert_janela_deteccao_nao_posterior). O grão NÃO muda — segue 1 linha por (fixture, mercado, saída, linha) —, mas o CUSTO muda: achar a janela mais cedo exige rodar o gate (nota inclusa) em TODAS as janelas coletadas e só depois reduzir, então os joins deste mart abrem ~4x antes do WHERE final. Linha que passou numa janela cedo e não passa na corrente NÃO aparece no board: preço que o usuário não consegue mais pegar não é oportunidade, e o histórico do que já foi anunciado vive no snapshot fact_value_opportunities_hist.'
 ) }}
 
 WITH prem_1x2 AS (
@@ -25,14 +25,18 @@ prem_dc AS (
 ),
 
 -- line_key STRING (NULL-safe) p/ casar a linha entre modelos sem depender de igualdade FLOAT.
--- REDUZIDO À JANELA CORRENTE (#37): o de-vig passou a emitir uma avaliação por janela
--- coletada. Sem a redução, cada join deste mart abriria uma linha por janela e o board
--- inflaria em silêncio — a mesma oportunidade publicada 4 vezes, uma por preço. A
--- redução reproduz exatamente a janela que o de-vig escolhia sozinho antes da #37, e é
--- por isso que a saída deste mart sai idêntica à de antes da mudança de grão.
+-- TODAS AS JANELAS ABERTAS (#40, ADR 0004): até a #37 este mart lia o de-vig já reduzido
+-- à janela corrente. A janela de detecção — a janela mais cedo em que a linha passou no
+-- gate — não é derivável dessa leitura: o gate inclui a NOTA, e a nota depende do preço,
+-- que é o que varia entre janelas. Logo o mart avalia (linha × janela) e só depois reduz.
+-- É mais cálculo por build do que a entrega anterior, e é o que a coluna custa.
+-- O flag `janela_e_corrente` vem carimbado do macro, calculado sobre o de-vig CRU: se
+-- fosse tirado aqui, depois dos filtros de completude dos ramos, uma linha cuja janela
+-- mais recente tem conjunto incompleto veria a anterior virar "a corrente" e seguiria no
+-- board com um preço que já não existe.
 devig AS (
     SELECT *, COALESCE(CAST(line_value AS STRING), 'NONE') AS line_key
-    FROM ({{ futebol_devig_janela_corrente() }})
+    FROM ({{ futebol_devig_todas_janelas() }})
 ),
 
 corro AS (
@@ -63,6 +67,8 @@ joined_1x2 AS (
         d.pin_n_outcomes,
         d.valor_fonte,
         d.janela_usada,
+        d.janela_prioridade,
+        d.janela_e_corrente,
         COALESCE(d.penalidades_globais_pts, 0)  AS penalidades_globais_pts,
         d.pen_odd_outlier,
         d.pen_poucas_casas,
@@ -113,6 +119,8 @@ joined_ou AS (
         d.pin_n_outcomes,
         d.valor_fonte,
         d.janela_usada,
+        d.janela_prioridade,
+        d.janela_e_corrente,
         COALESCE(d.penalidades_globais_pts, 0)  AS penalidades_globais_pts,
         d.pen_odd_outlier,
         d.pen_poucas_casas,
@@ -167,6 +175,8 @@ joined_ah AS (
         d.pin_n_outcomes,
         d.valor_fonte,
         d.janela_usada,
+        d.janela_prioridade,
+        d.janela_e_corrente,
         COALESCE(d.penalidades_globais_pts, 0)  AS penalidades_globais_pts,
         d.pen_odd_outlier,
         d.pen_poucas_casas,
@@ -221,6 +231,8 @@ joined_btts AS (
         d.pin_n_outcomes,
         d.valor_fonte,
         d.janela_usada,
+        d.janela_prioridade,
+        d.janela_e_corrente,
         COALESCE(d.penalidades_globais_pts, 0)  AS penalidades_globais_pts,
         d.pen_odd_outlier,
         d.pen_poucas_casas,
@@ -275,6 +287,8 @@ joined_dc AS (
         d.pin_n_outcomes,
         d.valor_fonte,
         d.janela_usada,
+        d.janela_prioridade,
+        d.janela_e_corrente,
         -- penalidades globais SEM odd_juice (a DC tem gate de odd próprio).
         ( 30 * CAST(d.pen_odd_outlier  AS INT64)
         + 12 * CAST(d.pen_poucas_casas AS INT64)
@@ -332,6 +346,73 @@ scored AS (
         -- TRUE só p/ .5; FALSE p/ linha cheia (2.0) e quarter; NULL onde não há linha (1X2/BTTS/DC).
         (MOD(CAST(ROUND(ABS(line_value) * 2) AS INT64), 2) = 1) AS is_half_line
     FROM unioned
+),
+
+-- ============================================================================
+-- O GATE, AGORA POR (LINHA × JANELA) (#40). Era o WHERE final; virou coluna porque a
+-- janela de detecção é "a janela mais cedo em que ESTA linha passou no gate", e não dá
+-- para saber isso sem avaliar o gate em todas elas. A completude do conjunto por
+-- mercado já foi aplicada ramo a ramo (1X2 >=3 saídas, O/U e AH >=2, DC >=3 + odd
+-- >=1,25): janela que não a satisfaz nem chega aqui, e por isso não pode ser detectada.
+-- COALESCE(..., FALSE) mantém a "degradação graciosa" do Motor — insumo NULL reprova a
+-- janela em vez de propagar NULL para dentro da detecção.
+-- ============================================================================
+avaliadas AS (
+    SELECT
+        *,
+        COALESCE(
+            edge > CASE
+                     -- #1: edge de CONSENSO (BTTS — Pinnacle não precifica) é enviesado
+                     -- p/ cima (best_odd=MAX das casas vs prob da MEDIANA) -> exige piso
+                     -- de edge maior. Tunável via var consensus_min_edge (default 3%).
+                     WHEN valor_fonte = 'consenso' THEN {{ var('consensus_min_edge', 0.03) }}
+                     ELSE 0
+                   END
+            -- mercado líquido, de-vig válido e o contrato "abaixo de 40 não vira
+            -- oportunidade" (#c).
+            AND n_casas >= 3
+            AND prob_justa_fechamento IS NOT NULL
+            AND score >= 40
+            -- #2: exclui linha NÃO-meia (cheia/quarter) de Handicap asiático e Gols O/U —
+            -- nessas o resultado pode dar push/meio-push e o de-vig 2-way superdimensiona
+            -- o edge; mercados sem linha (1X2/BTTS/DC) passam direto.
+            AND (market NOT IN ('asian_handicap', 'goals_over_under') OR is_half_line),
+        FALSE) AS passou_no_gate
+    FROM scored
+),
+
+-- ============================================================================
+-- A JANELA DE DETECÇÃO (#40, ADR 0004): a janela mais cedo, entre as coletadas para
+-- esta linha, em que ela passou no gate. Diz há quanto tempo a oportunidade está no
+-- board — para o apostador julgar se o mercado já teve chance de corrigi-la.
+--
+-- É calculada ANTES do filtro final de propósito: a janela que detectou não é (quase
+-- nunca) a janela publicada, e filtrar primeiro apagaria justamente as linhas de onde
+-- ela sai. A ordenação é pela prioridade declarada em futebol_janela_prioridade(),
+-- nunca pelo nome da janela ('daily' < 't15m' em ordem alfabética diria o contrário).
+--
+-- INVARIANTE: janela_deteccao nunca é posterior à janela avaliada. Sai de graça da
+-- construção — a linha publicada passou no gate na janela corrente, então ela mesma é
+-- candidata ao FIRST_VALUE e nenhuma janela posterior a ela existe na partição. A
+-- guarda assert_janela_deteccao_nao_posterior mede isso em produção mesmo assim, porque
+-- "sai da construção" é exatamente o tipo de garantia que um refactor futuro remove sem
+-- perceber.
+--
+-- Linha que passou numa janela cedo e NÃO passa na corrente continua fora do board (o
+-- WHERE final exige as duas coisas): preço que o usuário não consegue mais pegar não é
+-- oportunidade, é ruído com carimbo de oportunidade. O histórico do que já foi
+-- anunciado tem lugar próprio no snapshot fact_value_opportunities_hist.
+-- ============================================================================
+com_deteccao AS (
+    SELECT
+        *,
+        FIRST_VALUE(IF(passou_no_gate, janela_usada, NULL) IGNORE NULLS) OVER (
+            PARTITION BY fixture_id, market, outcome,
+                         COALESCE(CAST(line_value AS STRING), 'NONE')
+            ORDER BY janela_prioridade
+            ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+        ) AS janela_deteccao
+    FROM avaliadas
 )
 
 SELECT
@@ -392,6 +473,10 @@ SELECT
     prob_justa_fechamento,
     valor_fonte,
     janela_usada,
+    -- #40: a janela mais cedo em que esta linha passou no gate. Igual a janela_usada
+    -- quando a oportunidade nasceu na janela corrente; mais cedo quando ela já estava
+    -- no board antes. Nunca posterior a janela_usada.
+    janela_deteccao,
 
     -- componentes (transparência/debug)
     penalidades_globais_pts,
@@ -404,20 +489,16 @@ SELECT
     -- no edge — um bet de 1% de edge pode ter score maior que um de 6%). Sem coluna ev_rank dedicada.
 
     CURRENT_TIMESTAMP() AS dbt_loaded_at
-FROM scored
--- Gate (a completude da Pinnacle por mercado já foi aplicada por ramo: 1X2 >=3 outcomes,
--- O/U e AH >=2). Aqui: edge positivo, mercado líquido (>=3 casas), de-vig válido E score>=40
--- (#c: honra o contrato "abaixo de 40 não vira oportunidade"). #2: exclui linha NÃO-meia
--- (cheia/quarter) de Handicap asiático e Gols O/U — nessas o resultado pode dar push/meio-push
--- e o de-vig 2-way superdimensiona o edge; mercados sem linha (1X2/BTTS/DC) passam direto.
-WHERE edge > CASE
-               -- #1: edge de CONSENSO (BTTS — Pinnacle não precifica) é enviesado p/ cima
-               -- (best_odd=MAX das casas vs prob da MEDIANA) -> exige piso de edge maior.
-               -- Conservador e TUNÁVEL via var consensus_min_edge (default 0.03 = 3%).
-               WHEN valor_fonte = 'consenso' THEN {{ var('consensus_min_edge', 0.03) }}
-               ELSE 0
-             END
-  AND n_casas >= 3
-  AND prob_justa_fechamento IS NOT NULL
-  AND score >= 40
-  AND (market NOT IN ('asian_handicap', 'goals_over_under') OR is_half_line)
+FROM com_deteccao
+-- A REDUÇÃO A UMA LINHA POR (fixture, mercado, saída, linha) (#40). O grão do mart não
+-- mudou; o que mudou é que a redução agora é explícita aqui, em vez de vir pronta do
+-- macro futebol_devig_janela_corrente(). As duas condições respondem coisas diferentes
+-- e as duas são necessárias:
+--   janela_e_corrente — publica o preço que o usuário consegue pegar AGORA (e é o que
+--                       garante uma linha só: o flag vem de um MAX por (fixture,
+--                       mercado, linha) sobre o de-vig cru);
+--   passou_no_gate    — a oportunidade tem de valer NA janela corrente. Ter valido em
+--                       t24h e não valer mais em t15m é motivo para sair do board, não
+--                       para ficar nele com carimbo antigo (ADR 0004).
+WHERE janela_e_corrente
+  AND passou_no_gate
