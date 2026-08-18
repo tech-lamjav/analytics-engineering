@@ -25,9 +25,25 @@
 --
 -- Nível jogador: o lado da staging aplica o mesmo `player_id IS NOT NULL` que o fato aplica.
 -- Sem isso, os slots de escalação sem jogador (lixo conhecido da API) acusariam para sempre.
+--
+-- CORTE POR `loaded_at`: a staging é VIEW sobre o NDJSON vivo no GCS e o fato é TABELA. O
+-- poll pré-jogo (workflow_futebol_lineups) pousa escalação confirmada de 15 em 15 minutos,
+-- e as guardas rodam na fase 4 do workflow_futebol, depois do `dbt run` da fase 2. Escalação
+-- que pousa nessa fresta está na staging e legitimamente ainda não está no fato — sem o
+-- corte, a guarda acusaria isso como `perdida_no_dedup`, que é dizer "regressão de código"
+-- sobre pipeline saudável. Guarda que fica vermelha sozinha morre ignorada. O corte é o
+-- maior extracted_at que o fato chegou a ver: tudo anterior a ele teve chance de entrar.
 
 WITH spine AS (
     SELECT fixture_id FROM {{ ref('fact_fixtures') }}
+),
+
+corte_time AS (
+    SELECT MAX(extracted_at) AS ate FROM {{ ref('fact_fixture_lineups') }}
+),
+
+corte_jogador AS (
+    SELECT MAX(extracted_at) AS ate FROM {{ ref('fact_fixture_lineups_players') }}
 ),
 
 -- ── Nível time ───────────────────────────────────────────────────────────────
@@ -35,6 +51,7 @@ stg_time AS (
     SELECT DISTINCT fixture_id, team_id
     FROM {{ ref('stg_futebol_fixture_lineups') }}
     WHERE lineup_phase = 'confirmed'
+      AND loaded_at <= (SELECT ate FROM corte_time)
 ),
 
 fato_time AS (
@@ -61,6 +78,7 @@ stg_jogador AS (
     FROM {{ ref('stg_futebol_fixture_lineups_players') }}
     WHERE lineup_phase = 'confirmed'
       AND player_id IS NOT NULL  -- espelha o filtro do fato
+      AND loaded_at <= (SELECT ate FROM corte_jogador)
 ),
 
 fato_jogador AS (

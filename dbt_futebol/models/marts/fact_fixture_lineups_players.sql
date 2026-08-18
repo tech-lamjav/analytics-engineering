@@ -59,8 +59,14 @@ WHERE p.player_id IS NOT NULL
 -- jogador em dois slots da MESMA fase e do MESMO loaded_at (11 grupos hoje, alguns startXI +
 -- substitutes, outros dois slots do startXI). Sem ele o vencedor muda entre builds do mesmo
 -- código — a classe de irreprodutibilidade que a #78 já custou uma vez. Titular vence reserva
--- (a linha mais informativa), e o menor slot desempata o resto.
+-- (a linha mais informativa), o menor slot desempata o resto, e `team_id` fecha a ordenação:
+-- os três primeiros critérios empatam por completo se o mesmo jogador aparecer nos blocos dos
+-- DOIS times (a API já trocou identidade de clube antes), e aí team_side viraria entre builds.
+--
+-- ⚠️ Nenhum teste de unicidade pega a remoção deste desempate — ROW_NUMBER()=1 devolve uma
+-- linha por partição sob QUALQUER ORDER BY. Quem protege é o unit test
+-- `fixture_lineups_players_desempate_dentro_da_fase_e_deterministico`.
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY p.fixture_id, p.player_id, p.lineup_phase
-    ORDER BY p.loaded_at DESC, p.is_starter DESC, p.player_slot ASC
+    ORDER BY p.loaded_at DESC, p.is_starter DESC, p.player_slot ASC, p.team_id ASC
 ) = 1

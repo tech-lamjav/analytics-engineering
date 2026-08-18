@@ -1,5 +1,5 @@
 {{ config(
-    description='Flatten do raw_futebol_fixture_lineups (nível jogador). ~22-30 linhas por (fixture, fase): startXI (is_starter=TRUE) + substitutes (is_starter=FALSE), dos dois times. player_slot = índice no array (WITH OFFSET; preserva a ordem). lineup_phase distingue confirmed/real; fact_fixture_lineups_players faz dedup latest-wins por loaded_at.'
+    description='Flatten do raw_futebol_fixture_lineups (nível jogador). ~22-30 linhas por (fixture, fase): startXI (is_starter=TRUE) + substitutes (is_starter=FALSE), dos dois times. player_slot = índice no array (WITH OFFSET; preserva a ordem). lineup_phase distingue confirmed/real e faz parte do grao do fato; fact_fixture_lineups_players preserva as duas fases (#38), com latest-wins por loaded_at dentro de cada uma.'
 ) }}
 
 WITH src AS (

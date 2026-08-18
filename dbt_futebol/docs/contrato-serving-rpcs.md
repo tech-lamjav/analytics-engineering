@@ -41,7 +41,7 @@ e ele deixa de ser tabela de análise para virar fonte de duas telas.
 | `fact_odds_snapshot` | 2 | `distinct on (…, bookmaker_name)` com desempate por janela | ⛔ **DEFEITO VIVO** — ver abaixo |
 | `fact_value_opportunities` | 2 | 1 linha por (fixture, market, outcome, line) | ✅ hoje; ⚠️ #40/#41/A1 mexem nas COLUNAS |
 | `int_futebol_odds_devig` | 1 (`get_futebol_fixture_value`) | `distinct on (fixture_id, outcome_side, line_value)` **sem desempate** | ⛔ bloqueia a #37 |
-| `fact_fixture_lineups` + `_players` | 1 (`get_futebol_fixture_extras`) | `jsonb_agg` de TODAS as linhas do fixture, sem filtro de fase | ⛔ bloqueia a #38 |
+| `fact_fixture_lineups` + `_players` | 1 (`get_futebol_fixture_extras`) | `jsonb_agg` de TODAS as linhas do fixture, sem filtro de fase | ⛔ **bloqueia o DEPLOY da #38** — o lado dbt está pronto; ver abaixo |
 | `fact_injuries_snapshot` | 1 | `distinct on (player_id)` + `order by snapshot_date desc` | ✅ desempate correto e semântico |
 | 5 × `int_futebol_premissas_*` | 2 cada | join por (fixture, outcome[, line]) | ✅ hoje; ⚠️ #41 pode adicionar coluna |
 | `fact_h2h`, `fact_predictions_api`, `fact_standings_snapshot`, `fact_team_season_stats`, `fact_fixture_stats`, `fact_fixture_events`, `fact_fixture_player_stats` | 1–2 cada | leitura direta, sem suposição de unicidade além da chave natural | ✅ |
@@ -73,6 +73,31 @@ Conserto: acrescentar `when collection_window = 't24h' then 2` deslocando os dem
 derivar a prioridade de um lugar só. No dbt esse lugar já existe — o macro
 `futebol_janela_prioridade` — mas ele não atravessa para o Postgres, então aqui é duplicação
 inevitável e o que resta é **manter as duas listas juntas na mesma mudança**.
+
+## ⛔ Gate aberto: a #38 mergeou no dbt e o `get_futebol_fixture_extras` ainda não filtra fase
+
+**Não rodar `./build-and-push.sh dbt_futebol` até a RPC ser corrigida.** O lado dbt da #38 está
+no `master`: `lineup_phase` entrou no grão dos dois fatos e as duas fases coexistem. Enquanto a
+imagem não for reconstruída, o agendado segue materializando o grão ANTIGO e o app não vê
+diferença — é isso que segura o gate. No dia em que a imagem subir sem a RPC:
+
+- `lineups` passa de 2 para **4** elementos nos jogos com as duas fases (279 hoje). O front faz
+  `extras.lineups.find(l => l.team_side === 'home')?.formation` sobre array sem ordem — a
+  formação exibida vira sorteio entre a anunciada e a que entrou em campo, e pode virar entre
+  dois carregamentos da mesma página.
+- `lineup_players` **dobra** (275 fixtures hoje): cada jogador desenhado duas vezes no campinho,
+  com `is_starter`/`grid` contraditórios entre as duas cópias.
+
+Conserto, do lado do app (`prop-play-predictor`, escopo do Victor): filtrar
+`lineup_phase = 'real'` nos dois sub-selects quando o jogo já terminou e `'confirmed'` antes do
+apito — ou, mais simples e suficiente para não regredir, `distinct on` com desempate explícito
+de fase. Vale expor `lineup_phase` na projeção junto: sem ela o front não tem como dizer ao
+usuário que está vendo a escalação anunciada e não a que jogou, que é o produto que a #38
+destrava.
+
+⚠️ **A spec da #38 afirmava "a aplicação não os consulta".** É falso, e este documento já
+registrava isso desde 10/08 — a spec é de 06/08 e não foi revisada depois. A verificação de
+grão da spec não substituiu a consulta ao banco vivo do passo 1 abaixo.
 
 ## A regra que vale daqui pra frente
 

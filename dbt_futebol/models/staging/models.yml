@@ -447,7 +447,7 @@ models:
         description: "Timestamp ISO UTC do extractor"
 
   - name: stg_futebol_fixture_lineups
-    description: "Flatten do raw_futebol_fixture_lineups (nível time). 2 linhas por (fixture, fase) — formation/coach de cada time; grain (fixture_id, lineup_phase, team_id). lineup_phase distingue confirmed (~T-30min) de real (pós-jogo); fact_fixture_lineups faz dedup latest-wins por loaded_at (real vence confirmed)."
+    description: "Flatten do raw_futebol_fixture_lineups (nível time). 2 linhas por (fixture, fase) — formation/coach de cada time; grain (fixture_id, lineup_phase, team_id). lineup_phase distingue confirmed (~T-30min) de real (pós-jogo); fact_fixture_lineups preserva as duas fases (#38) e faz latest-wins por loaded_at DENTRO de cada uma."
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
@@ -480,7 +480,7 @@ models:
         description: "Timestamp ISO UTC do extractor"
 
   - name: stg_futebol_fixture_lineups_players
-    description: "Flatten/UNNEST do raw_futebol_fixture_lineups (nível jogador). ~22-30 linhas por (fixture, fase): startXI (is_starter=TRUE) + substitutes (is_starter=FALSE) dos dois times; grain (fixture_id, lineup_phase, player_id) — o teste de unicidade dispara se um jogador aparecer em startXI E substitutes na mesma fase. fact_fixture_lineups_players faz dedup latest-wins por loaded_at."
+    description: "Flatten/UNNEST do raw_futebol_fixture_lineups (nível jogador). ~22-30 linhas por (fixture, fase): startXI (is_starter=TRUE) + substitutes (is_starter=FALSE) dos dois times; grain (fixture_id, lineup_phase, player_id) — o teste de unicidade dispara se um jogador aparecer em startXI E substitutes na mesma fase. fact_fixture_lineups_players preserva as duas fases (#38), com latest-wins por loaded_at dentro de cada uma."
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

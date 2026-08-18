@@ -85,3 +85,41 @@ unit_tests:
         - {fixture_id: 1, player_id: 100, lineup_phase: 'real', is_starter: false, team_side: 'home', position: 'M'}
         - {fixture_id: 1, player_id: 200, lineup_phase: 'confirmed', is_starter: true, team_side: 'away', position: 'F'}
         - {fixture_id: 2, player_id: 100, lineup_phase: 'confirmed', is_starter: true, team_side: 'home', position: 'D'}
+
+  - name: fixture_lineups_players_desempate_dentro_da_fase_e_deterministico
+    model: fact_fixture_lineups_players
+    description: >
+      O desempate dentro da fase é determinístico quando loaded_at NÃO desempata. É o
+      único teste que o sustenta: a guarda de unicidade fica verde sem ele, porque
+      ROW_NUMBER() = 1 devolve uma linha por partição sob qualquer ORDER BY. Sem o
+      desempate o vencedor vira entre builds do mesmo código — a classe da #78.
+    given:
+      - input: ref('stg_futebol_fixture_lineups_players')
+        rows:
+          # -- fixture 1: o MESMO jogador em dois slots da mesma fase e do MESMO --------
+          # loaded_at, um no startXI e outro no banco. É o caso real: 11 grupos assim
+          # na base hoje. Titular vence — é a linha mais informativa.
+          - {fixture_id: 1, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: false, player_slot: 6, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: , loaded_at: '2026-08-01 23:00:00'}
+          - {fixture_id: 1, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: true, player_slot: 5, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: '3:1', loaded_at: '2026-08-01 23:00:00'}
+
+          # -- fixture 2: dois slots do MESMO startXI (também existe na base). ---------
+          # is_starter empata; o menor player_slot decide.
+          - {fixture_id: 2, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: true, player_slot: 4, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'D', grid: '2:2', loaded_at: '2026-08-02 23:00:00'}
+          - {fixture_id: 2, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: true, player_slot: 3, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: '3:1', loaded_at: '2026-08-02 23:00:00'}
+
+          # -- fixture 3: o mesmo jogador nos blocos dos DOIS times, tudo mais igual. --
+          # Só `team_id` separa — sem ele o team_side viraria entre builds.
+          - {fixture_id: 3, team_id: 20, team_name: 'Visitante', lineup_phase: 'real', is_starter: true, player_slot: 0, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'F', grid: '4:1', loaded_at: '2026-08-03 23:00:00'}
+          - {fixture_id: 3, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: true, player_slot: 0, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: '3:1', loaded_at: '2026-08-03 23:00:00'}
+
+      - input: ref('fact_fixtures')
+        rows:
+          - {fixture_id: 1, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-01', home_team_id: 10, away_team_id: 20}
+          - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-02', home_team_id: 10, away_team_id: 20}
+          - {fixture_id: 3, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-03', home_team_id: 10, away_team_id: 20}
+
+    expect:
+      rows:
+        - {fixture_id: 1, player_id: 100, lineup_phase: 'real', is_starter: true, player_slot: 5, team_side: 'home'}
+        - {fixture_id: 2, player_id: 100, lineup_phase: 'real', is_starter: true, player_slot: 3, team_side: 'home'}
+        - {fixture_id: 3, player_id: 100, lineup_phase: 'real', is_starter: true, player_slot: 0, team_side: 'home'}
