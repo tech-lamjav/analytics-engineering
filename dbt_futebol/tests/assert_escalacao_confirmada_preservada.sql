@@ -33,6 +33,8 @@
 -- corte, a guarda acusaria isso como `perdida_no_dedup`, que é dizer "regressão de código"
 -- sobre pipeline saudável. Guarda que fica vermelha sozinha morre ignorada. O corte é o
 -- maior extracted_at que o fato chegou a ver: tudo anterior a ele teve chance de entrar.
+-- COALESCE p/ o fato vazio: sem ele o corte seria NULL, filtraria a staging inteira e a
+-- guarda ficaria verde justamente no cenário mais grave (fato vazio = tudo sumiu).
 
 WITH spine AS (
     SELECT fixture_id FROM {{ ref('fact_fixtures') }}
@@ -51,7 +53,7 @@ stg_time AS (
     SELECT DISTINCT fixture_id, team_id
     FROM {{ ref('stg_futebol_fixture_lineups') }}
     WHERE lineup_phase = 'confirmed'
-      AND loaded_at <= (SELECT ate FROM corte_time)
+      AND loaded_at <= COALESCE((SELECT ate FROM corte_time), loaded_at)
 ),
 
 fato_time AS (
@@ -78,7 +80,7 @@ stg_jogador AS (
     FROM {{ ref('stg_futebol_fixture_lineups_players') }}
     WHERE lineup_phase = 'confirmed'
       AND player_id IS NOT NULL  -- espelha o filtro do fato
-      AND loaded_at <= (SELECT ate FROM corte_jogador)
+      AND loaded_at <= COALESCE((SELECT ate FROM corte_jogador), loaded_at)
 ),
 
 fato_jogador AS (
