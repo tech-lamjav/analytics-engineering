@@ -2,7 +2,7 @@
     materialized='table',
     partition_by={'field': 'date_utc', 'data_type': 'date'},
     cluster_by=['fixture_id', 'team_id'],
-    description='Escalação de jogadores por jogo (/fixtures/lineups). ~22-30 linhas por fixture_id (titulares + reservas dos dois times) — base p/ ajustar o modelo por desfalques. is_starter separa startXI de substitutes; position/grid/shirt_number do jogador. Particionada por DATE(date_utc) e clusterizada por (fixture_id, team_id). Latest-wins: dedup por (fixture_id, player_id) mantendo o loaded_at mais recente — "real" vence "confirmed". Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.'
+    description='Escalação de jogadores por jogo (/fixtures/lineups). Grão (fixture_id, player_id, lineup_phase): ~22-30 linhas por fixture POR FASE (titulares + reservas dos dois times) — base p/ ajustar o modelo por desfalques. is_starter separa startXI de substitutes; position/grid/shirt_number do jogador. "confirmed" (~T-30min) e "real" (pós-jogo) COEXISTEM, e é onde elas discordam que está o valor: anunciado titular, entrou reserva. Só a confirmada existe antes do apito. Particionada por DATE(date_utc) e clusterizada por (fixture_id, team_id). Latest-wins DENTRO de cada fase, só para absorver re-execução do pipeline. Cobre Brasileirão (71) 2024/25/26 e Copa do Mundo (1) 2026.'
 ) }}
 
 WITH players AS (
@@ -51,10 +51,16 @@ INNER JOIN fixtures f ON p.fixture_id = f.fixture_id
 -- Descarta slots de escalação sem player_id (lixo da API; ~4 linhas) — não são jogadores reais
 -- e quebrariam o not_null do mart (a staging mantém raw e só avisa via severity:warn).
 WHERE p.player_id IS NOT NULL
--- Latest-wins: "real" (pós-jogo) vence "confirmed" (~T-30min). Um jogador aparece 1x por
--- fase; dedup por (fixture_id, player_id) mantém a fase mais recente. Desempate determinístico
--- por lineup_phase='real' (em loaded_at empatado, "real" vence — regra explícita, tie-stable).
+-- A fase entra no grão (#38). Antes o dedup era por (fixture_id, player_id) e a "real",
+-- que chega depois do jogo, sobrescrevia a "confirmed" — look-ahead entrando pela porta
+-- do dedup, e a confirmada é a única evidência pré-apito de quem entra em campo.
+-- O latest-wins continua existindo DENTRO de cada fase, para absorver re-execução do pipeline.
+-- O desempate por (is_starter, player_slot) NÃO é decorativo: a API às vezes repete o mesmo
+-- jogador em dois slots da MESMA fase e do MESMO loaded_at (11 grupos hoje, alguns startXI +
+-- substitutes, outros dois slots do startXI). Sem ele o vencedor muda entre builds do mesmo
+-- código — a classe de irreprodutibilidade que a #78 já custou uma vez. Titular vence reserva
+-- (a linha mais informativa), e o menor slot desempata o resto.
 QUALIFY ROW_NUMBER() OVER (
-    PARTITION BY p.fixture_id, p.player_id
-    ORDER BY p.loaded_at DESC, (p.lineup_phase = 'real') DESC
+    PARTITION BY p.fixture_id, p.player_id, p.lineup_phase
+    ORDER BY p.loaded_at DESC, p.is_starter DESC, p.player_slot ASC
 ) = 1

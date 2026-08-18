@@ -259,6 +259,9 @@ The starting eleven as announced before kickoff, roughly forty minutes out — d
 from the escalação real recorded after the match. It is the only pre-kickoff evidence of
 who actually plays, and it arrives too late to inform any janela but t15m. Its value is
 therefore corroboration and measurement, not the desfalque premissa itself.
+Since #38 the phase is part of the grain of both lineup facts, so the two coexist and the
+confirmada is no longer overwritten by the real — reading either one means filtering
+`lineup_phase`, and anything measured before kickoff must read `'confirmed'`.
 _Avoid_: escalação provável (the source does not publish one)
 
 **Titular importante**:

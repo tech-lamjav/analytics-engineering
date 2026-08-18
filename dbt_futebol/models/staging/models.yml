@@ -489,7 +489,7 @@ models:
               - lineup_phase
               - player_id
           config:
-            severity: warn  # grain raw pré-dedup; fact_fixture_lineups_players deduppa latest-wins (1 grupo dup hoje)
+            severity: warn  # grain raw pré-dedup; fact_fixture_lineups_players deduppa dentro da fase (11 grupos dup hoje, todos com loaded_at único — daí o desempate por (is_starter, player_slot) lá)
     columns:
       - name: fixture_id
         description: "ID do jogo na API-Football (FK p/ fact_fixtures)"
