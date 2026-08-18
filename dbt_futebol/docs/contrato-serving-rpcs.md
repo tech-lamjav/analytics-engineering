@@ -89,7 +89,7 @@ Antes de mudar **grão** ou **colunas** de qualquer tabela da allowlist:
 |---|---|---|
 | **#37** (C5) | Janela no grão do de-vig | Precisa de desempate por `janela_usada` em `get_futebol_fixture_value` |
 | **#38** (C1) | Duas fases da escalação coexistem | `get_futebol_fixture_extras` duplicaria cada time e cada jogador; a projeção nem expõe `lineup_phase`. `lineup_phase` **já é coluna** nos dois fatos, então não há drift de esquema — só de grão |
-| **#40** (C5b) | Coluna `janela_deteccao` no mart | Coluna nova → migration antes do deploy |
+| **#40** (C5b) | Coluna `janela_deteccao` no mart | Coluna nova → migration antes do deploy, em **DUAS** tabelas: `futebol.fact_value_opportunities` e `futebol.fact_value_opportunities_hist` (o snapshot copia a linha inteira, então a coluna chega lá no primeiro `dbt snapshot` e o parity acusa as duas). `ALTER TABLE ... ADD COLUMN janela_deteccao text;` nos dois bancos (dev e prd). Nenhuma RPC muda: `get_futebol_value_board` declara o `RETURNS TABLE` coluna a coluna e não lista a nova — o board só passa a exibi-la quando o front pedir |
 | **#41** (C3b) | Contador de premissas sem dado | Coluna nova → migration antes do deploy |
 | **A1** | Remove `pts_valor`/`pts_corroboracao`/`penalidades` do mart | Colunas removidas **e** declaradas no `RETURNS TABLE` das duas RPCs → `DROP FUNCTION` + recriar |
 | **A7** | Tabela nova de funil | Livre — fora da allowlist |

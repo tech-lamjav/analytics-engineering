@@ -37,6 +37,42 @@
 
 
 {#-
+  O DE-VIG COM AS QUATRO JANELAS ABERTAS, cada uma carimbada com a sua prioridade e
+  com a resposta para "esta é a janela corrente desta linha?" (issue #40).
+
+  Existe porque o consumidor que precisa avaliar TODAS as janelas — hoje só o
+  `fact_value_opportunities`, para achar a janela de detecção — precisa saber qual
+  delas é a corrente ANTES de qualquer filtro seu. O flag é calculado aqui, sobre as
+  linhas cruas do de-vig, e não depois dos filtros do consumidor.
+
+  ⚠️ A diferença não é estética. Os ramos do mart filtram por completude do conjunto
+  (`pin_n_outcomes >= 3` no 1X2, `>= 2` no O/U e no AH). Se o `MAX(prioridade)` fosse
+  tirado DEPOIS desse filtro, uma linha cuja janela mais recente tem conjunto
+  incompleto veria a t24h virar "a corrente" e continuaria no board com o preço de
+  ontem — que é o oposto do que a ADR 0004 decidiu (preço que não dá para pegar sai
+  do board). Tirado aqui, a linha simplesmente não tem janela corrente publicável.
+
+  A partição é (fixture, mercado, LINHA) e deliberadamente NÃO inclui a saída — pela
+  mesma razão explicada em `futebol_devig_janela_corrente()` logo abaixo.
+-#}
+{% macro futebol_devig_todas_janelas() -%}
+    SELECT
+        d.* EXCEPT (_janela_prioridade, _line_key),
+        d._janela_prioridade AS janela_prioridade,
+        d._janela_prioridade = MAX(d._janela_prioridade) OVER (
+            PARTITION BY d.fixture_id, d.market_id, d._line_key
+        ) AS janela_e_corrente
+    FROM (
+        SELECT
+            *,
+            {{ futebol_janela_prioridade('janela_usada') }} AS _janela_prioridade,
+            COALESCE(CAST(line_value AS STRING), 'NONE')    AS _line_key
+        FROM {{ ref('int_futebol_odds_devig') }}
+    ) d
+{%- endmacro %}
+
+
+{#-
   O DE-VIG REDUZIDO À JANELA CORRENTE — a forma como todo consumidor lê o de-vig.
 
   O de-vig emite N linhas por (fixture, mercado, saída, linha), uma por janela
@@ -50,17 +86,13 @@
   conjunto de saídas: se o Home viesse da t15m e o Away da t1h, o Σ(1/odd) somaria
   preços de momentos diferentes. É a mesma partição que o `eval_odds` usava antes
   da #37, e é o que faz a saída do mart sair idêntica à de antes da mudança de grão.
+
+  Desde a #40 esta redução é um FILTRO sobre `futebol_devig_todas_janelas()`, e não
+  uma segunda cópia do `MAX(prioridade)`: as duas leituras do de-vig não têm como
+  divergir na definição de "janela corrente" porque só existe uma.
 -#}
 {% macro futebol_devig_janela_corrente() -%}
-    SELECT d.* EXCEPT (_janela_prioridade, _line_key)
-    FROM (
-        SELECT
-            *,
-            {{ futebol_janela_prioridade('janela_usada') }} AS _janela_prioridade,
-            COALESCE(CAST(line_value AS STRING), 'NONE')    AS _line_key
-        FROM {{ ref('int_futebol_odds_devig') }}
-    ) d
-    QUALIFY d._janela_prioridade = MAX(d._janela_prioridade) OVER (
-        PARTITION BY d.fixture_id, d.market_id, d._line_key
-    )
+    SELECT * EXCEPT (janela_prioridade, janela_e_corrente)
+    FROM ({{ futebol_devig_todas_janelas() }})
+    WHERE janela_e_corrente
 {%- endmacro %}
