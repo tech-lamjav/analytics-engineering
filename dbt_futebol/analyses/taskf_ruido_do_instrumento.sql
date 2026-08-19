@@ -61,6 +61,17 @@
     escrever a primeira comparação sobre o `estendido` precisa medir essa componente ANTES de
     reusar o número desta análise.
 
+    ⚠️ SEM `--target taskF`, E ISSO É DELIBERADO — é a única análise `taskf_*` que roda no target
+    default, então vale a linha. As outras leem as CÉLULAS materializadas em `futebol_taskF`; esta
+    não lê célula nenhuma, ela reexecuta o instrumento. E o que ela precisa reexecutar é o código
+    de HOJE sobre os fatos de HOJE: em `futebol_taskF` as tabelas de premissas guardam a última
+    célula que a receita construiu, sob o código PRÉ-#78 — medir o ruído pós-#78 ali seria medir o
+    ruído que a #78 já tirou. O dataset `futebol` é também, por definição, a configuração da célula
+    `base` (os defaults de produção), que é a célula da guarda.
+
+    Nada é materializado: `dbt compile` + `bq query` sobre um SELECT não escreve, então a ADR 0007
+    continua respeitada na letra e no espírito — o que ela proíbe é PUBLICAR medição no board.
+
     Rodar N vezes seguidas e comparar as saídas — sem `dbt run`, sem escrever em dataset nenhum:
 
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --select taskf_ruido_do_instrumento
@@ -75,7 +86,19 @@
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`, seção do ticket #92.
 #}
 
-{%- set pisos_em_pp = [0, 5, 10] -%}
+{#- OS PISOS SÃO OS DA GUARDA, E NÃO OS DE `macros/taskf_pisos()` — a diferença é de propósito e
+    tem de estar escrita, porque o macro diz que a lista "precisa existir num lugar só".
+
+    `taskf_pisos()` é `[0, 3, 5, 10]`: a varredura de piso da MEDIÇÃO, que a spec #49 pediu para
+    distinguir achado de escolha de corte. Aqui a lista é outra coisa — são os pisos que aparecem
+    nos seis campos `em_pp: true` da `tests/assert_taskf_base_reproduz_01.sql`, isto é, os campos
+    que a RÉGUA governa. Nenhum campo em pp da guarda está no piso 3, então medir p3 seria medir
+    ruído de um campo que a régua não cobre.
+
+    ⚠️ As duas listas são independentes e podem derivar: se a guarda passar a cobrar um campo em
+    pp num piso novo, ELE PRECISA ENTRAR AQUI À MÃO. O acoplamento é com o `campos` da guarda, não
+    com `taskf_pisos()` — e é por isso que herdar do macro seria o erro, não a correção. -#}
+{%- set pisos_da_guarda = [0, 5, 10] -%}
 
 WITH {{ task01_base() }},
 
@@ -84,15 +107,23 @@ WITH {{ task01_base() }},
     o que se quer reproduzir aqui é o INSTRUMENTO, com o `AVG` e tudo, e não uma versão limpa
     dele. Extrair para macro compartilhado trocaria o instrumento medido por outro.
 
-    Usa `a.min_jogos` (o USADO) e não a contagem disponível da #54: na célula `base` o recorte é
-    `temporada`, sem teto, e as duas são o mesmo número por construção. -#}
+    Usa `a.min_jogos` (o USADO) e não a `min_jogos_disponivel` da #54, e a igualdade das duas na
+    célula `base` é conferível LENDO, não uma alegação sobre o dado: sob recorte `temporada` o
+    `taskf_teste2.sql` resolve `col_disponivel = 'played_total'`, e aí o `pit_disponivel` dele
+    (linhas 269-280) fica sendo a MESMA expressão do `pit` do `macros/task01_base.sql` (linhas
+    316-327) — mesma tabela, mesmos dois LEFT JOIN por time, mesmo
+    `LEAST(COALESCE(h.played_total, 0), COALESCE(a.played_total, 0))`. Não são dois números que
+    coincidem: é uma expressão escrita duas vezes.
+
+    ⚠️ Isso vale porque a célula é a `base`. Sob `ultimos_10` o `played_total` satura no teto e as
+    duas contagens divergem de verdade (é o achado da #54) — esta análise mediria outra coisa. -#}
 agregado AS (
     SELECT
         a.market_id,
         pl.premissa,
         a.benchmark,
         AVG(IF(pl.acesa, IF(a.min_jogos < 5, 1.0, 0.0), NULL))   AS frac_curta
-        {%- for piso in pisos_em_pp %},
+        {%- for piso in pisos_da_guarda %},
         COUNTIF(pl.acesa AND a.min_jogos >= {{ piso }})          AS n_{{ piso }},
         AVG(IF(pl.acesa AND a.min_jogos >= {{ piso }},
                a.prob_justa_fechamento, NULL))                   AS p_odd_{{ piso }},
@@ -129,7 +160,7 @@ SELECT
     g.premissa,
     g.benchmark,
     -- A camada de contagem. Ela se mexer é outro fenômeno, e a saída tem de saber distinguir.
-    {%- for piso in pisos_em_pp %}
+    {%- for piso in pisos_da_guarda %}
     g.n_{{ piso }}                                               AS n_p{{ piso }},
     {%- endfor %}
     -- Os seis campos em pp que a `assert_taskf_base_reproduz_01` cobra, cada um em duas versões:
@@ -142,7 +173,7 @@ SELECT
     ROUND(g.p_odd_0  * 100, 12)                                  AS a_odd_dava_p0_bruto,
     ROUND(g.p_real_0 * 100, 1)                                   AS aconteceu_p0,
     ROUND(g.p_real_0 * 100, 12)                                  AS aconteceu_p0_bruto
-    {%- for piso in pisos_em_pp %},
+    {%- for piso in pisos_da_guarda %},
     ROUND((g.p_real_{{ piso }} - g.p_odd_{{ piso }}) * 100, 1)   AS diferenca_p{{ piso }},
     ROUND((g.p_real_{{ piso }} - g.p_odd_{{ piso }}) * 100, 12)  AS diferenca_p{{ piso }}_bruto
     {%- endfor %}

@@ -14,8 +14,13 @@
     ────────────────────────────────────────────────────────────────────────────────
     A RÉGUA, DECLARADA ANTES DE MEDIR
 
-    Mesmo padrão da tolerância de 0,5 pp da #51: o número existe antes do resultado, para não ser
-    escolhido depois de ver qual lado ele favorece.
+    Mesmo padrão da tolerância da #51: o número existe antes do resultado, para não ser escolhido
+    depois de ver qual lado ele favorece.
+
+    ⚠️ O paralelo vale para o MÉTODO, não para o número: aquela tolerância era 0,5 pp e a #92 a
+    remediu para 0,25 pp — ou seja, "declarado antes de medir" foi o começo dela, e não onde ela
+    ficou. Declarar antes protege da escolha conveniente; não dispensa remedir quando o fenômeno
+    que justificava o número muda.
 
     O que é ORDENAR. As 39 premissas do benchmark preferido (`usado_para_peso`), ordenadas por
     `diferenca_p<piso>` — o sinal medido, decrescente. É a ordenação que a [B] leria para decidir

@@ -165,6 +165,12 @@ preço depois do teto. A conclusão não muda; a explicação, sim.
 
 ### A tolerância, declarada
 
+⚠️ **REGISTRO CONGELADO DA #51 — o valor mudou. A tolerância vale 0,25 pp desde 19/08/2026 (#92),
+e a justificativa abaixo é a de então, não a de hoje.** Esta seção fica como está porque é o que se
+sabia ao declarar o número; a remedição, a decomposição em quatro parcelas e o motivo de o 0,5
+nunca ter sido medido sobre a métrica que ele governa estão na seção do ticket #92, no fim deste
+documento. O mesmo vale para as outras menções a "0,5 pp" nas seções da #51 e da #58.
+
 > **Tolerância: 0,5 pp de diferença absoluta, em qualquer piso, e SÓ para `linha_subindo` e
 > `linha_descendo`.**
 
@@ -2884,6 +2890,26 @@ Distância medida nos 360 campos:
 **Oito ordens de grandeza.** O empate não ficou raro: ficou impossível nesta base. A regra de
 descarte do cabeçalho se inverteu — guarda vermelha agora é divergência de verdade.
 
+#### 4b. Um rebuild caiu no meio da sessão, e isso virou corroboração de graça
+
+As 8 execuções do item 3 leram `odds_loaded_at = 2026-08-19 12:11:15`. Uma nona, rodada depois do
+fixup do code review, saiu com **`18:01:15`**: o agendado reconstruiu o `fact_odds_snapshot` a
+partir da landing zone nesse intervalo. (Os dois carimbos são a única grandeza medida aqui — o
+intervalo entre as execuções em si não foi cronometrado e não entra na conta.) **A coluna de carimbo pegou isso sozinha** — que é exatamente para o que ela
+está na saída, e a razão de a receita mandar conferi-la antes de ler qualquer diferença.
+
+Ela **não** entra no N=8: são builds diferentes, e a medição de ruído de instrumento é sobre
+execuções do mesmo insumo. Mas o que ela mostra vale registrar, porque é uma verificação
+independente do item 5 abaixo:
+
+> Entre os dois builds do `fact_odds_snapshot`, as 60 linhas do universo congelado saem
+> **idênticas** — todos os `n_p0`/`n_p5`/`n_p10` e todos os campos arredondados. As únicas
+> diferenças são os mesmos ~1e-12 pp em 3 dos 4 campos brutos do item 3.
+
+Reconstruir os fatos e não mover um campo é a afirmação "a coleta é forward-only e parou no apito"
+medida por outro caminho: se houvesse captura nova alcançando aqueles 169 jogos, ela teria entrado
+neste rebuild.
+
 #### 5. A componente que a #78 não tocou, remedida hoje
 
 A deriva **legítima** de odds. Na janela congelada ela não tem mecanismo, e o número foi
@@ -2908,6 +2934,13 @@ casa decimal, então a subtração em FLOAT64 de dois valores da grade não devo
 0,20000000000000284, que é `> 0.2`. Com `--vars '{taskf_tolerancia_pp: 0.2}'` a guarda fica
 **vermelha nos três campos de delta 0,2**, isto é, no próprio resíduo que a régua declara cobrir.
 0,25 cai no meio da grade: admite |Δ| até 0,2 e recusa a partir de 0,3, sem depender do último bit.
+
+⚠️ **Para a `analyses/taskf_reconciliacao_01.sql` o aperto é NO-OP hoje, e isso precisa estar
+dito.** Lá o `tol` só se aplica à origem `deriva_de_odds`, e nesta janela nenhuma linha se
+classifica assim — o mecanismo não existe, e o `linha_descendo` cai em `INVESTIGAR`. O valor novo
+só muda comportamento na guarda. Mudar os dois assim mesmo é o que mantém a régua existindo uma
+vez; deixar a reconciliação em 0,5 criaria duas réguas com o mesmo nome, e a segunda ficaria errada
+em silêncio no dia em que a origem 1 deixar de ser vazia.
 
 ⚠️ **O que a #92 deliberadamente NÃO faz: apertar até o zero.** O ruído mede 0,00 pp, mas zerar a
 régua deixaria a guarda vermelha no resíduo do `linha_descendo` — que está documentado,

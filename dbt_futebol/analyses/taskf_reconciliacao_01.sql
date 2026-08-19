@@ -66,9 +66,13 @@
 
     Consequência: nesta janela NENHUMA linha se classifica como `deriva_de_odds`, porque o
     mecanismo não existe — `linha_descendo` cai em `INVESTIGAR`, que é o veredito honesto, e o
-    resíduo está documentado em `docs/TASKF_RESULTADOS.md`, aberto e delimitado. A régua de 0,5 pp
-    continua declarada e continua valendo: ela volta a ter mordida no universo estendido da spec,
-    que alcança o presente e onde `capturas_apos_o_teto` deixa de ser zero.
+    resíduo está documentado em `docs/TASKF_RESULTADOS.md`, aberto e delimitado. A régua continua
+    declarada e continua valendo — mas vale **0,25 pp desde a #92**, e não os 0,5 que esta seção
+    dizia. A frase que estava aqui ("volta a ter mordida no universo estendido da spec") deixou de
+    ser a justificativa do número: o estendido nunca foi medido, e o que sustenta o 0,25 é o
+    resíduo do `linha_descendo` mais meia grade. O estendido segue sendo onde
+    `capturas_apos_o_teto` deixa de ser zero — e por isso segue precisando de medição PRÓPRIA
+    antes que alguém reuse este número lá.
 
     É por isso que os dois mecanismos são MEDIDOS e vão na saída (`capturas_apos_o_teto`,
     `linhas_da_22_no_preferido`): quem lê não precisa acreditar no rótulo, ele vem com o número

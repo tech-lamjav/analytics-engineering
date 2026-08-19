@@ -80,9 +80,12 @@
 --
 -- ⚠️ E A JUSTIFICATIVA DA TOLERÂNCIA NÃO SE APLICA A UMA JANELA CONGELADA — achado da #51. A
 -- coleta de odds é forward-only e para no apito: para os 169 jogos do universo congelado há ZERO
--- capturas posteriores ao teto, então o insumo dessas duas é imóvel e a folga de 0,5 pp está
--- cobrindo um mecanismo que ali não existe. Ela continua declarada porque volta a ter mordida no
--- universo estendido da spec, que alcança o presente. Quem quiser o veredito honesto sobre a
+-- capturas posteriores ao teto, então o insumo dessas duas é imóvel e a folga está cobrindo um
+-- mecanismo que ali não existe. (⚠️ A #92 tirou daqui a conclusão que estava escrita nesta linha —
+-- "ela continua declarada porque volta a ter mordida no universo estendido". A folga continua
+-- declarada, mas por OUTRO motivo, e menor: o resíduo conhecido do `linha_descendo`, medido. O
+-- universo estendido nunca foi medido e deixou de ser a justificativa; ver a decomposição das
+-- quatro parcelas acima.) Quem quiser o veredito honesto sobre a
 -- divergência de hoje lê a reconciliação, que se recusa a chamá-la de deriva e a marca
 -- `INVESTIGAR`. A guarda é deliberadamente a mais frouxa das duas leituras: ela protege o
 -- caminho da medição, não a explicação do resíduo.
