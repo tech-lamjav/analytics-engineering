@@ -35,6 +35,17 @@
 -- Se um dia a janela de detecção mudar SEM que nada em check_cols mude, a transição não vira
 -- versão — troca aceita: isso só acontece quando a nota de uma janela antiga cruza o gate de
 -- 40 por mudança de PREMISSA, não por mudança de preço.
+--
+-- As quatro flags de penalidade (#87) — `pen_odd_outlier`, `pen_poucas_casas`,
+-- `pen_odd_longshot`, `pen_odd_juice` — ficam FORA do check_cols pelo MESMO motivo da
+-- `janela_deteccao`, e por mais um que é só delas: elas são função DETERMINÍSTICA de
+-- `penalidades_globais_pts`, que já está no check_cols. Flag que muda sem mudar a soma não
+-- existe (a identidade 30/12/15/10 é guardada por assert_penalidades_globais_decompostas), e
+-- flag que muda mudando a soma já dispara o check pela soma. Incluí-las seria redundante e
+-- cobraria o preço de sempre: um check sobre coluna nova fecha TODAS as linhas vivas no
+-- primeiro run depois do deploy — pico de churn fabricado, bem no meio da medição da ADR 0009.
+-- Elas chegam ao histórico de graça, na primeira versão que a linha ganhar por preço, e é aí
+-- que o `avisos[]` deixa de ser reconstruído do presente e passa a ser point-in-time (#257).
 SELECT
     CONCAT(
       CAST(fixture_id AS STRING), '|', market, '|', outcome, '|',
