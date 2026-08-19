@@ -484,9 +484,11 @@ SELECT
     -- com o market_id do ramo e a janela publicada — e existem porque publicar só o agregado
     -- obrigava o consumidor a readivinhar as parcelas: a RPC do app as reconstruía com um
     -- `distinct on (fixture_id, outcome_side, line_value)` SEM market_id, SEM janela e sem
-    -- desempate, e em 59% das linhas do board pegava uma janela diferente da publicada (o
-    -- mercado 6, Gols O/U do 1º tempo, colide com o 5 nessa chave: `Over 0.5` do 1º tempo e
-    -- do jogo inteiro são a mesma). O aviso não muda — as strings continuam saindo daqui.
+    -- desempate, e pegava uma janela diferente da publicada em 74 das 126 linhas do board em
+    -- 18/08 e 76 das 126 em 19/08 — o número oscila a cada sync porque não HÁ desempate; o
+    -- que não oscila é isso. (O mercado 6, Gols O/U do 1º tempo, colide com o 5 nessa chave:
+    -- `Over 0.5` do 1º tempo e do jogo inteiro são a mesma.) O aviso não muda — as strings
+    -- continuam saindo daqui.
     -- Boolean atravessa o sync (ARRAY<STRING> não), então elas chegam ao Postgres e ao
     -- snapshot _hist, onde viram point-in-time. A identidade
     -- 30*outlier + 12*poucas + 15*longshot + 10*juice = penalidades_globais_pts vale em todo

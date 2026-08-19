@@ -9,9 +9,11 @@
 -- usava para montar o `avisos[]` e as descartava na projeção final — só o agregado saía. Quem
 -- precisava das parcelas (a RPC `get_futebol_fixture_value`, que remonta o aviso do lado do
 -- app) as readivinhava do `int_futebol_odds_devig` por uma chave SEM `market_id` e SEM
--- `janela_usada`, e sem desempate nenhum no `order by`. Medido no prd em 18/08: em 59% das
--- linhas do board a janela readivinhada não era a publicada, e em 27% as flags contradiziam o
--- `penalidades_globais_pts` da própria linha. Essa contradição não era falsificável em lugar
+-- `janela_usada`, e sem desempate nenhum no `order by`. Medido no prd sobre as 126 linhas do
+-- board: em 18/08, 74 linhas com janela readivinhada diferente da publicada e 34 com as flags
+-- contradizendo o `penalidades_globais_pts` da própria linha; em 19/08, 76 e 34. Os números
+-- oscilam de propósito — sem desempate, o Postgres devolve a linha que o scan encontrar
+-- primeiro, e o sync é TRUNCATE + COPY de hora em hora. Essa contradição não era falsificável em lugar
 -- nenhum — as parcelas não existiam no mart para serem comparadas com a soma. Agora existem,
 -- e esta guarda é a comparação.
 --
@@ -26,11 +28,13 @@
 --     termo do juice zera; se alguém trouxer a flag verdadeira do `d` sem somar os 10 pontos,
 --     ou somar os 10 sem trazer a flag, a linha aparece aqui.
 --
--- ⚠️ O braço do NULL é separado de propósito. As quatro flags saem COALESCE(..., FALSE) do
--- de-vig hoje, então o `CAST(... AS INT64)` nunca vê NULL — mas se um refactor as deixar
--- passar nulas, a aritmética devolveria NULL, a comparação `!=` devolveria NULL, e a linha
--- sairia CALADA por esta guarda. É a mesma degradação graciosa que o CODING_STANDARDS exige do
--- Motor: insumo ausente vira FALSE, nunca NULL propagado — e aqui, nunca guarda cega.
+-- ⚠️ O braço do NULL é separado de propósito, e cobre os DOIS lados da igualdade. As quatro
+-- flags saem COALESCE(..., FALSE) do de-vig e o agregado sai COALESCE(..., 0) em quatro ramos
+-- (na DC é aritmética), então nada disto é nulo hoje — mas `!=` com NULL de qualquer lado
+-- devolve NULL, e linha que não satisfaz o WHERE é linha que esta guarda deixa passar CALADA.
+-- Um teste que emudece exatamente quando o dado se degrada é pior que teste nenhum: ele
+-- continua verde e ninguém procura. É a mesma degradação graciosa que o CODING_STANDARDS
+-- exige do Motor — insumo ausente vira FALSE, nunca NULL propagado — aplicada à própria guarda.
 
 SELECT
     fixture_id,
@@ -48,13 +52,16 @@ SELECT
     + 15 * CAST(pen_odd_longshot AS INT64)
     + 10 * CAST(pen_odd_juice    AS INT64) ) AS soma_das_parcelas,
     CASE
+        WHEN penalidades_globais_pts IS NULL
+            THEN 'penalidade global nula — o agregado deixou de resolver ausência para zero, e a comparação com as parcelas devolveria NULL em vez de reprovar'
         WHEN pen_odd_outlier IS NULL OR pen_poucas_casas IS NULL
           OR pen_odd_longshot IS NULL OR pen_odd_juice IS NULL
             THEN 'flag de penalidade nula — o de-vig parou de resolver ausência para FALSE e a soma virou NULL, não zero'
         ELSE 'a soma publicada não é a das quatro parcelas publicadas ao lado dela — flags e agregado vieram de janelas/mercados diferentes, ou os pesos 30/12/15/10 mudaram de um lado só'
     END AS diagnostico
 FROM {{ ref('fact_value_opportunities') }}
-WHERE pen_odd_outlier IS NULL
+WHERE penalidades_globais_pts IS NULL
+   OR pen_odd_outlier IS NULL
    OR pen_poucas_casas IS NULL
    OR pen_odd_longshot IS NULL
    OR pen_odd_juice IS NULL
