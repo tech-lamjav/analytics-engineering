@@ -29,13 +29,45 @@
 --                      ou tabela — insumos determinísticos sobre um universo congelado. Não há
 --                      deriva legítima para acomodar, e acomodar assim mesmo seria a régua
 --                      virando desculpa.
---   linha_subindo e    `taskf_tolerancia_pp` (0,5 pp) nos campos medidos EM PONTOS PERCENTUAIS.
+--   linha_subindo e    `taskf_tolerancia_pp` (0,25 pp) nos campos medidos EM PONTOS PERCENTUAIS.
 --   linha_descendo     São as duas únicas que comparam preço com preço: acendem quando a média
 --                      das probabilidades implícitas de todas as casas sobe de t24h para t15m, e
 --                      o fechamento é a última janela disponível no momento do build.
 --
--- O valor 0,5 pp foi declarado ANTES de medir, calibrado pelo que o repositório já sabia (o
--- mercado de Gols anda 0,2–0,4 pp entre execuções sem que nada mude — `docs/TASK01_RESULTADOS.md`).
+-- ⚠️ O VALOR É 0,25 pp DESDE 19/08/2026 (#92). ANTES ERA 0,5, E O 0,5 NUNCA FOI MEDIDO.
+--
+-- Ele foi declarado antes de medir, calibrado por uma frase de `docs/TASK01_RESULTADOS.md` — "o
+-- mercado de Gols anda 0,2–0,4 pp entre execuções sem que nada mude". Aqueles 0,2–0,4 pp são
+-- deltas de ROI do TESTE 3 (ticket #4 daquele doc), e o Teste 3 é um agregado atrás de um
+-- LIMIAR: 0,07% das linhas trocando de lado moveu o ROI do mercado em 0,4 pp. Esta régua governa
+-- os campos por premissa do TESTE 2, que são médias. Na MESMA reconciliação de 04/08 as seis
+-- linhas do Teste 2 reproduziram com delta EXATAMENTE 0,0. Ou seja: a régua foi calibrada por
+-- uma métrica diferente da que ela mede, e a métrica que ela mede nunca tinha se mexido.
+--
+-- O 0,25 é medido, e é a soma de quatro parcelas, cada uma com número (#92, 19/08, N=8 —
+-- `analyses/taskf_ruido_do_instrumento.sql` e `docs/TASKF_RESULTADOS.md`):
+--
+--   ruído de instrumento       0,00 pp. Duas camadas, as duas em 8 execuções: a reconstrução das
+--                              premissas devolve fingerprint XOR por linha IDÊNTICO (pós-#78 a
+--                              soma é NUMERIC, exata, não depende da ordem), e a agregação do
+--                              Teste 2 não move um único campo arredondado.
+--   deriva legítima de odds    0,00 pp NESTE universo. `capturas_apos_o_teto` remedido em 19/08:
+--                              zero, última captura em 03/08. Ver o ⚠️ da janela congelada acima.
+--   resíduo conhecido do       0,2 pp, medido: com `--vars '{taskf_tolerancia_pp: 0}'` a guarda
+--   `linha_descendo`           acende 6 campos e só eles, deltas 0,1/0,1/0,1/0,2/0,2/0,2.
+--   grade do ROUND(·, 1)       0,05 pp de meia-grade, para o número não ficar EM CIMA da grade —
+--                              ver o parágrafo do knife-edge logo abaixo.
+--
+-- Por que 0,25 e não 0,2: os dois lados da comparação são impressos em UMA casa, então a
+-- subtração em FLOAT64 de dois valores da grade não devolve 0,2 e sim 0,20000000000000284 — que
+-- é `> 0.2` e deixaria a guarda vermelha no próprio resíduo que a régua declara cobrir. 0,25 cai
+-- no meio da grade: admite |Δ| até 0,2 e recusa a partir de 0,3, sem depender do último bit.
+--
+-- ⚠️ E 0,25 É CALIBRADO PARA O UNIVERSO `completo`, QUE É O ÚNICO QUE ESTA GUARDA COMPARA. A
+-- segunda parcela é zero porque a coleta parou antes do teto; no universo `estendido`, que
+-- alcança o presente, ela NÃO é zero e não foi medida — a #78 não a tocou. Quem escrever a
+-- primeira comparação sobre o estendido mede essa componente ANTES de reusar este número.
+--
 -- Ele mora em `taskf_tolerancia_pp`, o MESMO var da reconciliação: a régua existe uma vez.
 --
 -- ⚠️ NOS CAMPOS FORA DA ESCALA EM PP (`n_p0`, `n_p5`, `jogos_medios`, os dois pesos) essas duas
@@ -70,6 +102,19 @@
 -- cima de um múltiplo de meia unidade da grade (51/400 = 12,75; 308/320 = 96,25; 492/48 = 10,25) e,
 -- se cair, é empate. `analyses/taskf_remedicao.sql` faz essa comparação entre duas medições e é
 -- onde o caso se confirma.
+--
+-- ⚠️ ESSE MODO DE FALHA ESTÁ MORTO DESDE A #78, E ISSO FOI MEDIDO NA #92 — descarte-o em dois
+-- segundos, não em duas horas. O parágrafo acima fica porque descreve um fenômeno que de fato
+-- aconteceu (5 campos em 7.200 viraram 0,1 entre duas medições, e é assim que ele se
+-- diagnostica); o que mudou é o tamanho do tremor que o alimenta:
+--
+--     tremor da agregação entre 8 execuções sobre insumo imóvel   ~1e-12 pp
+--     menor folga até a fronteira do ROUND(·, 1), em 360 campos    4,1e-4 pp
+--     idem, só nas duas premissas de odds que a régua cobre        3,6e-3 pp
+--
+-- São OITO ordens de grandeza de distância. O empate não é raro nesta base: ele é impossível,
+-- e continua impossível até algum campo chegar a 1e-12 da grade. Quem vir esta guarda vermelha
+-- agora está olhando para divergência de verdade — a regra de descarte se inverteu.
 --
 -- ⚠️ CORREÇÃO DE DUAS COISAS DITAS ACIMA, MEDIDAS NA #78 — leia antes de usar este parágrafo.
 --
@@ -116,9 +161,11 @@
 --
 -- Falsificada de propósito com `--vars '{taskf_tolerancia_pp: 0}'`, que tira a folga e deixa a
 -- divergência de `linha_descendo` vermelha; o comando e o resultado estão em
--- `docs/TASKF_RESULTADOS.md`, seção do ticket #55.
+-- `docs/TASKF_RESULTADOS.md`, seção do ticket #55. A #92 acrescentou a falsificação do valor
+-- NOVO — `--vars '{taskf_tolerancia_pp: 0.15}'` derruba só os três campos de delta 0,2 —, que é
+-- o que prova que 0,25 ainda morde em vez de ser folga de sobra.
 
-{% set tol = var('taskf_tolerancia_pp', 0.5) %}
+{% set tol = var('taskf_tolerancia_pp', 0.25) %}
 
 {#- As duas que leem odds ao vivo. Não é lista de exceção conveniente: é o conjunto exato das que
     comparam preço com preço, e é a MESMA lista da analyses/taskf_reconciliacao_01.sql. -#}

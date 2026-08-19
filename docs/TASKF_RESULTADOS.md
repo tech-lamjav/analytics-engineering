@@ -2771,3 +2771,191 @@ gravada e não reconstrói nada; a deriva de odds que a #51 documentou não o al
 
 ⚠️ **Sem `--max_rows` o `bq query` corta em 100 linhas sem avisar**, e são 60 mais o cabeçalho de
 progresso; com o anexo junto a margem é pequena. É o mesmo corte silencioso da #57.
+
+---
+
+## Ticket #92 — a régua remedida: `taskf_tolerancia_pp` de 0,5 pp para 0,25 pp
+
+`analyses/taskf_ruido_do_instrumento.sql` · medição de **19/08/2026**, N = 8 execuções por camada
+
+### Veredito
+
+**O Gols não anda mais entre execuções idênticas. Anda 0,0 pp, contra os 0,2–0,4 pp que
+calibraram a régua — e aqueles 0,2–0,4 nunca foram medidos sobre o que a régua mede.**
+
+A régua desce para **0,25 pp**. Ela deixa de ser um número declarado e passa a ser uma soma de
+quatro parcelas, cada uma com medição atrás.
+
+### A descoberta que muda a leitura do número antigo: ele foi calibrado na métrica errada
+
+O 0,5 pp saiu de uma frase de `docs/TASK01_RESULTADOS.md` — *"o mercado de Gols anda 0,2–0,4 pp
+entre execuções sem que nada mude"*. Voltando ao ticket #4 daquele doc, de onde a frase vem, os
+0,2–0,4 pp são **deltas de ROI do Teste 3**:
+
+| Bloco | Métrica | n | Esperado | Obtido | Delta |
+|---|---|---|---|---|---|
+| Teste 3 | 2+ premissas | 4.066 | −7,6 | −7,4 | **+0,2** |
+| Teste 3 por mercado | Gols | 2.182 | −7,3 | −6,9 | **+0,4** |
+
+O Teste 3 é um agregado atrás de um **limiar**: a porta "N+ premissas" faz uma linha que sai de
+`n_prem = 1` para `2` entrar inteira no universo, e o próprio doc mede que **0,07% das linhas
+virando moveu o ROI do mercado em 0,4 pp**. A `taskf_tolerancia_pp` não governa nada disso — ela
+governa os campos por premissa do **Teste 2**, que são médias, sem porta.
+
+E o mesmo ticket #4 diz o que o Teste 2 fez naquela execução: *"22 das 25 linhas de comparação com
+delta exatamente 0,0 — **incluindo as seis do Teste 2**"*. Ou seja, a métrica que a régua mede
+**já reproduzia exato em 04/08**, e nunca fez parte da calibragem. O 0,5 pp era folga emprestada de
+outro fenômeno.
+
+Isso é o argumento mais forte para remedir, e ele independe do resultado da remedição.
+
+### As quatro medições
+
+Todas em SELECT — nenhum `dbt run`, nenhuma escrita em `futebol` nem em `futebol_taskF`.
+
+#### 1. A métrica que produziu os 0,2–0,4 pp, remedida
+
+`analyses/task01_reconciliacao.sql` é o artefato que gerou aquela tabela. Rodado **8 vezes
+seguidas** com o código pós-#78, as 8 saídas são **byte-idênticas** (mesmo `md5`), incluindo a
+linha do Gols. O movimento entre execuções idênticas é **0,0 pp**.
+
+⚠️ **As linhas dessa saída dizem `DIVERGE` contra os valores publicados em 04/08 — e isso NÃO é
+instabilidade.** O Gols sai hoje em −5,5 contra os −7,3 publicados, e o `n` da porta 2+ em 4.023
+contra 4.066. Entre 04/08 e hoje o pipeline mudou de verdade: o de-vig de consenso (#22), as
+janelas de coleta na chave (#37, #40) e a própria #78. A afirmação da #92 é sobre a **variância
+entre execuções do mesmo código**, não sobre reprodução do publicado — e ela é a igualdade dos 8
+`md5`. Quem confundir as duas vai caçar um fantasma que a ADR 0010 já explicou.
+
+#### 2. Camada 1 — a reconstrução das premissas
+
+Os cinco `int_futebol_premissas_*` são `materialized: table`: uma re-medição os **reconstrói**, e
+era aí que morava o ruído da #78. O modelo do Gols compilado e rodado como SELECT, 8 vezes:
+
+| | valor nas 8 execuções |
+|---|---|
+| `linha_subindo` | 2.010 |
+| `linha_descendo` | 2.713 |
+| `ataque_combinado` / `defesas_firmes` | 11.011 / 11.526 |
+| `xg_combinado_alto` / `xg_baixo_combinado` / `ritmo_alto` | 11.516 / 10.647 / 16.895 |
+| linhas | 76.520 |
+| `BIT_XOR` do fingerprint por linha | `-2294657971955933595` |
+
+O fingerprint é o que a contagem sozinha não dá: dois flips em sentidos opostos se cancelam num
+`COUNTIF` e **não** se cancelam num XOR de `FARM_FINGERPRINT` por linha. As 8 execuções são
+idênticas linha a linha, não só no total.
+
+E aqui a estabilidade é **por construção, não por sorte de rodada**: pós-#78 as duas premissas de
+odds saem de `SAFE_DIVIDE(SUM(CAST(1.0/odd AS NUMERIC)), COUNT(...))`. Soma em ponto FIXO é exata,
+e soma exata não depende da ordem em que o BigQuery funde os shards.
+
+#### 3. Camada 2 — a agregação do Teste 2, que ninguém tinha medido
+
+A #78 corrigiu **modelos**; a guarda `assert_premissas_sem_agregado_instavel` cobre modelo, não
+análise. O `AVG(IF(pl.acesa, ...))` sobre FLOAT64 — exatamente o agregado instável que a #78 tirou
+da produção — continua sendo o instrumento com que a [F] se mede. 8 execuções sobre insumo imóvel
+(`odds_loaded_at` idêntico nas 8, conferido na própria saída):
+
+- **nenhum** dos campos arredondados mudou, em nenhuma das 60 linhas;
+- **4 de 360** campos brutos tremeram, todos na 12ª casa decimal:
+
+| linha | campo | amplitude nas 8 |
+|---|---|---|
+| Gols · `ritmo_alto` · sharp | `diferenca_p0` | 1,0e-12 pp |
+| Gols · `xg_baixo_combinado` · consenso | `aconteceu_p0` | 9,9e-13 pp |
+| Handicap · `defesa_fora_solida` · sharp | `diferenca_p0` | 1,0e-12 pp |
+| Dupla Chance · `invicto_recente` · derivada | `diferenca_p10` | 1,0e-12 pp |
+
+**Ver o bruto ao lado do arredondado é o ponto da análise.** Só com o arredondado, "8 execuções
+idênticas" seria ambíguo entre *não há tremor* e *não houve empate nesta rodada* — e essas duas
+pedem decisões diferentes.
+
+#### 4. O empate de arredondamento está morto, e dá para dizer por quanto
+
+O modo de falha que o cabeçalho da guarda manda descartar antes de procurar bug — um valor em cima
+da grade do `ROUND(·, 1)` caindo para lados diferentes — precisa que o tremor alcance a fronteira.
+Distância medida nos 360 campos:
+
+| | |
+|---|---|
+| tremor da agregação (item 3) | ~1e-12 pp |
+| menor folga até a fronteira, 360 campos | **4,1e-4 pp** (`defesas_firmes`, `pct_amostra_curta` = 40,650406…) |
+| menor folga, só nas duas premissas de odds | **3,6e-3 pp** (`linha_descendo`, `pct_amostra_curta`) |
+
+**Oito ordens de grandeza.** O empate não ficou raro: ficou impossível nesta base. A regra de
+descarte do cabeçalho se inverteu — guarda vermelha agora é divergência de verdade.
+
+#### 5. A componente que a #78 não tocou, remedida hoje
+
+A deriva **legítima** de odds. Na janela congelada ela não tem mecanismo, e o número foi
+reconferido em 19/08:
+
+```
+capturas_apos_o_teto = 0    (última captura do universo: 2026-08-03 00:00:01)
+```
+
+### A régua nova, parcela a parcela
+
+| parcela | o que cobre | medido |
+|---|---|---|
+| ruído de instrumento | camadas 1 e 2, 8 execuções cada | **0,00 pp** |
+| deriva legítima de odds | capturas após o teto, universo `completo` | **0,00 pp** |
+| resíduo conhecido do `linha_descendo` | as 2 linhas de aposta de 405 que o medido perdeu | **0,2 pp** |
+| meia grade do `ROUND(·, 1)` | tirar o número de cima da grade — ver abaixo | **0,05 pp** |
+| | | **0,25 pp** |
+
+**Por que 0,25 e não 0,2, medido e não deduzido.** Os dois lados da comparação são impressos em uma
+casa decimal, então a subtração em FLOAT64 de dois valores da grade não devolve 0,2 — devolve
+0,20000000000000284, que é `> 0.2`. Com `--vars '{taskf_tolerancia_pp: 0.2}'` a guarda fica
+**vermelha nos três campos de delta 0,2**, isto é, no próprio resíduo que a régua declara cobrir.
+0,25 cai no meio da grade: admite |Δ| até 0,2 e recusa a partir de 0,3, sem depender do último bit.
+
+⚠️ **O que a #92 deliberadamente NÃO faz: apertar até o zero.** O ruído mede 0,00 pp, mas zerar a
+régua deixaria a guarda vermelha no resíduo do `linha_descendo` — que está documentado,
+delimitado e não é defeito do caminho de medição que a guarda protege. Trocar um falso-verde por
+um falso-vermelho é o que o próprio ticket #92 avisou para não fazer.
+
+⚠️ **E 0,25 vale para o universo `completo`, o único que os dois consumidores da var comparam**
+(`tests/assert_taskf_base_reproduz_01.sql` e `analyses/taskf_reconciliacao_01.sql`, ambos em
+`universo = 'completo'`). No `estendido`, que alcança o presente, a segunda parcela deixa de ser
+zero e **não foi medida** — a #78 não a tocou. Quem escrever a primeira comparação sobre o
+estendido mede essa componente antes de reusar este número.
+
+### Verificação, nas duas direções
+
+```bash
+# verde com o valor novo — 0 linhas
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt test --target taskF --select assert_taskf_base_reproduz_01
+#   1 of 1 PASS assert_taskf_base_reproduz_01
+
+# falsificação do valor NOVO: 0,15 derruba só os três campos de delta 0,2
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --select assert_taskf_base_reproduz_01 \
+  --vars '{taskf_tolerancia_pp: 0.15}'
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/tests/assert_taskf_base_reproduz_01.sql
+#   3 linhas: linha_descendo · pct_amostra_curta, diferenca_p5, diferenca_p10 (delta 0,2)
+
+# o knife-edge, medido: 0,2 EM CIMA da grade também derruba os mesmos três
+#   --vars '{taskf_tolerancia_pp: 0.2}'  ->  3 linhas
+```
+
+### Como remedir
+
+```bash
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --select taskf_ruido_do_instrumento
+for i in $(seq 1 8); do
+  bq query --use_legacy_sql=false --project_id=smartbetting-dados --format=csv --max_rows=500 \
+    < target/compiled/dbt_futebol/analyses/taskf_ruido_do_instrumento.sql > /tmp/r$i.csv
+done
+for i in $(seq 2 8); do diff -q /tmp/r1.csv /tmp/r$i.csv; done
+```
+
+⚠️ Confira o `odds_loaded_at` da saída antes de ler a diferença: se um rebuild agendado cair no
+meio das 8, elas deixam de ser 8 execuções idênticas e a diferença vira insumo novo lido como
+tremor do instrumento. A coluna está lá para essa conferência.
+
+### O que a #92 não toca
+
+O rebaseline dos quatro números da [F] que a #78 avisou que ficariam vermelhos na próxima
+reconstrução das células (`superioridade_xg`, `xg_combinado_alto`, `xg_baixo_combinado`,
+`ritmo_alto`). Isso é a #82 reescopada, sequenciada pela ADR 0010, e exige `dbt run --target
+taskF`. A #92 termina na régua.

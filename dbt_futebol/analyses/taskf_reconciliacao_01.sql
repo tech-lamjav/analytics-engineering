@@ -34,8 +34,18 @@
        sobre o mesmo universo congelado: deveria ser DETERMINÍSTICA. Diferença aqui não tem
        explicação pronta e é achado até que se prove o contrário.
 
-    A régua está em `taskf_tolerancia_pp` (default 0,5 pp), aplicada só sobre a origem 1. O valor
+    A régua está em `taskf_tolerancia_pp` (default 0,25 pp), aplicada só sobre a origem 1. O valor
     é declarado e justificado por escrito em `docs/TASKF_RESULTADOS.md` — aqui ele é só o número.
+
+    ⚠️ ERA 0,5 pp ATÉ 19/08/2026, e desceu na #92 porque o 0,5 nunca tinha sido medido: ele saiu
+    de uma frase sobre deltas de ROI do TESTE 3 ("0,2–0,4 pp entre execuções"), enquanto esta
+    régua governa campos do TESTE 2 — que, na reconciliação de 04/08, reproduziram com delta
+    exatamente 0,0. A #78 tirou o ruído de instrumento que alimentava aqueles 0,2–0,4, e a #92
+    remediu: 0,00 pp em 8 execuções, nas duas camadas (reconstrução das premissas e agregação do
+    Teste 2). O que sobrou dentro do 0,25 é o resíduo conhecido do `linha_descendo` (0,2 pp
+    medido) mais meia grade do `ROUND(·, 1)`, que tira o número de cima da grade. A decomposição
+    inteira está no cabeçalho da tests/assert_taskf_base_reproduz_01.sql — a régua existe uma vez,
+    o argumento também.
 
     ⚠️ O QUE A PRIMEIRA EXECUÇÃO MOSTROU, e que muda como esta saída deve ser lida (12/08/2026):
 
@@ -89,7 +99,7 @@
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 #}
 
-{%- set tol = var('taskf_tolerancia_pp', 0.5) -%}
+{%- set tol = var('taskf_tolerancia_pp', 0.25) -%}
 {%- set j   = taskf_universo() -%}
 
 {#- As duas premissas que leem odds ao vivo. Não é uma lista de exceções conveniente: é o
