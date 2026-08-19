@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 ---
 
 # O funil é append-only e congela no apito
