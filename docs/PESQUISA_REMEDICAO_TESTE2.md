@@ -1,5 +1,13 @@
 # Pesquisa — a remedição do Teste 2 está destravada?
 
+> **A decisão que este levantamento pedia foi tomada em 2026-08-19:**
+> `dbt_futebol/docs/adr/0010-a-remedicao-do-teste-2-e-janela-nova-sobre-pipeline-juntado.md`.
+> Ela responde a bifurcação da seção 3 (leitura estrita, e não a pragmática), corta a circularidade
+> da ADR 0008 descrita na seção 2c, e substitui a condição de destrave de 04/08 por cinco termos
+> conferíveis. Duas incertezas da seção 4 foram fechadas com dado vivo — o universo do Teste 2 não
+> passa pelo gate, e o eixo que resgata a Europa na janela nova é o **recorte**, não o escopo.
+> Este documento fica como está: é o levantamento que a ADR cita, não um documento vivo.
+
 Levantamento, não decisão. Escrito em 2026-08-19 contra o código do worktree
 `impl-87-flags-penalidade` (`master` em `2a4ac2a`), o corpo das issues do GitHub, as ADRs do
 `dbt_futebol/docs/adr/` e os dois docs de resultado (`docs/TASK01_RESULTADOS.md`,
