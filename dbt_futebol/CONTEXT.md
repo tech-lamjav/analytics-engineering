@@ -45,7 +45,19 @@ _Avoid_: feature, predictor
 
 **Gate**:
 The eliminatory precondition (positive edge and enough bookmakers). Failing the gate
-means the bet is not an opportunity at all. Dupla Chance has its own gate.
+means the bet is not an opportunity at all. Dupla Chance has its own gate. The gate is
+the **conjunction of the portas** — it says whether a line publishes, never which
+condition stopped it.
+_Avoid_: using gate where the individual condition is meant (that is a **porta**)
+
+**Porta**:
+One named eliminatory condition, recorded as one boolean per candidato. Portas are
+counted one at a time on purpose: a line can fail several at once, so a single "reason"
+column is a win for whichever is checked first and destroys the only two readings the
+funil exists for — how many lines a porta removes **alone**, and how many it still
+removes **after** the ones before it. A primary reason derived on top of the booleans is
+a reading convenience, never the source.
+_Avoid_: motivo de rejeição as a single column
 
 **Faixa**:
 The confidence band over the score: Alta (>= 60), Média (40–59), Baixa (< 40).
@@ -67,8 +79,37 @@ universe the gates act on, and the denominator of every funnel reading. A line n
 priced is not a rejected candidato, it is absence of market: that belongs to coleta, not
 to the funil. A candidato whose conjunto de saídas came in incomplete still counts —
 it exists, it just lost its fair probability.
+The universe is bounded by the markets the Motor scores. A priced line in a market with
+no premissa model at all (first-half goals) is **outside** the funil, not rejected by it
+— we never wrote that model, so its absence is not our decision. A priced **saída** the
+Motor declines to score inside a market it does model is the opposite case, and stays in
+(see **saída não catalogada**).
 _Avoid_: counting every premissa row (they are generated for canonical lines with no
 market at all, and are unbounded)
+
+**Funil**:
+Every candidato with the verdict of each porta on it, the score it got, and nothing
+filtered away. It is a **record of what the Motor said**, not a re-derivation of what
+today's code would say: a row is written once, refined while the fixture is still ahead,
+and frozen at kickoff. It keeps the played fixture — that is the only thing that can
+answer what the discarded faixa would have returned — and it lives in BigQuery only; the
+app never reads it.
+_Avoid_: reading the funil as a board with more rows, or expecting a rebuilt table to
+preserve a funil at all
+
+**Saída não catalogada**:
+An outcome that was priced, inside a market the Motor does model, that the Motor chooses
+not to score — Dupla Chance prices 1X, 12 and X2, and only 1X and X2 are published. It
+had a price, so it is a candidato, and the choice is ours: it is a rejection with its own
+porta, never a silent absence.
+
+**Congelamento no apito**:
+The moment a funil row stops being rewritten: kickoff. After it, no build and no deploy
+touches the row. The boundary is the whistle and not the final status, because the two
+hours of play are exactly where a score nobody could have read before betting would be
+written. A postponed fixture whose kickoff moves back into the future becomes writable
+again — it went back to being bettable.
+_Avoid_: confusing it with expurgo (that is the board's boundary, and it runs on status)
 
 **Board**:
 The window of what is **still bettable**: the value opportunities of fixtures that have
