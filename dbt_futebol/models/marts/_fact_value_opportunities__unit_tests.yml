@@ -92,8 +92,8 @@ unit_tests:
       rows:
         # fixture 1: publica a t15m (o preço que dá para pegar) e conta que a
         # oportunidade está no board desde a t24h.
-        - {fixture_id: 1, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't24h', score: 45}
+        - {fixture_id: 1, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't24h', score: 45, penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
         # fixture 3: nasceu na janela corrente — detecção e avaliação coincidem.
-        - {fixture_id: 3, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't15m', score: 45}
+        - {fixture_id: 3, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't15m', score: 45, penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
         # As fixtures 2 e 4 não aparecem. São as duas formas de morrer na janela
         # corrente: a 2 por preço, a 4 por conjunto incompleto.
