@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     cluster_by=['competition', 'fixture_id'],
-    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate (edge>0 E n_casas>=3 E de-vig válido E conjunto da Pinnacle completo pro mercado E score>=40 E — p/ Handicap asiático/Gols O/U — linha meia .5, sem push). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES). faixa Alta(>=60)/Média(40-59); abaixo de 40 não vira oportunidade. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market` — v5 liga 1X2 (market_id=1) + Gols O/U (market_id=5) + Handicap asiático (market_id=4) + Ambos Marcam/BTTS (market_id=8) + Dupla Chance (market_id=12, saídas 1X/X2). Junta int_futebol_premissas_1x2/_ou/_ah/_btts/_dc + int_futebol_odds_devig + int_futebol_corroboracao. line_value é NULL no 1X2/BTTS/DC, a linha L no O/U e o handicap (ótica do mandante, mesmo p/ Home e Away) no AH. valor_fonte = pinnacle (de-vig da Pinnacle, mercados 1/4/5; e DC, derivada do 1X2 da Pinnacle) ou consenso (de-vig da mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front). A DC tem GATE PRÓPRIO (melhor_odd >=1,25, sem odd_juice) — aplicado no ramo joined_dc; o gate >=1,25 já garante o retorno mínimo (sem penalidade específica de odd baixa). Contador de cegueira (#41, ADR 0003): premissas_sem_dado diz QUANTAS premissas aplicáveis àquela linha não puderam ser avaliadas por falta de insumo — gerado do mapa futebol_insumos_premissa(), nunca escrito à mão. QUAIS foram fica nos modelos de premissas (premissas_cegas[]), de onde este número vem: o mart carrega a contagem, que é o que o board exibe. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. premissas_sem_dado é propagado dos cinco modelos de premissas e sai também como aviso em avisos[], SEM pontos entre parênteses: ele não desconta nada, diz que a nota está incompleta e não contrária (#41, ADR 0003). JANELA DE DETECÇÃO (#40, ADR 0004): janela_deteccao é a janela mais cedo (daily<t24h<t1h<t15m) em que ESTA linha passou no gate; janela_usada continua sendo a janela corrente, a que dá o preço publicado. Nunca posterior a janela_usada (guarda assert_janela_deteccao_nao_posterior). O grão NÃO muda — segue 1 linha por (fixture, mercado, saída, linha) —, mas o CUSTO muda: achar a janela mais cedo exige rodar o gate (nota inclusa) em TODAS as janelas coletadas e só depois reduzir, então os joins deste mart abrem ~4x antes do WHERE final. Linha que passou numa janela cedo e não passa na corrente NÃO aparece no board: preço que o usuário não consegue mais pegar não é oportunidade, e o histórico do que já foi anunciado vive no snapshot fact_value_opportunities_hist.'
+    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate (edge>0 E n_casas>=3 E de-vig válido E conjunto da Pinnacle completo pro mercado E score>=40 E — p/ Handicap asiático/Gols O/U — linha meia .5, sem push). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES). faixa Alta(>=60)/Média(40-59); abaixo de 40 não vira oportunidade. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market` — v5 liga 1X2 (market_id=1) + Gols O/U (market_id=5) + Handicap asiático (market_id=4) + Ambos Marcam/BTTS (market_id=8) + Dupla Chance (market_id=12, saídas 1X/X2). Junta int_futebol_premissas_1x2/_ou/_ah/_btts/_dc + int_futebol_odds_devig + int_futebol_corroboracao. line_value é NULL no 1X2/BTTS/DC, a linha L no O/U e o handicap (ótica do mandante, mesmo p/ Home e Away) no AH. valor_fonte = pinnacle (de-vig da Pinnacle, mercados 1/4/5; e DC, derivada do 1X2 da Pinnacle) ou consenso (de-vig da mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front). A DC tem GATE PRÓPRIO (melhor_odd >=1,25, sem odd_juice) — aplicado no ramo joined_dc; o gate >=1,25 já garante o retorno mínimo (sem penalidade específica de odd baixa). Contador de cegueira (#41, ADR 0003): premissas_sem_dado diz QUANTAS premissas aplicáveis àquela linha não puderam ser avaliadas por falta de insumo — gerado do mapa futebol_insumos_premissa(), nunca escrito à mão. QUAIS foram fica nos modelos de premissas (premissas_cegas[]), de onde este número vem: o mart carrega a contagem, que é o que o board exibe. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. premissas_sem_dado é propagado dos cinco modelos de premissas e sai também como aviso em avisos[], SEM pontos entre parênteses: ele não desconta nada, diz que a nota está incompleta e não contrária (#41, ADR 0003). JANELA DE DETECÇÃO (#40, ADR 0004): janela_deteccao é a janela mais cedo (daily<t24h<t1h<t15m) em que ESTA linha passou no gate; janela_usada continua sendo a janela corrente, a que dá o preço publicado. Nunca posterior a janela_usada (guarda assert_janela_deteccao_nao_posterior). O grão NÃO muda — segue 1 linha por (fixture, mercado, saída, linha) —, mas o CUSTO muda: achar a janela mais cedo exige rodar o gate (nota inclusa) em TODAS as janelas coletadas e só depois reduzir, então os joins deste mart abrem ~4x antes do WHERE final. Linha que passou numa janela cedo e não passa na corrente NÃO aparece no board: preço que o usuário não consegue mais pegar não é oportunidade, e o histórico do que já foi anunciado vive no snapshot fact_value_opportunities_hist. PARCELAS DA PENALIDADE GLOBAL (#87): além do agregado penalidades_globais_pts, o mart publica as quatro flags que o compõem — pen_odd_outlier/pen_poucas_casas/pen_odd_longshot/pen_odd_juice, BOOLEAN —, as MESMAS que montam o avisos[]. Antes só o agregado saía, e o consumidor tinha de readivinhar as parcelas a partir do int_futebol_odds_devig por uma chave sem market_id e sem janela: a soma sobrevivia e as parcelas se perdiam. Publicá-las não muda score, avisos nem grão; muda que a parcela é lida em vez de reconstruída, e que ela entra no snapshot _hist (vira point-in-time). Identidade garantida em todo ramo: 30*outlier + 12*poucas + 15*longshot + 10*juice = penalidades_globais_pts (na Dupla Chance o juice é FALSE de propósito — o gate de odd >=1,25 já cobre o retorno mínimo). EXPURGO DO BOARD (#85, ADR 0009): o mart é a janela do que AINDA DÁ PARA APOSTAR — junta fact_fixtures e não emite linha de jogo com status terminal (FT/AET/PEN/CANC/ABD/AWD/WO) nem ao vivo, com rede de segurança em kickoff + var expurgo_carencia_horas (24) para o jogo que passou do apito e nunca recebeu status. PST/SUSP/INT SOBREVIVEM, inclusive além da carência: kickoff no passado com jogo por acontecer é oportunidade legítima. Antes do expurgo o mart não tinha filtro de data nem de status e reemitia jogo encerrado a cada run (121 linhas no PRD em 17/08, só 2 de jogo futuro, a mais velha de 19/06). NENHUMA COLUNA NOVA sai daqui por causa disso — coluna nova em tabela sincronizada exigiria migration no Postgres antes do deploy da imagem, e o filtro por join não exige nada. Nada é apagado: o fact_value_opportunities_hist fecha e guarda a versão (invalidate_hard_deletes), e é dele que o app serve o passado em leitura point-in-time no apito. O predicado mora em macros/futebol_expurgo.sql, num lugar só, porque a guarda assert_board_sem_jogo_encerrado o espelha.'
 ) }}
 
 WITH prem_1x2 AS (
@@ -42,6 +42,27 @@ devig AS (
 corro AS (
     SELECT *, COALESCE(CAST(line_value AS STRING), 'NONE') AS line_key
     FROM {{ ref('int_futebol_corroboracao') }}
+),
+
+-- O EXPURGO DO BOARD (#85, ADR 0009): o único uso de `fact_fixtures` neste mart, e ele
+-- serve só ao filtro final. Até aqui o mart não tinha filtro de data nem de status, e a
+-- linha de jogo encerrado seguia sendo reavaliada e reemitida a cada run — 121 linhas no
+-- PRD em 17/08, só 2 de jogo futuro, a mais velha de 19/06.
+--
+-- As duas colunas vêm com prefixo `_fx_` por necessidade, não por estilo: `fact_fixtures`
+-- também tem `competition` e `season`, e a lista final deste modelo referencia as duas sem
+-- qualificar. Trazer o `*` (ou os nomes originais) tornaria as referências ambíguas e o
+-- modelo pararia de compilar.
+--
+-- NENHUMA COLUNA NOVA SAI DAQUI, e isso é decisão, não descuido: coluna nova em tabela
+-- sincronizada exige migração no Postgres ANTES do deploy da imagem, senão o parity aborta
+-- as 21 tabelas. O filtro por join não exige nada — por isso ele é o mecanismo escolhido.
+fixtures AS (
+    SELECT
+        fixture_id,
+        status_short AS _fx_status_short,
+        kickoff_utc  AS _fx_kickoff_utc
+    FROM {{ ref('fact_fixtures') }}
 ),
 
 -- ============================================================================
@@ -480,6 +501,24 @@ SELECT
 
     -- componentes (transparência/debug)
     penalidades_globais_pts,
+    -- AS PARCELAS DA SOMA ACIMA (#87). Vêm do MESMO `d` que monta o `avisos[]` logo acima —
+    -- com o market_id do ramo e a janela publicada — e existem porque publicar só o agregado
+    -- obrigava o consumidor a readivinhar as parcelas: a RPC do app as reconstruía com um
+    -- `distinct on (fixture_id, outcome_side, line_value)` SEM market_id, SEM janela e sem
+    -- desempate, e pegava uma janela diferente da publicada em 74 das 126 linhas do board em
+    -- 18/08 e 76 das 126 em 19/08 — o número oscila a cada sync porque não HÁ desempate; o
+    -- que não oscila é isso. (O mercado 6, Gols O/U do 1º tempo, colide com o 5 nessa chave:
+    -- `Over 0.5` do 1º tempo e do jogo inteiro são a mesma.) O aviso não muda — as strings
+    -- continuam saindo daqui.
+    -- Boolean atravessa o sync (ARRAY<STRING> não), então elas chegam ao Postgres e ao
+    -- snapshot _hist, onde viram point-in-time. A identidade
+    -- 30*outlier + 12*poucas + 15*longshot + 10*juice = penalidades_globais_pts vale em todo
+    -- ramo (na DC o juice é FALSE de propósito) e é medida por
+    -- assert_penalidades_globais_decompostas.
+    pen_odd_outlier,
+    pen_poucas_casas,
+    pen_odd_longshot,
+    pen_odd_juice,
     penalidades_especificas_pts,
     modelo_api_concorda,
     linha_sharp_confirma,
@@ -490,6 +529,12 @@ SELECT
 
     CURRENT_TIMESTAMP() AS dbt_loaded_at
 FROM com_deteccao
+-- LEFT, nunca INNER (#85, ADR 0009 + ADR 0003). Fixture que não existe em `fact_fixtures`
+-- não deve sumir do board: sumir seria a perda silenciosa que a ADR 0009 existe para
+-- impedir. O predicado do expurgo devolve NULL nesse caso e o `COALESCE(..., FALSE)` abaixo
+-- deixa a linha passar — e a guarda 1 acende vermelho com diagnóstico próprio, que é o
+-- caminho certo para dado faltante: diagnosticar, não eliminar.
+LEFT JOIN fixtures USING (fixture_id)
 -- A REDUÇÃO A UMA LINHA POR (fixture, mercado, saída, linha) (#40). O grão do mart não
 -- mudou; o que mudou é que a redução agora é explícita aqui, em vez de vir pronta do
 -- macro futebol_devig_janela_corrente(). As duas condições respondem coisas diferentes
@@ -502,3 +547,17 @@ FROM com_deteccao
 --                       para ficar nele com carimbo antigo (ADR 0004).
 WHERE janela_e_corrente
   AND passou_no_gate
+  -- O BOARD É A JANELA DO QUE AINDA DÁ PARA APOSTAR (#85, ADR 0009). O predicado mora em
+  -- `macros/futebol_expurgo.sql`, num lugar só, porque a guarda 1 o espelha para provar que
+  -- o expurgo aconteceu — e predicado copiado é predicado que diverge.
+  --
+  -- Nada é apagado: o mart é reconstruído do zero e o `fact_value_opportunities_hist` fecha
+  -- e guarda a versão pelo `invalidate_hard_deletes` do snapshot, sem nenhuma mudança lá.
+  -- Sair do board é deixar de ser emitida, não deixar de ter existido.
+  --
+  -- O `COALESCE(..., FALSE)` é o fail-open explicado no join e no macro: fixture ausente
+  -- não expurga a linha, acende a guarda.
+  AND NOT COALESCE(
+        {{ futebol_expurga_do_board('_fx_status_short', '_fx_kickoff_utc') }},
+        FALSE
+      )

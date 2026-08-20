@@ -15,6 +15,19 @@ models:
       ⚠️ Desde a #40 o gate é avaliado em TODAS as janelas coletadas e só depois reduzido a uma
       linha: é o que permite dizer, em `janela_deteccao`, há quanto tempo a oportunidade está no
       board. O grão não muda; o custo por build sim (os joins abrem ~4x antes do filtro final).
+      ⚠️ EXPURGO (#85, ADR 0009): passar no gate deixou de bastar. O mart é a JANELA DO QUE AINDA
+      DÁ PARA APOSTAR — junta `fact_fixtures` e não emite linha de jogo com status terminal
+      (FT/AET/PEN/CANC/ABD/AWD/WO) nem ao vivo, com rede de segurança em kickoff +
+      `var expurgo_carencia_horas` (24) para o jogo que passou do apito e nunca recebeu status.
+      `PST`, `SUSP` e `INT` SOBREVIVEM, inclusive além da carência: kickoff no passado com jogo
+      por acontecer é oportunidade legítima. Antes disso o mart não tinha filtro de data nem de
+      status e reemitia jogo encerrado a cada run — 133 linhas no PRD em 20/08, só 6 de jogo
+      futuro, a mais velha de 19/06. NENHUMA COLUNA NOVA saiu daqui por causa disso (coluna nova
+      em tabela sincronizada exigiria migration no Postgres antes do deploy da imagem; o filtro
+      por join não exige nada). Nada é apagado: o `fact_value_opportunities_hist` fecha e guarda
+      a versão, e é dele que o app serve o passado em leitura point-in-time no apito. O predicado
+      mora em `macros/futebol_expurgo.sql`, num lugar só, porque a guarda
+      `assert_board_sem_jogo_encerrado` o espelha.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -108,6 +121,32 @@ models:
               config:
                 severity: error
                 tags: ['guarda']
+      # AS QUATRO PARCELAS DE penalidades_globais_pts (#87). Sem teste de coluna aqui: a
+      # afirmação que importa não é sobre cada uma isolada, é a identidade entre as quatro e
+      # o agregado — e ela vive em assert_penalidades_globais_decompostas (tag:guarda), que é
+      # onde o agendado a lê. Um not_null por coluna seria mais fraco (o braço do NULL da
+      # guarda já cobre) e diria menos.
+      - name: pen_odd_outlier
+        description: >
+          TRUE quando a melhor odd está >= 10% acima da média das OUTRAS casas — provável linha
+          mole ou erro de precificação (−30 pts). Vale para a janela PUBLICADA (`janela_usada`)
+          e para o mercado desta linha. É uma das quatro parcelas de `penalidades_globais_pts`,
+          e é a mesma flag que emite o aviso correspondente em `avisos[]`.
+      - name: pen_poucas_casas
+        description: >
+          TRUE quando menos de 4 casas cobrem o mercado (−12 pts) — mercado fino, preço menos
+          confiável. Não confundir com o gate `n_casas >= 3`, que é eliminatório: aqui a linha
+          entrou no board e leva desconto. Parcela de `penalidades_globais_pts`.
+      - name: pen_odd_longshot
+        description: >
+          TRUE quando a melhor odd passa de 4,5 (−15 pts) — azarão, onde o de-vig erra mais e a
+          variância manda mais que o edge. Parcela de `penalidades_globais_pts`.
+      - name: pen_odd_juice
+        description: >
+          TRUE quando a melhor odd é menor que 1,40 (−10 pts) — retorno baixo demais para o
+          risco. Parcela de `penalidades_globais_pts`. ⚠️ Sempre FALSE na Dupla Chance, e de
+          propósito: aquele ramo tem gate de odd próprio (melhor_odd >= 1,25) e não aplica a
+          penalidade de juice, então a soma dele também não tem o termo de 10 pontos.
       - name: edge
         description: "EV/edge = best_odd * prob_justa − 1. Gate garante > 0 nas linhas materializadas. É a MEDIDA DE VALOR/EV — ranqueie por `edge` p/ tamanho de vantagem; `score`/`faixa` são índice de CONFIABILIDADE (não monotônicos no edge)."
     tests:

@@ -37,6 +37,16 @@ explícita de não mexer em premissa. Fica registrada como candidata para a [B],
 motivo, com o agravante de que o percentil mistura ligas de níveis diferentes sem nada que
 sinalize isso no número.
 
+⚠️ **Emenda de 2026-08-19 — "adiada para a [B]" não faz da [B] pré-requisito de nada.** Ler o
+parágrafo acima como se a [B] precisasse decidir *antes* de o escopo ser juntado em produção cria
+uma circularidade: parte de (c) esperando a task que (c) bloqueia. A **ADR 0010** cortou isso, e o
+corte é uma releitura desta ADR, não uma exceção a ela. Como esta ADR já decidiu que as quatro
+**permanecem competição-scoped** — *"essa imobilidade é o resultado reportado"* —, o pipeline
+juntado sobe **sem tocar nelas**, e a remedição entrega para as três medidas evidência sob
+`da_competicao`, por construção. A [B] as julga nessa evidência, como julga as outras 36. A
+"competição principal" é, portanto, um **resultado candidato da [B]** — que muda a definição da
+premissa e exige medição própria depois —, nunca um insumo dela.
+
 ## Consequences
 
 O `min_jogos` **continua seguindo a célula**, inclusive nas linhas dessas quatro premissas. O
