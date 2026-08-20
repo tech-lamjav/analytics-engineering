@@ -15,6 +15,19 @@ models:
       ⚠️ Desde a #40 o gate é avaliado em TODAS as janelas coletadas e só depois reduzido a uma
       linha: é o que permite dizer, em `janela_deteccao`, há quanto tempo a oportunidade está no
       board. O grão não muda; o custo por build sim (os joins abrem ~4x antes do filtro final).
+      ⚠️ EXPURGO (#85, ADR 0009): passar no gate deixou de bastar. O mart é a JANELA DO QUE AINDA
+      DÁ PARA APOSTAR — junta `fact_fixtures` e não emite linha de jogo com status terminal
+      (FT/AET/PEN/CANC/ABD/AWD/WO) nem ao vivo, com rede de segurança em kickoff +
+      `var expurgo_carencia_horas` (24) para o jogo que passou do apito e nunca recebeu status.
+      `PST`, `SUSP` e `INT` SOBREVIVEM, inclusive além da carência: kickoff no passado com jogo
+      por acontecer é oportunidade legítima. Antes disso o mart não tinha filtro de data nem de
+      status e reemitia jogo encerrado a cada run — 133 linhas no PRD em 20/08, só 6 de jogo
+      futuro, a mais velha de 19/06. NENHUMA COLUNA NOVA saiu daqui por causa disso (coluna nova
+      em tabela sincronizada exigiria migration no Postgres antes do deploy da imagem; o filtro
+      por join não exige nada). Nada é apagado: o `fact_value_opportunities_hist` fecha e guarda
+      a versão, e é dele que o app serve o passado em leitura point-in-time no apito. O predicado
+      mora em `macros/futebol_expurgo.sql`, num lugar só, porque a guarda
+      `assert_board_sem_jogo_encerrado` o espelha.
     columns:
       - name: fixture_id
         tests: [not_null]
