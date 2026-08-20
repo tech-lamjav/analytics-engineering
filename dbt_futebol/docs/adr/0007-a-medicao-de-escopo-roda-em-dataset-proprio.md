@@ -4,6 +4,18 @@ status: accepted
 
 # A medição de escopo roda em dataset próprio, atrás de uma var com default de produção
 
+> ⚠️ **Emenda de 2026-08-19 — a exigência de dataset próprio expira quando (c) entra em produção.**
+> A **ADR 0010** decidiu que o pipeline passa a computar a célula `ambos` (`pit_escopo: todas`,
+> `pit_recorte: ultimos_10`) por default. A premissa desta ADR — *"medir histórico juntado
+> significaria publicar histórico juntado"* — deixa de valer no instante em que publicar histórico
+> juntado é a decisão. A partir daí a remedição roda contra `futebol`, sem var, e `futebol_taskF`
+> fica como registro congelado do 2×2 da [F].
+>
+> Nada disto vale **antes** daquele commit: enquanto o default for `da_competicao`/`temporada`,
+> tudo abaixo continua em vigor, inclusive a Costura A. No commit que vira o default, a Costura A
+> (`tests/assert_taskf_pit_default_igual_baseline`) é **recongelada** — a saída que o cabeçalho
+> dela já nomeia.
+
 A task [F] precisa saber o que cada premissa vira quando o PIT do time deixa de ser
 contado dentro da competição. Trocar só o `min_jogos` não responde isso: as flags das premissas
 saem dos 5 modelos de `intermediate/`, que fazem `ref('int_futebol_team_form_pit')` — e são elas
