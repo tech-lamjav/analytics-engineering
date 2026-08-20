@@ -31,9 +31,41 @@
 -- expurgável no build e deixou de ser — só existe via PST/SUSP reabrindo, e nela a guarda
 -- acusa uma diferença real de conteúdo entre as duas tabelas.
 --
+-- ⚠️ O QUE ELA NÃO COBRE, e é preciso dizer em voz alta: as duas direções comparam só o
+-- conjunto PUBLICÁVEL. Uma divergência de fórmula confinada às linhas REJEITADAS — que são
+-- justamente o produto novo desta tabela — passa por aqui em silêncio nas duas direções,
+-- porque nenhum dos dois lados as contém. Quem alcança essa região são os unit tests do
+-- `fact_value_funnel`, com linha construída. A guarda impede as duas cópias de divergirem
+-- onde o assinante enxerga; não onde a análise da [A] vai olhar.
+--
 -- ⚠️ ESTA GUARDA TEM DATA DE VALIDADE. No passo 2 o board passa a ser o funil filtrado, a
 -- paridade vira tautologia e ela é APOSENTADA no mesmo commit. Guarda que não pode falhar
 -- é ruído com cara de cobertura.
+
+-- "IDÊNTICA" É A PALAVRA DO ACEITE, ENTÃO A COMPARAÇÃO É O PAYLOAD INTEIRO, não só a
+-- chave e a nota. A nota agrega os componentes: `edge`, o contexto de odds e as quatro
+-- parcelas da penalidade podem divergir sem mover um ponto sequer — `pts_valor` é o edge
+-- passado por um `ROUND` de faixa, e três das quatro penalidades não mudam a soma se duas
+-- trocarem de lugar. Comparar a nota sozinha seria confiar num proxy que perde exatamente
+-- as parcelas que a #87 acabou de publicar para não serem readivinhadas.
+--
+-- ⚠️ `competition` e `season` entram, e têm PROVENIÊNCIA DIFERENTE nos dois lados: o board
+-- as tira das premissas, o funil do de-vig. Medido em 20/08, os dois concordam nos 391
+-- fixtures — zero divergência —, então incluí-las não custa nada hoje e o dia em que elas
+-- discordarem é um dia sobre o qual se quer saber (jogo cuja competição mudou entre a
+-- coleta da odd e o registro do fixture).
+--
+-- Ficam de fora as colunas que só existem de um lado: `faixa`, `evidencias`, `avisos` e
+-- `janela_deteccao` são do board (derivados ou de outra pergunta), `n_outcomes_valor`,
+-- `janela_prioridade` e as oito portas são do funil.
+{%- set payload = [
+    'edge', 'pts_valor', 'pts_premissas', 'premissas_sem_dado', 'pts_corroboracao',
+    'penalidades', 'penalidades_globais_pts', 'penalidades_especificas_pts',
+    'pen_odd_outlier', 'pen_poucas_casas', 'pen_odd_longshot', 'pen_odd_juice',
+    'modelo_api_concorda', 'linha_sharp_confirma',
+    'best_odd', 'best_book', 'avg_odd', 'n_casas', 'prob_justa_fechamento',
+    'valor_fonte', 'pin_n_outcomes', 'is_half_line', 'competition', 'season'
+] %}
 
 WITH board AS (
     SELECT
@@ -42,7 +74,8 @@ WITH board AS (
         outcome,
         COALESCE(CAST(line_value AS STRING), 'NONE')    AS line_key,
         janela_usada                                    AS janela,
-        score
+        score,
+        {{ payload | join(',\n        ') }}
     FROM {{ ref('fact_value_opportunities') }}
 ),
 
@@ -63,7 +96,8 @@ funil_publicavel AS (
         f.outcome,
         COALESCE(CAST(f.line_value AS STRING), 'NONE')  AS line_key,
         f.janela,
-        f.score
+        f.score,
+        f.{{ payload | join(',\n        f.') }}
     FROM {{ ref('fact_value_funnel') }} f
     -- LEFT + COALESCE(..., FALSE): fixture ausente é fail-open aqui pelo mesmo motivo que
     -- é fail-open no board — a linha fica, e quem grita sobre fixture ausente é a

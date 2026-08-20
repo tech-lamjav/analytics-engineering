@@ -80,7 +80,6 @@ cand_1x2 AS (
         '{{ futebol_mercados_pontuados()[1] }}'         AS market,
         d.outcome_side                                  AS outcome,
         CAST(NULL AS FLOAT64)                           AS line_value,
-        d.line_key,
         d.competition,
         d.season,
         d.janela_usada,
@@ -141,7 +140,6 @@ cand_ou AS (
         '{{ futebol_mercados_pontuados()[5] }}'         AS market,
         d.outcome_side                                  AS outcome,
         d.line_value,
-        d.line_key,
         d.competition,
         d.season,
         d.janela_usada,
@@ -199,7 +197,6 @@ cand_ah AS (
         '{{ futebol_mercados_pontuados()[4] }}'         AS market,
         d.outcome_side                                  AS outcome,
         d.line_value,
-        d.line_key,
         d.competition,
         d.season,
         d.janela_usada,
@@ -258,7 +255,6 @@ cand_btts AS (
         '{{ futebol_mercados_pontuados()[8] }}'         AS market,
         d.outcome_side                                  AS outcome,
         CAST(NULL AS FLOAT64)                           AS line_value,
-        d.line_key,
         d.competition,
         d.season,
         d.janela_usada,
@@ -323,7 +319,6 @@ cand_dc AS (
         '{{ futebol_mercados_pontuados()[12] }}'        AS market,
         d.outcome_side                                  AS outcome,
         CAST(NULL AS FLOAT64)                           AS line_value,
-        d.line_key,
         d.competition,
         d.season,
         d.janela_usada,
@@ -397,6 +392,15 @@ unioned AS (
 -- premissa (a "12" da DC) resolve a nota para NULL, e o NULL morre na `porta_nota`,
 -- que é NULL-safe. Somar zero no lugar diria que a linha foi avaliada e tirou zero —
 -- que é diferente de não ter sido avaliada, e é a distinção que a ADR 0003 preserva.
+--
+-- ⚠️ Isto NÃO contraria a regra do CODING_STANDARDS.md ("missing data must resolve to
+-- FALSE, never a NULL propagated into the Score"). Aquela regra é sobre INSUMO de
+-- premissa — degradação graciosa: dado ausente não acende a premissa, e é ela que
+-- resolve para FALSE. Aqui não falta insumo: falta a AVALIAÇÃO inteira, porque a saída
+-- não é catalogada. E o NULL não se propaga para dentro de veredito nenhum — todas as
+-- oito portas o absorvem individualmente, que é o que a regra existe para garantir.
+-- No board esta linha nem existia; só aqui ela precisa de um valor, e nenhum número
+-- seria honesto.
 -- ============================================================================
 scored AS (
     SELECT
