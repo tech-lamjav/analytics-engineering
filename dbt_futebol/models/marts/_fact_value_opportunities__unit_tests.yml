@@ -88,6 +88,20 @@ unit_tests:
       - input: ref('int_futebol_corroboracao')
         rows: []
 
+      # #85: o mart ganhou um ref novo (`fact_fixtures`, para o expurgo) e todo ref
+      # precisa de mock — sem este bloco o unit test não roda. Os quatro jogos entram
+      # como futuros e 'NS' de propósito: aqui se mede a JANELA DE DETECÇÃO, e nenhuma
+      # linha pode morrer pela fronteira do board sem que a asserção acima mude de
+      # significado em silêncio. A fronteira tem teste próprio, logo abaixo.
+      - input: ref('fact_fixtures')
+        format: sql
+        rows: |
+          SELECT 1 AS fixture_id, 'NS' AS status_short,
+                 TIMESTAMP '2099-01-01 00:00:00+00' AS kickoff_utc
+          UNION ALL SELECT 2, 'NS', TIMESTAMP '2099-01-01 00:00:00+00'
+          UNION ALL SELECT 3, 'NS', TIMESTAMP '2099-01-01 00:00:00+00'
+          UNION ALL SELECT 4, 'NS', TIMESTAMP '2099-01-01 00:00:00+00'
+
     expect:
       rows:
         # fixture 1: publica a t15m (o preço que dá para pegar) e conta que a
@@ -97,3 +111,83 @@ unit_tests:
         - {fixture_id: 3, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't15m', score: 45, penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
         # As fixtures 2 e 4 não aparecem. São as duas formas de morrer na janela
         # corrente: a 2 por preço, a 4 por conjunto incompleto.
+
+  - name: value_opportunities_expurgo_a_fronteira_do_board
+    model: fact_value_opportunities
+    description: >
+      A fronteira do expurgo (#85, ADR 0009) é o STATUS, não o relógio. Cobre as cinco
+      formas de sair ou ficar, e a que mais importa é a terceira: PST/SUSP/INT sobrevivem
+      INCLUSIVE além da carência — sem essa exceção a rede de 24 h expurgaria exatamente
+      a linha que a decisão manda preservar.
+    given:
+      # Seis jogos idênticos em tudo que não seja a fronteira: mesmos pontos, mesmo
+      # preço, uma janela só. O que os separa é só o par (status, kickoff), então
+      # qualquer diferença no resultado é atribuível ao expurgo e a mais nada.
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT 10 AS fixture_id, 'Home' AS outcome, 'brasileirao' AS competition,
+                 2026 AS season, 15 AS pts_premissas, 0 AS premissas_sem_dado,
+                 0 AS penalidades_1x2_pts,
+                 CAST([] AS ARRAY<STRING>) AS evidencias,
+                 CAST([] AS ARRAY<STRING>) AS avisos
+          UNION ALL SELECT 11, 'Home', 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 12, 'Home', 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 13, 'Home', 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 14, 'Home', 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 15, 'Home', 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+
+      - input: ref('int_futebol_odds_devig')
+        rows:
+          - {fixture_id: 10, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 11, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 12, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 13, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 14, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 15, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+      # A FIXTURE 15 NÃO ESTÁ AQUI, e é de propósito: é o fail-open do LEFT JOIN
+      # (ADR 0003). Fixture ausente não expurga a linha — quem grita nesse caso é a
+      # guarda 1, com diagnóstico próprio, e não o sumiço silencioso da oportunidade.
+      - input: ref('fact_fixtures')
+        format: sql
+        rows: |
+          -- 10: jogo futuro, não começou. FICA.
+          SELECT 10 AS fixture_id, 'NS' AS status_short,
+                 TIMESTAMP_ADD(CURRENT_TIMESTAMP(), INTERVAL 6 HOUR) AS kickoff_utc
+          -- 11: terminou. SAI por status terminal.
+          UNION ALL SELECT 11, 'FT', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 3 HOUR)
+          -- 12: bola rolando. SAI — não se aposta pré-jogo com o jogo em curso.
+          UNION ALL SELECT 12, '1H', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 1 HOUR)
+          -- 13: ADIADO há 10 dias. FICA, apesar de o kickoff ter passado MUITO da
+          --     carência de 24 h. É a asserção central deste teste.
+          UNION ALL SELECT 13, 'PST', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 240 HOUR)
+          -- 14: passou do apito há 48 h e nunca recebeu status final. SAI pela rede de
+          --     segurança — é o sintoma de coleta de placar falha (task [C]).
+          UNION ALL SELECT 14, 'NS', TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
+
+      - input: ref('int_futebol_premissas_ou')
+        rows: []
+      - input: ref('int_futebol_premissas_ah')
+        rows: []
+      - input: ref('int_futebol_premissas_btts')
+        rows: []
+      - input: ref('int_futebol_premissas_dc')
+        rows: []
+      - input: ref('int_futebol_corroboracao')
+        rows: []
+
+    expect:
+      rows:
+        # 10 — jogo por acontecer.
+        - {fixture_id: 10, market: 'match_winner', outcome: 'Home', score: 45}
+        # 13 — adiado há 10 dias: sobrevive INCLUSIVE além da carência.
+        - {fixture_id: 13, market: 'match_winner', outcome: 'Home', score: 45}
+        # 15 — sem fixture: o fail-open deixa passar (ADR 0003), a guarda 1 acusa.
+        - {fixture_id: 15, market: 'match_winner', outcome: 'Home', score: 45}
+        # Não aparecem: 11 (terminal), 12 (ao vivo), 14 (carência).

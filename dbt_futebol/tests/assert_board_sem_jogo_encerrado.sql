@@ -27,6 +27,14 @@
 -- ⚠️ PST/SUSP/INT sobrevivem inclusive além da carência, e é por isso que a exceção está
 -- dentro do macro e não aqui: jogo adiado fica adiado por semanas, e uma guarda que a
 -- ignorasse acenderia vermelha em cima da linha que a decisão manda preservar.
+--
+-- ⚠️ PONTO CEGO DECLARADO: esta guarda reavalia `CURRENT_TIMESTAMP()` na fase 4, minutos
+-- depois de o mart tê-lo avaliado na fase 2. Uma linha que cruzar a fronteira da carência
+-- DENTRO dessa janela acende vermelho uma vez sem defeito nenhum de código, e se cura
+-- sozinha no run seguinte (o mart a expurga). Não vale sincronizar relógio entre as fases
+-- para evitar isso: o custo seria carimbar um "agora" no mart — coluna nova em tabela
+-- sincronizada, que é exatamente o que a ADR 0009 recusou —, e o falso positivo é raro,
+-- transitório e legível pelo diagnóstico, que aponta a carência e não o status.
 
 SELECT
     o.fixture_id,
