@@ -1,0 +1,186 @@
+version: 2
+
+models:
+  - name: fact_value_funnel
+    description: >
+      O FUNIL DE AVALIAÇÃO (#95, ADR 0011 + ADR 0006). 1 linha por
+      (fixture_id, market, outcome, line_value, janela) que TEVE PREÇO naquela janela, nos
+      cinco mercados pontuados — e NADA filtrado. Onde o `fact_value_opportunities` guarda
+      só o que passa, este guarda todo candidato com o veredito de cada porta em coluna
+      própria, e é dele que sai a pergunta que a task [A] inteira precisa responder:
+      quantas linhas cada porta remove SOZINHA, e quantas ela ainda remove DEPOIS das
+      anteriores.
+
+      Duas rejeições que hoje são SUMIÇO passam a ser linha com carimbo: o conjunto de
+      saídas incompleto (a maior do sistema, ~49% do universo), que vivia num `WHERE`
+      dentro do join de cada ramo do board; e a saída "12" da Dupla Chance — precificada,
+      não pontuada —, que o `INNER JOIN` com as premissas engolia.
+
+      O board NÃO muda nesta entrega. Quem prova que o funil o descreve de verdade é
+      `assert_funil_paridade_com_board`; quem prova que o universo está inteiro é
+      `assert_funil_reconcilia_com_devig`, que lê a FONTE (o de-vig) e nunca o próprio
+      funil.
+
+      ⚠️ Materialização TABELA nesta entrega: como ela nasce cobrindo desde a primeira odd
+      coletada, o backfill sai de graça. O append-only com congelamento no apito (ADR 0011)
+      é a próxima entrega — e é ela que impede o rebuild de reescrever o passado quando as
+      portas mudarem (A1/A2/A3/A5).
+
+      ⚠️ NÃO VAI PARA O SUPABASE (ADR 0006/0011): o app não lê funil. Sem migração no
+      Postgres, sem RPC, sem tocar `check_schema_parity`.
+
+      ⚠️ Quem for CONTAR o funil precisa fixar UMA janela por candidato antes de contar
+      (`janela_e_corrente`, ou a janela que a análise escolher). Contando as quatro, todo
+      número infla até 4×.
+    columns:
+      # ------------------------------------------------------------------ chave e grão
+      - name: fixture_id
+        description: "Jogo. Vem do de-vig, não de `fact_fixtures` — o funil não perde linha por fixture ausente."
+        tests: [not_null]
+      - name: market
+        description: "Os cinco mercados pontuados. O mercado 6 (Gols O/U do 1º tempo) fica FORA do universo: não existe modelo de premissa para ele (ADR 0011). A lista mora em `macros/futebol_funil.sql`."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['match_winner', 'goals_over_under', 'asian_handicap', 'btts', 'double_chance']
+      - name: outcome
+        description: >
+          A saída precificada. Inclui a "12" da Dupla Chance, que o Motor NÃO pontua — ela
+          entra com `porta_saida_catalogada = FALSE`, porque teve preço e a decisão de não
+          pontuá-la é nossa (ADR 0011). Por isso a lista aqui é MAIOR que a do board.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Yes', 'No', '1X', '12', 'X2']
+      - name: line_value
+        description: "NULL no 1X2, BTTS e Dupla Chance; a linha L (1.5/2.5/...) no Gols O/U; o handicap na ótica do mandante (o mesmo p/ Home e Away) no Handicap asiático."
+      - name: janela
+        description: "A janela de coleta que originou esta avaliação. São QUATRO por candidato (daily < t24h < t1h < t15m), não três — a `daily` entrou em 07/08/2026. É a quarta coluna do grão."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['daily', 't24h', 't1h', 't15m']
+      - name: janela_prioridade
+        description: "A ordem declarada das janelas (`futebol_janela_prioridade()`), 1=daily .. 4=t15m. Ordenar pelo NOME diria que 'daily' < 't15m' < 't1h' < 't24h'."
+      - name: janela_e_corrente
+        description: >
+          TRUE na janela mais recente coletada deste (fixture, mercado, linha) — a que o
+          board publicaria. É REDUÇÃO, não veredito: fica FORA de `passou_no_gate` de
+          propósito (ADR 0011, D8), senão toda taxa de rejeição do funil passaria a incluir
+          três janelas que ninguém rejeitou.
+        tests: [not_null]
+
+      # ------------------------------------------------------------------- as oito portas
+      - name: porta_saida_catalogada
+        description: "TRUE = a saída é pontuada pelo Motor. FALSE só na \"12\" da Dupla Chance, hoje. É a porta que existe para que uma saída precificada e não modelada seja um DESCARTE registrado, e não um sumiço."
+        tests: [not_null]
+      - name: porta_conjunto_completo
+        description: >
+          TRUE = o conjunto de saídas do de-vig tem o tamanho declarado (ADR 0002): 1X2
+          exige 3 saídas da Pinnacle, Handicap e Gols exigem o par, BTTS exige o par no
+          consenso, Dupla Chance exige o conjunto 1X2 DE ORIGEM completo. É a maior
+          rejeição do sistema (~49% do universo) e até esta entrega ela não existia em
+          lugar nenhum — saía num `WHERE` dentro do join, antes de qualquer nota.
+        tests: [not_null]
+      - name: porta_valor_estimavel
+        description: >
+          TRUE = há `prob_justa_fechamento`. ⚠️ ANINHADA com `porta_conjunto_completo`:
+          pela ADR 0002, conjunto incompleto implica prob justa ausente. As duas ficam
+          porque a leitura marginal é o produto da tabela — mas quem as somar como
+          independentes conta a mesma linha duas vezes.
+        tests: [not_null]
+      - name: porta_liquidez
+        description: "TRUE = `n_casas >= 3`. (A A3 vai mexer neste número; é para medir o antes/depois que esta tabela existe.)"
+        tests: [not_null]
+      - name: porta_edge
+        description: "TRUE = `edge > 0`, ou `> consensus_min_edge` (3%) quando o valor vem do consenso — o edge de consenso é enviesado p/ cima (best_odd é o MÁXIMO das casas contra a prob da MEDIANA). (A A2 tira o edge do gate.)"
+        tests: [not_null]
+      - name: porta_nota
+        description: "TRUE = `score >= 40`. Nota NULL (saída sem premissa a avaliar) reprova aqui — é a porta que absorve o que o `INNER JOIN` do board descartava."
+        tests: [not_null]
+      - name: porta_linha_meia
+        description: "TRUE = a linha é meia (.5, sem push/meio-push). Só se aplica a Handicap asiático e Gols O/U; nos outros três passa trivialmente, porque a porta não se aplica — não porque a linha foi isentada."
+        tests: [not_null]
+      - name: porta_odd_dc
+        description: "TRUE = `best_odd >= 1,25`. Gate de odd PRÓPRIO da Dupla Chance (que por isso não aplica a penalidade de juice). Trivialmente TRUE nos outros quatro mercados."
+        tests: [not_null]
+      - name: passou_no_gate
+        description: >
+          A CONJUNÇÃO das oito portas, DERIVADA e nunca escrita à mão (ADR 0006). Não
+          inclui `janela_e_corrente` (redução, não veredito) nem o expurgo do board
+          (o funil guarda jogo encerrado de propósito — é ele que responde quanto rendeu a
+          faixa descartada).
+        tests: [not_null]
+      - name: motivo_primario
+        description: >
+          CONVENIÊNCIA DE LEITURA, NÃO FONTE (ADR 0006). A primeira porta reprovada na
+          ordem de leitura declarada; NULL quando a linha passou. Uma linha reprova em
+          várias portas ao mesmo tempo, e é justamente a leitura marginal — isolada vs.
+          depois das anteriores — que dá valor à tabela: quem for medir porta lê os oito
+          booleanos, nunca esta coluna.
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['saida_nao_catalogada', 'conjunto_incompleto', 'valor_nao_estimavel',
+                         'sem_liquidez', 'sem_edge', 'nota_abaixo_da_regua', 'sem_lado_apostado',
+                         'linha_nao_meia', 'odd_dc_abaixo_do_minimo']
+      - name: sem_lado_apostado
+        description: >
+          O empate do 1X2 (ADR 0005/0006). Marca ESTRUTURAL — o mercado e a saída —, nunca
+          "a nota deu zero": sem lado apostado nenhuma premissa dispara, e um terço do
+          universo do 1X2 está em zero POR CONSTRUÇÃO. Sob o motivo genérico esse terço
+          apareceria como "nota abaixo da régua" e a régua pareceria mais severa no 1X2 do
+          que é.
+        tests: [not_null]
+
+      # --------------------------------------------------------------------- o payload
+      - name: kickoff_utc
+        description: >
+          O apito, em UTC. Eixo de toda análise por horizonte e — na próxima entrega — a
+          fronteira do congelamento (ADR 0011). NULL quando o fixture não existe em
+          `fact_fixtures`: o join é LEFT de propósito, porque perder a linha seria a perda
+          silenciosa que a tabela existe para impedir.
+      - name: score
+        description: "A MESMA nota do board: clamp(pts_valor + pts_premissas + pts_corroboracao − penalidades, 0, 100). NULL onde não houve premissa a avaliar (a \"12\" da DC) — e o NULL morre na `porta_nota`, que é NULL-safe."
+      - name: pts_premissas
+        description: "NULL, e não zero, onde não houve premissa a avaliar. Zero seria \"foi avaliada e tirou zero\", que é outra coisa (ADR 0003)."
+      - name: premissas_sem_dado
+        description: "Quantas premissas aplicáveis à linha não puderam ser avaliadas por falta de insumo (#41, ADR 0003). Não entra na nota: é o que a nota NÃO pôde levar em conta. NULL onde não houve premissa nenhuma."
+      - name: edge
+        description: "EV/edge = best_odd * prob_justa − 1. Ao contrário do board, aqui ele NÃO é garantidamente positivo: o funil guarda o que a porta de edge rejeitou."
+      - name: valor_fonte
+        description: "'pinnacle' (mercados 1/4/5; e Dupla Chance, derivada do 1X2 da Pinnacle) ou 'consenso' (mediana das casas — BTTS). NULL em linha cujo conjunto de saídas veio incompleto: sem conjunto não há estimativa (ADR 0002)."
+        tests:
+          - accepted_values:
+              arguments:
+                values: ['pinnacle', 'consenso']
+      - name: is_half_line
+        description: "TRUE se a linha é meia (.5); FALSE p/ cheia/quarter; NULL onde não há linha. Insumo cru da `porta_linha_meia`."
+      - name: pen_odd_outlier
+        description: "Parcela da penalidade global: best_odd >= 1,10 × média das OUTRAS casas (−30)."
+      - name: pen_poucas_casas
+        description: "Parcela da penalidade global: n_casas < 4 (−12)."
+      - name: pen_odd_longshot
+        description: "Parcela da penalidade global: best_odd > 4,5 (−15)."
+      - name: pen_odd_juice
+        description: "Parcela da penalidade global: best_odd < 1,40 (−10). FALSE na Dupla Chance de propósito — o gate de odd próprio (>= 1,25) já cobre o retorno mínimo."
+    tests:
+      # O GRÃO — e aqui ele inclui a JANELA, ao contrário do board (ADR 0004/0011).
+      #
+      # `tag:guarda` porque esta é a única propriedade da tabela que nenhuma outra guarda
+      # cobre: a `assert_funil_reconcilia_com_devig` compara CONJUNTOS de chaves com
+      # `EXCEPT DISTINCT`, que é insensível a duplicata — um fan-out que duplicasse toda
+      # linha passaria por ela nos dois sentidos e só apareceria aqui.
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - market
+              - outcome
+              - line_value
+              - janela
+          config:
+            tags: ['guarda']
