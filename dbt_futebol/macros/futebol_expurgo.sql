@@ -34,13 +34,27 @@
   decisão manda preservar — jogo adiado fica adiado por semanas — e a guarda 1, que espelha
   o predicado, acenderia vermelha nela sem que houvesse defeito nenhum.
 
-  ⚠️ NULL É FAIL-OPEN, DE PROPÓSITO. Se o fixture não existir em `fact_fixtures`, tanto o
-  `IN` quanto o `NOT IN` devolvem NULL e o predicado inteiro vira NULL — a linha NÃO é
-  expurgada. É a ADR 0003 aplicada aqui (dado faltante diagnostica, não elimina): sumir com
-  a linha por falta do lado direito do join seria a perda silenciosa que a ADR 0009 existe
-  para impedir. Quem grita nesse caso é a guarda 1, que trata fixture ausente como vermelho
-  próprio, com diagnóstico próprio. Por isso o consumidor deste macro escreve
+  ⚠️ FIXTURE AUSENTE É FAIL-OPEN, DE PROPÓSITO. Se o fixture não existir em `fact_fixtures`,
+  o `kickoff` é NULL, a comparação de relógio vira NULL e o predicado inteiro vira NULL — a
+  linha NÃO é expurgada. É a ADR 0003 aplicada aqui (dado faltante diagnostica, não elimina):
+  sumir com a linha por falta do lado direito do join seria a perda silenciosa que a ADR 0009
+  existe para impedir. Quem grita nesse caso é a guarda 1, que trata fixture ausente como
+  vermelho próprio, com diagnóstico próprio. Por isso o consumidor deste macro escreve
   `NOT COALESCE(<predicado>, FALSE)` — explícito, nunca `NOT <predicado>`.
+
+  ⚠️ STATUS NULO NUM FIXTURE QUE EXISTE É COISA DIFERENTE, e por isso o `COALESCE` no braço
+  do relógio. Sem ele o buraco caía exatamente onde a rede de segurança deveria pegar: com
+  `status_short` NULL, `NULL NOT IN ('PST','SUSP','INT')` devolve NULL, o braço inteiro vira
+  NULL, o `COALESCE(..., FALSE)` do consumidor deixa a linha passar — e a guarda 1, que
+  espelha o mesmo predicado, também não acende. Jogo com o apito dado há dias, sem status
+  nenhum, ficaria no board para sempre e em silêncio: o caso literal que a rede existe para
+  cobrir ("passou do kickoff e NUNCA recebeu status final"). Com `COALESCE(status, '')`, um
+  status nulo não é nenhum dos três que sobrevivem, então a carência o alcança.
+
+  A diferença entre os dois NULLs é deliberada: fixture ausente é defeito A MONTANTE e a
+  linha fica (com a guarda gritando); status nulo é a AUSÊNCIA DE PLACAR que a carência
+  existe para cobrir, e a linha sai. Um é "não sei o que é este jogo", o outro é "sei qual é
+  o jogo e ninguém carimbou o fim dele".
 -#}
 
 {#- Terminais: o jogo acabou, ou foi decidido fora de campo, ou não vai acontecer. -#}
@@ -80,7 +94,9 @@
         OR (
             TIMESTAMP_ADD({{ kickoff_col }}, INTERVAL {{ var('expurgo_carencia_horas') }} HOUR)
                 < CURRENT_TIMESTAMP()
-            AND {{ status_col }} NOT IN ({{ futebol_status_sobrevivem() }})
+            -- COALESCE, e não `{{ status_col }} NOT IN (...)` direto: status nulo tem de
+            -- ser alcançado pela carência, não escapar dela por NULL. Ver o cabeçalho.
+            AND COALESCE({{ status_col }}, '') NOT IN ({{ futebol_status_sobrevivem() }})
         )
     )
 {%- endmacro %}
