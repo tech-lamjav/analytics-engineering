@@ -1,0 +1,125 @@
+version: 2
+
+# ==============================================================================
+# Unit tests das DUAS FASES DA ESCALAÇÃO (#38).
+#
+# Por que unit test e não data test: a fase confirmada e a fase real do mesmo jogo
+# são a mesma escalação vista em dois momentos, e uma contagem sobre produção não
+# separa "as duas coexistem" de "a real chegou e a confirmada nunca existiu". A
+# maior parte da base é backfill histórico, que só tem fase real — um fato com
+# 100% de linhas 'real' é compatível tanto com o grão novo quanto com o dedup
+# antigo, que apagava a confirmada. Só linha construída separa as duas.
+#
+# Cada teste sustenta as duas metades do aceite, uma em cada fixture:
+#
+#   fixture 1  o mesmo jogo tem as duas fases -> as duas sobrevivem
+#   fixture 2  duas cargas da MESMA fase (re-execução do pipeline) -> colapsam em 1
+#
+# A fixture 1 carrega o valor que a issue pede: no nível time a formação muda entre
+# o que se anunciou (4-4-2) e o que entrou em campo (4-3-3); no nível jogador o
+# titular anunciado começa no banco. É exatamente essa diferença que o dedup antigo
+# apagava, e ela é look-ahead: a versão real só existe depois do apito.
+# ==============================================================================
+unit_tests:
+  - name: fixture_lineups_as_duas_fases_do_mesmo_jogo_coexistem
+    model: fact_fixture_lineups
+    description: >
+      Nível time: confirmed e real do mesmo (fixture, time) coexistem — a real deixa
+      de sobrescrever a confirmada. Duas cargas da mesma fase continuam colapsando
+      em uma (latest-wins dentro da fase), para absorver re-execução do pipeline.
+    given:
+      - input: ref('stg_futebol_fixture_lineups')
+        rows:
+          # -- fixture 1: as duas fases do mandante; só a confirmada do visitante. ----
+          # A formação anunciada não é a que entrou em campo.
+          - {fixture_id: 1, team_id: 10, team_name: 'Mandante', lineup_phase: 'confirmed', formation: '4-4-2', coach_id: 900, coach_name: 'Tecnico A', loaded_at: '2026-08-01 20:30:00'}
+          - {fixture_id: 1, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', formation: '4-3-3', coach_id: 900, coach_name: 'Tecnico A', loaded_at: '2026-08-01 23:00:00'}
+          - {fixture_id: 1, team_id: 20, team_name: 'Visitante', lineup_phase: 'confirmed', formation: '3-5-2', coach_id: 901, coach_name: 'Tecnico B', loaded_at: '2026-08-01 20:30:00'}
+
+          # -- fixture 2: a MESMA fase coletada duas vezes (re-execução do pipeline). -
+          # A segunda carga corrige a formação; vence por loaded_at, sem duplicar.
+          - {fixture_id: 2, team_id: 10, team_name: 'Mandante', lineup_phase: 'confirmed', formation: '4-4-2', coach_id: 900, coach_name: 'Tecnico A', loaded_at: '2026-08-02 20:30:00'}
+          - {fixture_id: 2, team_id: 10, team_name: 'Mandante', lineup_phase: 'confirmed', formation: '4-2-3-1', coach_id: 900, coach_name: 'Tecnico A', loaded_at: '2026-08-02 20:45:00'}
+
+      - input: ref('fact_fixtures')
+        rows:
+          - {fixture_id: 1, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-01', home_team_id: 10, away_team_id: 20}
+          - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-02', home_team_id: 10, away_team_id: 20}
+
+    expect:
+      rows:
+        - {fixture_id: 1, team_id: 10, lineup_phase: 'confirmed', formation: '4-4-2', team_side: 'home'}
+        - {fixture_id: 1, team_id: 10, lineup_phase: 'real', formation: '4-3-3', team_side: 'home'}
+        - {fixture_id: 1, team_id: 20, lineup_phase: 'confirmed', formation: '3-5-2', team_side: 'away'}
+        - {fixture_id: 2, team_id: 10, lineup_phase: 'confirmed', formation: '4-2-3-1', team_side: 'home'}
+
+  - name: fixture_lineups_players_as_duas_fases_do_mesmo_jogo_coexistem
+    model: fact_fixture_lineups_players
+    description: >
+      Nível jogador: o mesmo jogador no mesmo jogo existe nas duas fases, e é o caso
+      em que elas discordam — anunciado titular, entrou reserva. Duas cargas da mesma
+      fase colapsam em uma. Slot de escalação sem player_id continua fora do fato.
+    given:
+      - input: ref('stg_futebol_fixture_lineups_players')
+        rows:
+          # -- fixture 1: o jogador 100 é titular na confirmada e reserva na real. ----
+          - {fixture_id: 1, team_id: 10, team_name: 'Mandante', lineup_phase: 'confirmed', is_starter: true, player_slot: 0, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: '3:1', loaded_at: '2026-08-01 20:30:00'}
+          - {fixture_id: 1, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: false, player_slot: 0, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: , loaded_at: '2026-08-01 23:00:00'}
+          # Só a fase confirmada: é o que se sabia antes do apito, e nada a sobrescreve.
+          - {fixture_id: 1, team_id: 20, team_name: 'Visitante', lineup_phase: 'confirmed', is_starter: true, player_slot: 0, player_id: 200, player_name: 'Camisa 9', shirt_number: 9, position: 'F', grid: '4:1', loaded_at: '2026-08-01 20:30:00'}
+          # Lixo da API: slot sem player_id não é jogador e não entra no fato.
+          - {fixture_id: 1, team_id: 20, team_name: 'Visitante', lineup_phase: 'confirmed', is_starter: false, player_slot: 1, player_id: , player_name: , shirt_number: , position: , grid: , loaded_at: '2026-08-01 20:30:00'}
+
+          # -- fixture 2: a MESMA fase coletada duas vezes (re-execução do pipeline). -
+          - {fixture_id: 2, team_id: 10, team_name: 'Mandante', lineup_phase: 'confirmed', is_starter: true, player_slot: 0, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: '3:1', loaded_at: '2026-08-02 20:30:00'}
+          - {fixture_id: 2, team_id: 10, team_name: 'Mandante', lineup_phase: 'confirmed', is_starter: true, player_slot: 0, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'D', grid: '2:1', loaded_at: '2026-08-02 20:45:00'}
+
+      - input: ref('fact_fixtures')
+        rows:
+          - {fixture_id: 1, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-01', home_team_id: 10, away_team_id: 20}
+          - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-02', home_team_id: 10, away_team_id: 20}
+
+    expect:
+      rows:
+        - {fixture_id: 1, player_id: 100, lineup_phase: 'confirmed', is_starter: true, team_side: 'home', position: 'M'}
+        - {fixture_id: 1, player_id: 100, lineup_phase: 'real', is_starter: false, team_side: 'home', position: 'M'}
+        - {fixture_id: 1, player_id: 200, lineup_phase: 'confirmed', is_starter: true, team_side: 'away', position: 'F'}
+        - {fixture_id: 2, player_id: 100, lineup_phase: 'confirmed', is_starter: true, team_side: 'home', position: 'D'}
+
+  - name: fixture_lineups_players_desempate_dentro_da_fase_e_deterministico
+    model: fact_fixture_lineups_players
+    description: >
+      O desempate dentro da fase é determinístico quando loaded_at NÃO desempata. É o
+      único teste que o sustenta: a guarda de unicidade fica verde sem ele, porque
+      ROW_NUMBER() = 1 devolve uma linha por partição sob qualquer ORDER BY. Sem o
+      desempate o vencedor vira entre builds do mesmo código — a classe da #78.
+    given:
+      - input: ref('stg_futebol_fixture_lineups_players')
+        rows:
+          # -- fixture 1: o MESMO jogador em dois slots da mesma fase e do MESMO --------
+          # loaded_at, um no startXI e outro no banco. É o caso real: 11 grupos assim
+          # na base hoje. Titular vence — é a linha mais informativa.
+          - {fixture_id: 1, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: false, player_slot: 6, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: , loaded_at: '2026-08-01 23:00:00'}
+          - {fixture_id: 1, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: true, player_slot: 5, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: '3:1', loaded_at: '2026-08-01 23:00:00'}
+
+          # -- fixture 2: dois slots do MESMO startXI (também existe na base). ---------
+          # is_starter empata; o menor player_slot decide.
+          - {fixture_id: 2, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: true, player_slot: 4, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'D', grid: '2:2', loaded_at: '2026-08-02 23:00:00'}
+          - {fixture_id: 2, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: true, player_slot: 3, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: '3:1', loaded_at: '2026-08-02 23:00:00'}
+
+          # -- fixture 3: o mesmo jogador nos blocos dos DOIS times, tudo mais igual. --
+          # Só `team_id` separa — sem ele o team_side viraria entre builds.
+          - {fixture_id: 3, team_id: 20, team_name: 'Visitante', lineup_phase: 'real', is_starter: true, player_slot: 0, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'F', grid: '4:1', loaded_at: '2026-08-03 23:00:00'}
+          - {fixture_id: 3, team_id: 10, team_name: 'Mandante', lineup_phase: 'real', is_starter: true, player_slot: 0, player_id: 100, player_name: 'Camisa 10', shirt_number: 10, position: 'M', grid: '3:1', loaded_at: '2026-08-03 23:00:00'}
+
+      - input: ref('fact_fixtures')
+        rows:
+          - {fixture_id: 1, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-01', home_team_id: 10, away_team_id: 20}
+          - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-02', home_team_id: 10, away_team_id: 20}
+          - {fixture_id: 3, competition: 'brasileirao', competition_id: 71, season: 2026, date_utc: '2026-08-03', home_team_id: 10, away_team_id: 20}
+
+    expect:
+      rows:
+        - {fixture_id: 1, player_id: 100, lineup_phase: 'real', is_starter: true, player_slot: 5, team_side: 'home'}
+        - {fixture_id: 2, player_id: 100, lineup_phase: 'real', is_starter: true, player_slot: 3, team_side: 'home'}
+        - {fixture_id: 3, player_id: 100, lineup_phase: 'real', is_starter: true, player_slot: 0, team_side: 'home'}

@@ -415,20 +415,36 @@ models:
 
   - name: fact_fixture_lineups
     description: >
-      Formação e técnico por time por jogo (/fixtures/lineups). 2 linhas por fixture_id
-      (mandante e visitante) — insumo de desfalques p/ o modelo de value betting.
-      Particionada por DATE(date_utc) (data do jogo) e clusterizada por (fixture_id,
-      team_id). Latest-wins: dedup por (fixture_id, team_id) mantendo o loaded_at mais
-      recente — "real" (pós-jogo) vence "confirmed" (~T-30min); lineup_phase mostra qual
-      snapshot venceu. Backfill histórico (2024/2025) só tem fase "real" (não dá pra obter
-      a confirmada retroativa). Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026,
+      Formação e técnico por time por jogo (/fixtures/lineups). Grão (fixture_id, team_id,
+      lineup_phase): até 4 linhas por fixture_id — os dois times × as duas fases — e insumo
+      de desfalques p/ o modelo de value betting. As duas fases COEXISTEM (#38): "confirmed"
+      (~T-30min) e "real" (pós-jogo) não são versões melhor e pior uma da outra, são o que se
+      sabia em dois momentos, e só a confirmada existe antes do apito. Particionada por
+      DATE(date_utc) (data do jogo) e clusterizada por (fixture_id, team_id). Latest-wins
+      DENTRO de cada fase (dedup por loaded_at), só para absorver re-execução do pipeline.
+      Backfill histórico (2024/2025) só tem fase "real" (não dá pra obter a confirmada
+      retroativa). Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026,
       Série B (72) 2024/25/26, Copa do Brasil (73) 2024/25/26, Libertadores (13) 2024/25/26 e Sudamericana (11) 2024/25/26.
     tests:
+      # GRÃO NOVO (#38): a fase entra na chave. Sem `lineup_phase` aqui, o próprio efeito
+      # pretendido da mudança (as duas fases coexistindo) deixaria esta guarda
+      # permanentemente vermelha — e guarda sempre vermelha morre ignorada.
+      #
+      # TAG `guarda` pela mesma razão que a #37 tagueou a dela: teste sem tag não roda no
+      # agendado, só no laptop de quem lembrar. A guarda irmã
+      # (assert_escalacao_confirmada_preservada) prova que a fase confirmada CHEGOU ao
+      # fato; esta prova que ela chegou UMA VEZ. Duplicata dentro da fase é o modo de
+      # falha que infla contagem em silêncio, e só vale se rodar em produção.
       - dbt_utils.unique_combination_of_columns:
+          name: assert_lineups_grao_por_fase
           arguments:
             combination_of_columns:
               - fixture_id
               - team_id
+              - lineup_phase
+          config:
+            severity: error
+            tags: ['guarda']
     columns:
       - name: fixture_id
         description: "ID do jogo na API-Football (FK p/ fact_fixtures; 2 linhas por fixture; cluster key)"
@@ -466,7 +482,21 @@ models:
       - name: coach_name
         description: "Nome do técnico"
       - name: lineup_phase
-        description: "Fase do snapshot que venceu o dedup: 'real' (pós-jogo) ou 'confirmed' (~T-30min)"
+        description: "Momento do registro, e parte do grão: 'confirmed' (~T-30min, a única evidência pré-apito) ou 'real' (pós-jogo). As duas coexistem para o mesmo jogo."
+        # Taguear junto com a guarda de grão: os dois defendem a mesma chave. NULL ou fase
+        # nova colapsam/abrem o grão sem que a unicidade acuse, e quem lê o fato antes do
+        # apito filtra por este valor — errar aqui é voltar a servir look-ahead calado.
+        tests:
+          - not_null:
+              config:
+                severity: error
+                tags: ['guarda']
+          - accepted_values:
+              arguments:
+                values: ['confirmed', 'real']
+              config:
+                severity: error
+                tags: ['guarda']
       - name: extracted_at
         description: "Timestamp UTC quando o extractor coletou a linha"
       - name: dbt_loaded_at
@@ -474,19 +504,35 @@ models:
 
   - name: fact_fixture_lineups_players
     description: >
-      Escalação de jogadores por jogo (/fixtures/lineups). ~22-30 linhas por fixture_id
-      (titulares + reservas dos dois times) — base p/ ajustar o modelo por desfalques.
-      is_starter separa startXI de substitutes; position/grid/shirt_number do jogador.
-      Particionada por DATE(date_utc) e clusterizada por (fixture_id, team_id). Latest-wins:
-      dedup por (fixture_id, player_id) mantendo o loaded_at mais recente — "real" vence
-      "confirmed". Cobre Brasileirão (71) 2024/25/26, Copa do Mundo (1) 2026, Série B (72)
+      Escalação de jogadores por jogo (/fixtures/lineups). Grão (fixture_id, player_id,
+      lineup_phase): ~22-30 linhas por fixture POR FASE (titulares + reservas dos dois times)
+      — base p/ ajustar o modelo por desfalques. is_starter separa startXI de substitutes;
+      position/grid/shirt_number do jogador. As duas fases COEXISTEM (#38), e é onde elas
+      discordam que está o valor: anunciado titular, entrou reserva. Só a confirmada existe
+      antes do apito. Particionada por DATE(date_utc) e clusterizada por (fixture_id,
+      team_id). Latest-wins DENTRO de cada fase, só para absorver re-execução do pipeline;
+      o desempate por (is_starter, player_slot) existe porque a API repete o mesmo jogador em
+      dois slots da mesma fase e do mesmo loaded_at. Cobre Brasileirão (71) 2024/25/26, Copa
+      do Mundo (1) 2026, Série B (72)
       2024/25/26, Copa do Brasil (73) 2024/25/26, Libertadores (13) 2024/25/26 e Sudamericana (11) 2024/25/26.
     tests:
+      # Gêmea da guarda de grão de fact_fixture_lineups (#38) — mesma justificativa.
+      #
+      # O que ela NÃO cobre, e é bom estar escrito: o desempate do modelo. É neste nível
+      # que a API repete o mesmo jogador em dois slots da mesma fase, mas ROW_NUMBER()=1
+      # devolve uma linha por partição sob qualquer ORDER BY — tirar o desempate deixa
+      # esta guarda VERDE e o vencedor nondeterminístico. Quem falsifica isso é o unit
+      # test `fixture_lineups_players_desempate_dentro_da_fase_e_deterministico`.
       - dbt_utils.unique_combination_of_columns:
+          name: assert_lineups_players_grao_por_fase
           arguments:
             combination_of_columns:
               - fixture_id
               - player_id
+              - lineup_phase
+          config:
+            severity: error
+            tags: ['guarda']
     columns:
       - name: fixture_id
         description: "ID do jogo na API-Football (FK p/ fact_fixtures; N linhas por fixture; cluster key)"
@@ -542,7 +588,21 @@ models:
       - name: grid
         description: "Posição no grid tático (ex: '1:1', '4:2'). NULL p/ reservas."
       - name: lineup_phase
-        description: "Fase do snapshot que venceu o dedup: 'real' (pós-jogo) ou 'confirmed' (~T-30min)"
+        description: "Momento do registro, e parte do grão: 'confirmed' (~T-30min, a única evidência pré-apito) ou 'real' (pós-jogo). As duas coexistem para o mesmo jogo."
+        # Taguear junto com a guarda de grão: os dois defendem a mesma chave. NULL ou fase
+        # nova colapsam/abrem o grão sem que a unicidade acuse, e quem lê o fato antes do
+        # apito filtra por este valor — errar aqui é voltar a servir look-ahead calado.
+        tests:
+          - not_null:
+              config:
+                severity: error
+                tags: ['guarda']
+          - accepted_values:
+              arguments:
+                values: ['confirmed', 'real']
+              config:
+                severity: error
+                tags: ['guarda']
       - name: extracted_at
         description: "Timestamp UTC quando o extractor coletou a linha"
       - name: dbt_loaded_at

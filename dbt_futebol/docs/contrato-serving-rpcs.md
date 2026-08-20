@@ -47,8 +47,8 @@ interna.
 | `dim_teams` | 4 | `get_futebol_teams` faz `distinct on (team_id)` **sem desempate** | ✅ inofensivo — a tabela é única por `team_id` (591/591 medido) |
 | `fact_odds_snapshot` | 2 | `distinct on (…, bookmaker_name)` com desempate por janela | ⛔ **DEFEITO VIVO** — ver abaixo |
 | `fact_value_opportunities` | 2 | 1 linha por (fixture, market, outcome, line) | ✅ hoje; ⚠️ #40/#41/A1 mexem nas COLUNAS |
-| `int_futebol_odds_devig` | 1 (`get_futebol_fixture_value`) | `distinct on (fixture_id, outcome_side, line_value)` **sem desempate** | ⛔ bloqueia a #37 — e é DEFEITO VIVO por si só (#87): a chave não tem `market_id` nem `janela_usada`, então as 4 flags de penalidade que a RPC remonta saem de uma linha sorteada. Medido sobre as 126 linhas do board: 74 com janela diferente da publicada em 18/08, 76 em 19/08, e 34 com as flags contradizendo o `penalidades_globais_pts` da própria linha nas duas medições. O número oscila porque não há desempate — é o sintoma, não ruído de medição. A #87 publica as flags no mart para que o CTE possa morrer |
-| `fact_fixture_lineups` + `_players` | 1 (`get_futebol_fixture_extras`) | `jsonb_agg` de TODAS as linhas do fixture, sem filtro de fase | ⛔ bloqueia a #38 |
+| `int_futebol_odds_devig` | **nenhuma** (era 1, `get_futebol_fixture_value`) | — | ✅ **RESOLVIDO** pela migration 105 (release #271, 19/08). Era DEFEITO VIVO: a chave do `distinct on (fixture_id, outcome_side, line_value)` não tinha `market_id` nem `janela_usada`, então as 4 flags de penalidade que a RPC remontava saíam de uma linha sorteada — 74 das 126 linhas do board com janela diferente da publicada em 18/08, 76 em 19/08, e 34 com as flags contradizendo o `penalidades_globais_pts` da própria linha. A #87 publicou as flags no mart e o CTE morreu. Conferido em 20/08 no PRD: **nenhuma função de `public` referencia a tabela** |
+| `fact_fixture_lineups` + `_players` | 1 (`get_futebol_fixture_extras`) | **uma fase só**, decidida por tempo e em separado para cada uma das duas tabelas | ✅ **RESOLVIDO** pela migration 103 (release #271, 19/08). O `jsonb_agg` filtrava nada e pegava TODAS as linhas do fixture: com as duas fases no ar, a tela mostraria formação sorteada entre a anunciada e a que entrou em campo, e desenharia cada jogador duas vezes. Agora `where lineup_phase = v_fase_*`, com a regra por TEMPO (`kickoff_utc <= now()` → `real`, senão `confirmed`) — a regra por EXISTÊNCIA que a 098 tinha estava errada: nos 154 jogos com as duas fases, a `confirmed` tinha 2,0 jogadores por jogo contra 46,5 da `real`. Conferido em 20/08 no PRD com `pg_get_functiondef` |
 | `fact_injuries_snapshot` | 1 | `distinct on (player_id)` + `order by snapshot_date desc` | ✅ desempate correto e semântico |
 | 5 × `int_futebol_premissas_*` | 2 cada | join por (fixture, outcome[, line]) | ✅ hoje; ⚠️ #41 pode adicionar coluna |
 | `fact_h2h`, `fact_predictions_api`, `fact_standings_snapshot`, `fact_team_season_stats`, `fact_fixture_stats`, `fact_fixture_events`, `fact_fixture_player_stats` | 1–2 cada | leitura direta, sem suposição de unicidade além da chave natural | ✅ |
@@ -80,6 +80,53 @@ Conserto: acrescentar `when collection_window = 't24h' then 2` deslocando os dem
 derivar a prioridade de um lugar só. No dbt esse lugar já existe — o macro
 `futebol_janela_prioridade` — mas ele não atravessa para o Postgres, então aqui é duplicação
 inevitável e o que resta é **manter as duas listas juntas na mesma mudança**.
+
+## ✅ Gate FECHADO em 20/08: a RPC de escalação filtra fase, e a #38 pode subir
+
+**O gate abaixo está resolvido.** Ele dizia *"não rodar `./build-and-push.sh dbt_futebol` até a
+RPC ser corrigida"*, e a correção chegou na **migration 103** (release #271, 19/08). Conferido em
+20/08 no PRD com `pg_get_functiondef` — no banco vivo, não no `deploy.sql`, que é a disciplina
+que este próprio gate exigia:
+
+```sql
+-- Uma fase so, nunca as duas. Prefere a confirmada; cai para a real quando
+-- nao houver confirmada. As duas tabelas sao decididas em separado porque
+-- discordam entre si.
+when v_fix.kickoff_utc <= (now() at time zone 'UTC')
+     and count(*) filter (where lineup_phase = 'real') > 0 then 'real'
+when count(*) filter (where lineup_phase = 'confirmed') > 0 then 'confirmed'
+```
+
+...e os dois sub-selects filtram `where lineup_phase = v_fase_*`.
+
+Duas coisas que valem guardar do conserto:
+
+1. **A regra é por TEMPO, não por existência.** A migration 098 tinha decidido a fase pela
+   existência de linhas, e estava errada: nos 154 jogos com as duas fases, a `confirmed` tem
+   **2,0 jogadores por jogo** contra **46,5** da `real`. Sob a regra por existência, o campinho
+   de jogo encerrado apareceria com dois jogadores.
+2. **As duas tabelas decidem em separado**, de propósito, porque discordam entre si — o fato de
+   times e o de jogadores não têm garantia de cobrir a mesma fase no mesmo fixture.
+
+O que segue abaixo é o registro do que o gate impedia, mantido porque é o caso de teste de
+qualquer mudança futura nessa RPC. **No dia em que a imagem subisse sem a RPC corrigida:**
+
+- `lineups` passa de 2 para **4** elementos nos jogos com as duas fases (279 hoje). O front faz
+  `extras.lineups.find(l => l.team_side === 'home')?.formation` sobre array sem ordem — a
+  formação exibida vira sorteio entre a anunciada e a que entrou em campo, e pode virar entre
+  dois carregamentos da mesma página.
+- `lineup_players` **dobra** (275 fixtures hoje): cada jogador desenhado duas vezes no campinho,
+  com `is_starter`/`grid` contraditórios entre as duas cópias.
+
+O conserto pedido era, do lado do app (`prop-play-predictor`, escopo do Victor): filtrar
+`lineup_phase = 'real'` nos dois sub-selects quando o jogo já terminou e `'confirmed'` antes do
+apito, expondo `lineup_phase` na projeção junto — sem ela o front não tem como dizer ao usuário
+que está vendo a escalação anunciada e não a que jogou, que é o produto que a #38 destrava.
+**Foi exatamente isso que a 103 fez**, incluindo o `lineup_phase` na projeção dos dois blocos.
+
+⚠️ **A spec da #38 afirmava "a aplicação não os consulta".** É falso, e este documento já
+registrava isso desde 10/08 — a spec é de 06/08 e não foi revisada depois. A verificação de
+grão da spec não substituiu a consulta ao banco vivo do passo 1 abaixo.
 
 ## A regra que vale daqui pra frente
 

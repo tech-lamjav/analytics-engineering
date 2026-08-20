@@ -1,5 +1,5 @@
 {{ config(
-    description='Flatten do raw_futebol_fixture_lineups (nível time). 2 linhas por (fixture, fase) — formation e coach de cada time. lineup_phase distingue confirmed (escalação ~T-30min) de real (pós-jogo); fact_fixture_lineups faz dedup latest-wins por loaded_at e junta fact_fixtures p/ competition/season/date_utc e rótulo home/away.'
+    description='Flatten do raw_futebol_fixture_lineups (nível time). 2 linhas por (fixture, fase) — formation e coach de cada time. lineup_phase distingue confirmed (escalação ~T-30min) de real (pós-jogo); fact_fixture_lineups preserva as duas fases (#38), com latest-wins por loaded_at dentro de cada uma, e junta fact_fixtures p/ competition/season/date_utc e rótulo home/away.'
 ) }}
 
 WITH src AS (

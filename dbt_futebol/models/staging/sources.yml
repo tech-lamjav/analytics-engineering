@@ -187,8 +187,9 @@ sources:
           (mandante e visitante), 1 arquivo por (fixture_id, fase). Wildcard cobre
           _confirmed (escalação ~T-30min) + _real (pós-jogo). team/coach + startXI/
           substitutes ficam aninhados — o flatten/UNNEST acontece em
-          stg_futebol_fixture_lineups(_players). lineup_phase distingue a fase; o fato é
-          latest-wins (dedup por loaded_at). Arquivos:
+          stg_futebol_fixture_lineups(_players). lineup_phase distingue a fase e faz parte
+          do grão dos dois fatos (#38): as duas fases coexistem, e o latest-wins (dedup por
+          loaded_at) acontece DENTRO de cada uma. Arquivos:
           gs://smartbetting-landingzone/futebol/fixture_lineups/raw_futebol_fixture_lineups_{fixture_id}_{confirmed|real}.json.
         external:
           # Documentação apenas — external table criada por
@@ -202,7 +203,7 @@ sources:
           - name: loaded_at
             description: "Timestamp ISO UTC quando o extractor coletou a linha"
           - name: lineup_phase
-            description: "'confirmed' (escalação ~T-30min) | 'real' (pós-jogo). Fato é latest-wins por loaded_at."
+            description: "'confirmed' (escalação ~T-30min) | 'real' (pós-jogo). Parte do grão dos dois fatos (#38); latest-wins por loaded_at dentro de cada fase."
           - name: total_teams
             description: "Metadata: nº de blocos de time no jogo (sempre 2). Ignorado downstream."
           - name: formation
