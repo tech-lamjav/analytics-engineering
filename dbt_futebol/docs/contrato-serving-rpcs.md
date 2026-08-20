@@ -26,13 +26,20 @@ aplicação não os consulta" (falso, ver abaixo) e a **C5** não a mencionou.
 
 ## A matriz
 
-20 das 22 tabelas da allowlist são lidas por alguma RPC. **`dim_leagues` e
-`fact_value_opportunities_hist` não são lidas por nenhuma** — mudança de grão nelas não alcança o
-app (o `hist` é consumido só por análise).
+21 das 22 tabelas da allowlist são lidas por alguma RPC. **Só `dim_leagues` não é lida por
+nenhuma** — mudança de grão nela não alcança o app.
 
-⚠️ **A segunda metade dessa frase morre com a ADR 0009.** Quando o board passar a expurgar jogo
-encerrado, o passado do app passa a ser servido pelo `hist`, em leitura point-in-time no apito —
-e ele deixa de ser tabela de análise para virar fonte de duas telas.
+✅ **A frase que estava aqui morreu, como previsto** (ADR 0009). Até 19/08/2026 este parágrafo
+dizia que o `fact_value_opportunities_hist` também não era lido por RPC nenhuma e era "consumido
+só por análise", com um aviso de que a segunda metade da frase morreria com o expurgo. Morreu: o
+release #271 pôs no PRD as migrations 092–105, e **o `hist` virou fonte de duas telas** —
+`get_futebol_value_history` (aba Histórico) e `get_futebol_fixture_value` (que cai no snapshot
+quando o kickoff já passou). O passado do app é servido em leitura point-in-time no apito.
+
+**O grão do `hist` é contrato de serving a partir daqui.** Ele deixou de ser tabela de análise, e
+a consequência é a regra desta página inteira: mudar o grão dele — ou o `check_cols` do snapshot,
+que é o que decide quando nasce versão nova — muda o que duas telas mostram. Não é mais mudança
+interna.
 
 | Tabela sincronizada | RPCs que leem | Suposição de grão | Estado |
 |---|---|---|---|
@@ -45,7 +52,7 @@ e ele deixa de ser tabela de análise para virar fonte de duas telas.
 | `fact_injuries_snapshot` | 1 | `distinct on (player_id)` + `order by snapshot_date desc` | ✅ desempate correto e semântico |
 | 5 × `int_futebol_premissas_*` | 2 cada | join por (fixture, outcome[, line]) | ✅ hoje; ⚠️ #41 pode adicionar coluna |
 | `fact_h2h`, `fact_predictions_api`, `fact_standings_snapshot`, `fact_team_season_stats`, `fact_fixture_stats`, `fact_fixture_events`, `fact_fixture_player_stats` | 1–2 cada | leitura direta, sem suposição de unicidade além da chave natural | ✅ |
-| `fact_value_opportunities_hist` | **nenhuma hoje**; passa a ter 1 (`get_futebol_value_history`) | leitura **point-in-time no apito**: 1 linha por `opportunity_key`, a versão viva quando o jogo começou | ⚠️ o grão dele vira **contrato de serving** com o expurgo do board (ADR 0009) |
+| `fact_value_opportunities_hist` | **2** (`get_futebol_value_history`, `get_futebol_fixture_value`) | leitura **point-in-time no apito**: 1 linha por `opportunity_key`, a versão viva quando o jogo começou | ⚠️ **tabela de serving** desde o release #271 (ADR 0009). O grão É contrato: mexer nele, ou no `check_cols` do snapshot, muda o que a aba Histórico e o bloco pós-jogo da tela do jogo mostram |
 | `dim_leagues` | **nenhuma** | — | ✅ fora do alcance do app |
 
 ## ⛔ Defeito vivo: o desempate de janela das RPCs de odds não conhece a `daily`
@@ -94,4 +101,4 @@ Antes de mudar **grão** ou **colunas** de qualquer tabela da allowlist:
 | **#87** | Quatro flags de penalidade (`pen_odd_outlier`, `pen_poucas_casas`, `pen_odd_longshot`, `pen_odd_juice`) como `BOOLEAN` no mart | Colunas novas → mesmo caminho da #40: `ALTER TABLE ... ADD COLUMN <flag> boolean;` nas **duas** tabelas (`fact_value_opportunities` e `_hist`) × **dois** bancos, antes do deploy da imagem. **Nenhuma RPC quebra** — verificado no prd em 19/08: as duas que leem o mart o aliasam como `v` e enumeram coluna a coluna, sem `v.*`. E a #87 é o pré-requisito do conserto do lado do app: só com estas colunas no prd o CTE `d` de `get_futebol_fixture_value` (linha ⛔ da tabela acima) vira leitura direta e morre |
 | **A1** | Remove `pts_valor`/`pts_corroboracao`/`penalidades` do mart | Colunas removidas **e** declaradas no `RETURNS TABLE` das duas RPCs → `DROP FUNCTION` + recriar |
 | **A7** | Tabela nova de funil | Livre — fora da allowlist |
-| **Expurgo do board** (ADR 0009) | Mart para de emitir linha de jogo encerrado; passado vem do `hist` | **Nenhuma coluna muda** — o filtro é por join com `fact_fixtures`, de propósito. O risco aqui é o outro: o parity passa, as RPCs devolvem 200 e o Histórico esvazia em silêncio. Por isso a RPC nova (`get_futebol_value_history`) e o front vão **antes** do expurgo, e `get_futebol_value_board` **não é alterada**. `get_futebol_fixture_value` muda só o corpo (assinatura idêntica → `CREATE OR REPLACE`) |
+| **Expurgo do board** (ADR 0009, #85) | Mart para de emitir linha de jogo encerrado; passado vem do `hist` | ✅ **ENTREGUE.** **Nenhuma coluna muda** — o filtro é por join com `fact_fixtures`, de propósito, e por isso este passo não precisou de migration nenhuma. O risco aqui era o outro: o parity passa, as RPCs devolvem 200 e o Histórico esvazia em silêncio. Foi por isso que a RPC nova (`get_futebol_value_history`) e o front foram **antes** — os dois no PRD pelo release #271, em 19/08 — e `get_futebol_value_board` **não foi alterada**. `get_futebol_fixture_value` mudou só o corpo (assinatura idêntica → `CREATE OR REPLACE`) |

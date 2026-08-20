@@ -18,6 +18,20 @@ clean-targets:
   - "dbt_packages"
 
 
+# A carência do expurgo do board (#85, ADR 0009): quantas horas depois do kickoff uma linha
+# sem status final ainda pode ficar no `fact_value_opportunities`. É a rede de segurança para
+# o jogo que passou do apito e nunca recebeu status — falha de COLETA DE PLACAR, não de
+# modelagem —, e por isso ela é parâmetro: a qualidade dessa coleta é a task [C] e vai mudar.
+#
+# ⚠️ Nenhum workflow passa esta var (nem o `workflow_futebol.yml` nem o
+# `workflow_futebol_odds.yml`). Mudar a carência é mudar este arquivo e redeployar a imagem,
+# de propósito: a fronteira do board não é knob de execução.
+#
+# A carência NÃO se aplica a PST/SUSP/INT — ver `macros/futebol_expurgo.sql`.
+vars:
+  expurgo_carencia_horas: 24
+
+
 models:
   dbt_futebol:
     staging:
