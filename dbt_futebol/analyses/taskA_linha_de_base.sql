@@ -25,6 +25,15 @@
     que leem movimento de odd. É a decisão D1 da spec, ainda pendente de confirmação —
     por isso as duas notas saem lado a lado em vez de uma escolhida.
 
+    ⚠ `passa_meia_linha` MUDOU na #101 e os números da entrega original não se reproduzem.
+    Ela tinha uma cópia da expressão do board, que classificava linha de QUARTO (.25) como
+    meia; hoje chama `futebol_e_linha_meia()`, o mesmo predicado que os dois marts. Esta
+    análise declara, na primeira linha, que "reproduz os 5 ramos do
+    `fact_value_opportunities`" — se o board conserta e ela não, ela para de cumprir o
+    próprio contrato. Consequência: a leitura de "quantas linhas a porta de meia linha
+    remove" era subestimada, e rerodar agora dá número maior. É o mesmo tipo de
+    rebaselinamento da #82.
+
     Rodar com:
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --select taskA_linha_de_base
       bq query --use_legacy_sql=false < ../target/compiled/dbt_futebol/analyses/taskA_linha_de_base.sql
@@ -97,7 +106,7 @@ ramo_ou AS (
         d.best_odd, d.n_casas, d.prob_justa_fechamento, d.valor_fonte, d.edge,
         COALESCE(c.pts_corroboracao, 0) AS pts_corroboracao,
         COALESCE(d.pin_n_outcomes >= 2, FALSE)            AS passa_completude,
-        COALESCE(MOD(CAST(ROUND(ABS(p.line_value) * 2) AS INT64), 2) = 1, FALSE) AS passa_meia_linha
+        COALESCE({{ futebol_e_linha_meia('p.line_value') }}, FALSE) AS passa_meia_linha
     FROM {{ ref('int_futebol_premissas_ou') }} p
     JOIN board b        ON b.fixture_id = p.fixture_id
     JOIN devig d        ON d.market_id = 5 AND d.fixture_id = p.fixture_id AND d.outcome_side = p.outcome
@@ -129,7 +138,7 @@ ramo_ah AS (
         d.best_odd, d.n_casas, d.prob_justa_fechamento, d.valor_fonte, d.edge,
         COALESCE(c.pts_corroboracao, 0) AS pts_corroboracao,
         COALESCE(d.pin_n_outcomes >= 2, FALSE)            AS passa_completude,
-        COALESCE(MOD(CAST(ROUND(ABS(p.line_value) * 2) AS INT64), 2) = 1, FALSE) AS passa_meia_linha
+        COALESCE({{ futebol_e_linha_meia('p.line_value') }}, FALSE) AS passa_meia_linha
     FROM {{ ref('int_futebol_premissas_ah') }} p
     JOIN board b        ON b.fixture_id = p.fixture_id
     JOIN devig d        ON d.market_id = 4 AND d.fixture_id = p.fixture_id AND d.outcome_side = p.outcome

@@ -158,7 +158,7 @@ models:
               arguments:
                 values: ['pinnacle', 'consenso']
       - name: is_half_line
-        description: "TRUE se a linha é meia (.5); FALSE p/ cheia/quarter; NULL onde não há linha. Insumo cru da `porta_linha_meia`."
+        description: "TRUE só se a linha é meia (.5); FALSE p/ cheia (x.0) e p/ os DOIS quartos (.25 e .75); NULL onde não há linha. Insumo cru da `porta_linha_meia`. Predicado em `futebol_e_linha_meia()`; até a #101 a linha de quarto .25 saía TRUE aqui."
       - name: pen_odd_outlier
         description: "Parcela da penalidade global: best_odd >= 1,10 × média das OUTRAS casas (−30)."
       - name: pen_poucas_casas

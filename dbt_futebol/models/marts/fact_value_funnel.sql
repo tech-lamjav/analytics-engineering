@@ -410,7 +410,9 @@ scored AS (
             pts_valor + pts_premissas + pts_corroboracao
             - (penalidades_globais_pts + penalidades_especificas_pts), 0), 100) AS score,
         -- linha "meia" (.5) é a única SEM push/meio-push. NULL onde não há linha.
-        (MOD(CAST(ROUND(ABS(line_value) * 2) AS INT64), 2) = 1) AS is_half_line
+        -- O predicado mora em `futebol_linha_meia.sql`, e não aqui, porque foi copiá-lo
+        -- byte a byte do board que trouxe o defeito do `.25` para esta tabela (#101).
+        {{ futebol_e_linha_meia('line_value') }} AS is_half_line
     FROM unioned
 ),
 
