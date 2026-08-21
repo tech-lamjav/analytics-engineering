@@ -135,14 +135,23 @@ nasce na mesma execução, sobre esses números.
 
 A ordem, e ela é apertada porque o `workflow-futebol-odds` dispara com frequência:
 
-1. mergear a AE e **deployar o workflow da DE** (o `--select` enumera modelo a modelo, e modelo
-   fora da lista nasce parado; nome desconhecido é só warning, então o workflow pode ir antes);
+1. mergear a AE e **deployar o workflow da DE** — editar o `workflow_futebol_odds.yml` local não
+   muda o workflow live, então é `./scripts/deploy_workflows.sh workflow-futebol-odds` na DE. Vem
+   antes porque o `--select` enumera modelo a modelo e modelo fora da lista nasce parado; nome
+   desconhecido no `--select` é só warning, então o workflow pode ir na frente da imagem;
 2. `./build-and-push.sh dbt_futebol`;
 3. **imediatamente** `bq rm -f -t smartbetting-dados:futebol.fact_value_funnel`;
 4. disparar o workflow à mão e conferir: nenhuma linha com `origem` NULL, e o selo com linhas.
 
 Se uma execução agendada couber entre (2) e (3) e fizer o merge ruim, o conserto é o mesmo (3) e
 (4) de novo — o estado não é absorvente.
+
+⚠️ **Entre (2) e (3) as duas guardas novas dão ERRO, e é esperado.** Elas rodam da imagem nova
+contra a tabela velha: `assert_funil_congelado_no_apito` não acha a coluna `origem` e
+`assert_funil_imutavel_por_dia_de_kickoff` não acha o selo. É erro de compilação, não guarda
+vermelha, e passa sozinho no (4). Está escrito aqui porque a alternativa é alguém gastar um dia
+rediagnosticando um alarme que a própria ordem do deploy produziu — já aconteceu duas vezes com o
+board t24h.
 
 ⚠️ E daqui sai uma regra permanente: **funil e selo caem juntos, ou nenhum dos dois cai.** Um
 selo reconstruído a partir do funil de agora é um selo que concorda com qualquer coisa; um funil
