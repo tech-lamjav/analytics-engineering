@@ -44,3 +44,40 @@
         {%- endfor %}
     END
 {%- endmacro %}
+
+
+{#-
+  A FRONTEIRA DO CONGELAMENTO, declarada num lugar só (issue #96, ADR 0011).
+
+  TRUE = esta linha ainda pode ser escrita. O funil é append-only: a linha é escrita e
+  atualizada enquanto o jogo não começou, e no apito ela para de ser tocada por build
+  nenhum e deploy nenhum.
+
+  É no **apito inicial**, e não no status final: entre um e outro há duas horas em que os
+  modelos de premissa continuam rodando, e tudo escrito ali seria nota nascida depois de a
+  bola rolar — nota que ninguém podia ler antes de apostar. É a fresta que a ADR 0009
+  existe para fechar.
+
+  ⚠️ Por que macro e não SQL repetido — a mesma lição de `futebol_expurgo.sql`, e aqui ela
+  vale em CINCO lugares: o modelo, os dois lados da `assert_funil_reconcilia_com_devig` e os
+  dois lados da `assert_funil_paridade_com_board`. Predicado copiado em cinco arquivos é
+  predicado que diverge no primeiro refactor, e a divergência é muda nos dois sentidos:
+  guarda mais frouxa que o modelo nunca acende, guarda mais estrita acende sem defeito. Com
+  um macro só, modelo e guardas não têm como discordar.
+
+  ⚠️ FIXTURE AUSENTE É FAIL-OPEN (ADR 0003). `NULL > CURRENT_TIMESTAMP()` é NULL, e sem o
+  `COALESCE(..., TRUE)` a linha nunca mais seria escrita: ela sumiria do funil e a
+  reconciliação acenderia vermelha, com razão. Preferimos a linha eternamente gravável à
+  linha perdida — não dá para congelar no apito de um jogo cuja hora não se sabe.
+
+  ⚠️ JOGO ADIADO REABRE, e de graça: o predicado lê o kickoff CORRENTE, não o que estava lá
+  quando a linha foi escrita. `PST`/`SUSP` empurram o kickoff para o futuro e a linha volta
+  a ser gravável — o jogo voltou a ser apostável, e o que estava escrito descrevia uma
+  partida que não aconteceu.
+
+  `kickoff_col` é expressão já qualificada pelo chamador (ex.: `f.kickoff_utc`), porque os
+  consumidores juntam as tabelas com aliases diferentes.
+-#}
+{% macro futebol_funil_e_gravavel(kickoff_col) -%}
+    COALESCE({{ kickoff_col }} > CURRENT_TIMESTAMP(), TRUE)
+{%- endmacro %}

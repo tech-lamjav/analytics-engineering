@@ -1,7 +1,11 @@
 {{ config(
-    materialized='table',
+    materialized='incremental',
+    incremental_strategy='merge',
+    unique_key=['fixture_id', 'market', 'outcome', 'line_key', 'janela'],
+    on_schema_change='append_new_columns',
+    full_refresh=false,
     cluster_by=['competition', 'fixture_id'],
-    description='O FUNIL DE AVALIAÇÃO (#95, ADR 0011 + ADR 0006). 1 linha por (fixture_id, market, outcome, line_value, janela) que TEVE PREÇO naquela janela, nos CINCO mercados pontuados (1X2, Handicap asiático, Gols O/U, Ambos Marcam, Dupla Chance) — e NADA filtrado. Cada porta do Motor é uma COLUNA BOOLEANA (TRUE = passou), nunca um WHERE: porta_saida_catalogada, porta_conjunto_completo, porta_valor_estimavel, porta_liquidez, porta_edge, porta_nota, porta_linha_meia, porta_odd_dc. `passou_no_gate` é a CONJUNÇÃO derivada das oito, jamais escrita à mão; `motivo_primario` é derivado por cima dos booleanos e é conveniência de leitura, não fonte (uma linha reprova em várias portas ao mesmo tempo, e é a leitura marginal — quantas linhas a porta ainda remove DEPOIS das anteriores — que dá valor à tabela). Cada porta é NULL-safe INDIVIDUALMENTE (COALESCE(..., FALSE)): insumo ausente reprova a porta em vez de propagar NULL para dentro da conjunção. UNIVERSO: os candidatos do int_futebol_odds_devig nos cinco mercados, quatro janelas (daily<t24h<t1h<t15m). Gols do 1º tempo (mercado 6) fica FORA — não existe modelo de premissa para ele e a sua ausência não é decisão nossa (ADR 0011). A saída "12" da Dupla Chance fica DENTRO, com porta_saida_catalogada=FALSE: ela é precificada e a decisão de não pontuá-la é nossa. As duas rejeições que hoje são SUMIÇO no fact_value_opportunities — conjunto de saídas incompleto (a maior do sistema) e a "12" da DC — passam a ser linha com carimbo: os WHERE de completude de cada ramo viram coluna e o INNER JOIN com as premissas vira LEFT JOIN. `janela_e_corrente` é COLUNA e fica FORA da conjunção: é redução (qual janela publica), não veredito de qualidade (ADR 0011, D8). O EXPURGO NÃO É PORTA (ADR 0011): o funil guarda jogo encerrado de propósito — é ele que responde quanto rendeu a faixa descartada — e o expurgo continua no board, sobre o status vindo de fact_fixtures. Por isso `kickoff_utc` sai daqui e o STATUS não: status muda depois do apito e uma coluna congelada com o status de antes mentiria (ADR 0011, D10). Sem evidencias[]/avisos[]: são derivados e reconstruíveis. O EMPATE DO 1X2 carrega marca própria (`sem_lado_apostado`): sem lado apostado nenhuma premissa dispara, e um terço do universo do 1X2 está em zero POR CONSTRUÇÃO — sob o motivo genérico ele seria lido como severidade da régua (ADR 0005/0006). MATERIALIZAÇÃO TABELA nesta entrega (#95): a tabela nasce cobrindo desde a primeira odd coletada (16/06), então o backfill sai de graça. O append-only com congelamento no apito (ADR 0011) é a próxima entrega. NÃO VAI PARA O SUPABASE: o app não lê funil — sem migração no Postgres, sem RPC, sem tocar check_schema_parity. O board NÃO muda nesta entrega; quem prova que o funil o descreve de verdade é a guarda assert_funil_paridade_com_board, e quem prova que o universo está inteiro é assert_funil_reconcilia_com_devig (que lê a FONTE, nunca o próprio funil).'
+    description='O FUNIL DE AVALIAÇÃO (#95/#96, ADR 0011 + ADR 0006). 1 linha por (fixture_id, market, outcome, line_value, janela) que TEVE PREÇO naquela janela, nos CINCO mercados pontuados (1X2, Handicap asiático, Gols O/U, Ambos Marcam, Dupla Chance) — e NADA filtrado. Cada porta do Motor é uma COLUNA BOOLEANA (TRUE = passou), nunca um WHERE: porta_saida_catalogada, porta_conjunto_completo, porta_valor_estimavel, porta_liquidez, porta_edge, porta_nota, porta_linha_meia, porta_odd_dc. `passou_no_gate` é a CONJUNÇÃO derivada das oito, jamais escrita à mão; `motivo_primario` é derivado por cima dos booleanos e é conveniência de leitura, não fonte (uma linha reprova em várias portas ao mesmo tempo, e é a leitura marginal — quantas linhas a porta ainda remove DEPOIS das anteriores — que dá valor à tabela). Cada porta é NULL-safe INDIVIDUALMENTE (COALESCE(..., FALSE)): insumo ausente reprova a porta em vez de propagar NULL para dentro da conjunção. UNIVERSO: os candidatos do int_futebol_odds_devig nos cinco mercados, quatro janelas (daily<t24h<t1h<t15m). Gols do 1º tempo (mercado 6) fica FORA — não existe modelo de premissa para ele e a sua ausência não é decisão nossa (ADR 0011). A saída "12" da Dupla Chance fica DENTRO, com porta_saida_catalogada=FALSE: ela é precificada e a decisão de não pontuá-la é nossa. As duas rejeições que hoje são SUMIÇO no fact_value_opportunities — conjunto de saídas incompleto (a maior do sistema) e a "12" da DC — passam a ser linha com carimbo: os WHERE de completude de cada ramo viram coluna e o INNER JOIN com as premissas vira LEFT JOIN. `janela_e_corrente` é COLUNA e fica FORA da conjunção: é redução (qual janela publica), não veredito de qualidade (ADR 0011, D8). O EXPURGO NÃO É PORTA (ADR 0011): o funil guarda jogo encerrado de propósito — é ele que responde quanto rendeu a faixa descartada — e o expurgo continua no board, sobre o status vindo de fact_fixtures. Por isso `kickoff_utc` sai daqui e o STATUS não: status muda depois do apito e uma coluna congelada com o status de antes mentiria (ADR 0011, D10). Sem evidencias[]/avisos[]: são derivados e reconstruíveis. O EMPATE DO 1X2 carrega marca própria (`sem_lado_apostado`): sem lado apostado nenhuma premissa dispara, e um terço do universo do 1X2 está em zero POR CONSTRUÇÃO — sob o motivo genérico ele seria lido como severidade da régua (ADR 0005/0006). APPEND-ONLY, CONGELADO NO APITO (#96, ADR 0011): materialização INCREMENTAL por merge no grão (fixture_id, market, outcome, line_key, janela). A linha é escrita e atualizada enquanto o kickoff do fixture está no FUTURO e nenhuma escrita acontece depois dele — o funil deixa de ser uma foto do que o código de hoje diria e passa a ser registro do que o Motor disse. `full_refresh=false` no config porque a fase de RECOVERY do workflow_futebol_odds roda o mesmo --select com --full-refresh: sem isso, a primeira recuperação de deriva apagaria o histórico inteiro. Toda linha carrega `gravado_em` e `origem`: `backfill` no build que cria a tabela (recalculado com o código de hoje, e é a única parte que NÃO é registro de época) e `corrente` em toda escrita incremental. Jogo adiado (PST/SUSP) cujo kickoff volta para o futuro VOLTA a ser gravável — o filtro lê o kickoff corrente, não o da escrita anterior. Fixture ausente em fact_fixtures (kickoff NULL) é FAIL-OPEN: continua gravável para sempre, porque perdê-lo quebraria a reconciliação (ADR 0003). NÃO HÁ EXPURGO DO FUNIL (~45 mil linhas/mês; a política se revisita se a tabela passar de 10 milhões de linhas). NÃO VAI PARA O SUPABASE: o app não lê funil — sem migração no Postgres, sem RPC, sem tocar check_schema_parity. O board NÃO muda nesta entrega; quem prova que o funil o descreve de verdade é a guarda assert_funil_paridade_com_board, e quem prova que o universo está inteiro é assert_funil_reconcilia_com_devig (que lê a FONTE, nunca o próprio funil).'
 ) }}
 
 -- ============================================================================
@@ -487,6 +491,12 @@ SELECT
     market,
     outcome,
     line_value,
+    -- A CHAVE DO MERGE, e ela existe por um motivo mecânico: `line_value` é NULL no 1X2,
+    -- no BTTS e na Dupla Chance, e num MERGE ... ON, NULL nunca casa com NULL. Com
+    -- `line_value` cru na `unique_key` toda linha desses três mercados seria INSERIDA de
+    -- novo a cada execução, em silêncio, até a guarda de grão acender. O `COALESCE` para
+    -- 'NONE' é o mesmo que os dois lados das guardas já usam.
+    COALESCE(CAST(line_value AS STRING), 'NONE') AS line_key,
     janela_usada                AS janela,
     janela_prioridade,
     -- redução, não veredito: diz qual das quatro janelas o board publicaria. Quem for
@@ -572,9 +582,35 @@ SELECT
     n_outcomes_valor,
     is_half_line,
 
-    CURRENT_TIMESTAMP() AS dbt_loaded_at
+    -- ----------------------------------------------------------------- os carimbos (#96)
+    -- QUANDO o Motor disse isto. Sob append-only, "quando o dbt carregou" e "quando ficou
+    -- registrado" são o MESMO instante — por isso este campo substituiu o `dbt_loaded_at`
+    -- em vez de conviver com ele. Duas colunas de tempo com o mesmo valor são duas colunas
+    -- que um dia divergem e ninguém sabe qual manda.
+    CURRENT_TIMESTAMP()         AS gravado_em,
+    -- DE ONDE ela veio. `backfill` é o build que CRIA a tabela: aquelas linhas foram
+    -- recalculadas com o código de hoje sobre odds antigas, e são a única parte do funil
+    -- que NÃO é registro do que foi dito na época — têm de dizer isso de si mesmas. Toda
+    -- escrita incremental é `corrente`, e essa sim é registro de época.
+    --
+    -- ⚠️ Uma linha `backfill` de jogo ainda futuro vira `corrente` no primeiro merge
+    -- seguinte. É o comportamento certo: ela voltou a ser escrita antes do apito, então
+    -- passou a ser registro de época de verdade.
+    '{{ 'corrente' if is_incremental() else 'backfill' }}' AS origem
 FROM com_gate
 -- LEFT, nunca INNER: fixture ausente em `fact_fixtures` não pode sumir do funil — sumir
 -- seria a perda silenciosa que a tabela inteira existe para impedir, e quebraria a
 -- reconciliação contra o de-vig. O kickoff vem NULL e diz isso de si mesmo.
 LEFT JOIN fixtures USING (fixture_id)
+{% if is_incremental() %}
+-- ============================================================================
+-- O CONGELAMENTO (#96, ADR 0011). É esta linha, e só ela, que transforma a tabela de
+-- foto em registro: o merge só recebe candidato de jogo que AINDA NÃO COMEÇOU, então
+-- nenhuma linha de kickoff passado é reescrita por build nenhum nem por deploy nenhum.
+--
+-- O predicado mora em `futebol_funil.sql` — o mesmo que as duas guardas leem. Copiá-lo
+-- aqui faria dele cinco cópias, e cópia que diverge do que a guarda espera é divergência
+-- MUDA nos dois sentidos (ver o cabeçalho do macro).
+-- ============================================================================
+WHERE {{ futebol_funil_e_gravavel('_fx_kickoff_utc') }}
+{% endif %}
