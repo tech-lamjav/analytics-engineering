@@ -141,7 +141,10 @@ A ordem, e ela é apertada porque o `workflow-futebol-odds` dispara com frequên
    desconhecido no `--select` é só warning, então o workflow pode ir na frente da imagem;
 2. `./build-and-push.sh dbt_futebol`;
 3. **imediatamente** `bq rm -f -t smartbetting-dados:futebol.fact_value_funnel`;
-4. disparar o workflow à mão e conferir: nenhuma linha com `origem` NULL, e o selo com linhas.
+4. disparar o workflow à mão e conferir: nenhuma linha com `origem` NULL, o selo com linhas, e
+   `dbt ls --select tag:guarda --resource-type test` listando **42** (eram 36; entram as duas
+   guardas novas, o `not_null` de `gravado_em` e de `origem`, o `accepted_values` de `origem` e o
+   grão do selo — os carimbos precisam da tag porque o agendado roda só essa seleção).
 
 Se uma execução agendada couber entre (2) e (3) e fizer o merge ruim, o conserto é o mesmo (3) e
 (4) de novo — o estado não é absorvente.
