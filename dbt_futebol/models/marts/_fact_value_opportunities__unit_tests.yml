@@ -209,3 +209,76 @@ unit_tests:
         # do fim — é a ausência de placar que a carência existe para cobrir, e a linha
         # sai. "Não sei que jogo é este" e "sei qual é e ninguém carimbou o fim" não
         # podem ter o mesmo destino.
+
+  # ---------------------------------------------------------------------------
+  # A PORTA DA LINHA MEIA, NO BOARD (#101).
+  #
+  # O gêmeo deste caso vive no funil (`funil_linha_meia_e_por_quarto_de_linha`), e
+  # até aqui era o ÚNICO: os dois unit tests do board são 100% 1X2, com `line_value`
+  # vazio em toda linha mockada, então o modelo que serve o usuário não tinha
+  # nenhuma linha construída exercitando esta porta.
+  #
+  # Hoje os dois marts não têm como divergir — chamam o mesmo
+  # `futebol_e_linha_meia()` —, e `assert_funil_paridade_com_board` pegaria a
+  # divergência nas linhas publicadas. Mas a paridade é declaradamente temporária: o
+  # plano é o board passar a LER do funil, e nesse dia a guarda se aposenta e o funil
+  # deixa de ser um segundo cálculo. Este teste é o que sobra quando isso acontecer.
+  #
+  # E a asserção aqui é diferente da do funil, de propósito. O funil grava o veredito
+  # de cada porta e responde "por que reprovou"; o board só responde "aparece ou
+  # não". A linha de quarto SUMIR do board é a consequência que o usuário vê, e é ela
+  # que precisa estar presa.
+  # ---------------------------------------------------------------------------
+  - name: value_opportunities_linha_de_quarto_nao_chega_ao_board
+    model: fact_value_opportunities
+    description: >
+      Três candidatos de Gols O/U idênticos fora da linha — cheia (2.0), de quarto
+      (2.25) e meia (2.5). Só a meia é publicada. Antes da #101 a de quarto entrava no
+      board como se não pudesse dar push.
+    given:
+      - input: ref('int_futebol_premissas_ou')
+        format: sql
+        rows: |
+          SELECT 20 AS fixture_id, 'Over' AS outcome, 2.0 AS line_value,
+                 'brasileirao' AS competition, 2026 AS season,
+                 15 AS pts_premissas, 0 AS premissas_sem_dado,
+                 0 AS penalidades_ou_pts,
+                 CAST([] AS ARRAY<STRING>) AS evidencias,
+                 CAST([] AS ARRAY<STRING>) AS avisos
+          UNION ALL SELECT 21, 'Over', 2.25, 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 22, 'Over', 2.5, 'brasileirao', 2026, 15, 0, 0,
+                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+
+      - input: ref('int_futebol_odds_devig')
+        rows:
+          - {fixture_id: 20, market_id: 5, outcome_side: 'Over', line_value: 2.0, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 21, market_id: 5, outcome_side: 'Over', line_value: 2.25, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 22, market_id: 5, outcome_side: 'Over', line_value: 2.5, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+      - input: ref('int_futebol_premissas_1x2')
+        rows: []
+      - input: ref('int_futebol_premissas_ah')
+        rows: []
+      - input: ref('int_futebol_premissas_btts')
+        rows: []
+      - input: ref('int_futebol_premissas_dc')
+        rows: []
+      - input: ref('int_futebol_corroboracao')
+        rows: []
+
+      # Os três futuros e 'NS': ninguém pode morrer pela fronteira do expurgo sem que
+      # a asserção abaixo mude de significado em silêncio.
+      - input: ref('fact_fixtures')
+        format: sql
+        rows: |
+          SELECT id AS fixture_id, 'NS' AS status_short,
+                 TIMESTAMP '2099-01-01 00:00:00+00' AS kickoff_utc
+          FROM UNNEST([20,21,22]) AS id
+
+    expect:
+      rows:
+        # Só a linha MEIA. A cheia (20) e a de quarto (21) não aparecem — nas duas
+        # parte da aposta pode voltar como push, e o de-vig 2-way superdimensiona o
+        # edge. A 21 é a que passava antes da #101.
+        - {fixture_id: 22, market: 'goals_over_under', outcome: 'Over', line_value: 2.5, is_half_line: true, score: 45}
