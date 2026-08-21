@@ -265,3 +265,94 @@ unit_tests:
         - {fixture_id: 20, janela: 't24h',  janela_e_corrente: false, porta_liquidez: true,  porta_edge: true,  passou_no_gate: true}
         - {fixture_id: 20, janela: 't1h',   janela_e_corrente: false, porta_liquidez: true,  porta_edge: true,  passou_no_gate: true}
         - {fixture_id: 20, janela: 't15m',  janela_e_corrente: true,  porta_liquidez: true,  porta_edge: false, passou_no_gate: false}
+
+  # ---------------------------------------------------------------------------
+  # 4. A PORTA DA LINHA MEIA, QUARTO A QUARTO (#101).
+  #
+  # O teste 1 cobre a porta com UM caso (a linha cheia 2.0) e ela passa. Isso não
+  # prova a porta: `is_half_line` era `MOD(ROUND(ABS(line_value) * 2), 2) = 1`, e o
+  # BigQuery arredonda **meio para longe do zero** — então `.25` virava `0.5 -> 1` e a
+  # linha de QUARTO era classificada como meia. Medido em 20/08/2026 no de-vig,
+  # mercados 4 e 5: 18.809 linhas de `.25` entravam no gate como se não tivessem push.
+  # O `.75` escapava por sorte (arredonda para cima e cai no par).
+  #
+  # A porta existe porque em linha não-meia parte da aposta pode voltar como push e o
+  # de-vig 2-way normaliza sobre duas saídas que NÃO são exaustivas. Na linha de quarto
+  # isso vale igual — ela é metade da aposta em cada uma das duas linhas vizinhas.
+  #
+  # Por isso o caso de teste é a TABELA INTEIRA, e não mais um caso: só os quatro
+  # quartos juntos separam "a porta está certa" de "a porta acerta o .5 e o 2.0". A
+  # linha negativa está aqui porque é assim que se escreve Handicap asiático, e o `ABS`
+  # é a única razão de ela funcionar.
+  # ---------------------------------------------------------------------------
+  - name: funil_linha_meia_e_por_quarto_de_linha
+    model: fact_value_funnel
+    description: >
+      Os quatro quartos de linha (.0, .25, .5, .75) em Gols O/U, uma linha de quarto
+      NEGATIVA em Handicap, e um mercado sem linha. Só `.5` é meia; linha de quarto pode
+      dar push e reprova. Antes da #101 o `.25` passava.
+    given:
+      - input: ref('int_futebol_odds_devig')
+        rows:
+          # -- 30: linha CHEIA. Push inteiro possível. ---------------------------------
+          - {fixture_id: 30, competition: 'brasileirao', season: 2026, market_id: 5, outcome_side: 'Over', line_value: 2.0, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 31: linha de QUARTO. É O CASO DA #101 — passava como se fosse meia. -----
+          - {fixture_id: 31, competition: 'brasileirao', season: 2026, market_id: 5, outcome_side: 'Over', line_value: 2.25, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 32: linha MEIA. A única sem push nem meio-push — a que a porta deixa passar.
+          - {fixture_id: 32, competition: 'brasileirao', season: 2026, market_id: 5, outcome_side: 'Over', line_value: 2.5, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 33: o outro QUARTO. Já reprovava — mas por sorte do arredondamento, não por
+          # construção. Fica no teste para continuar reprovando pelo motivo certo.
+          - {fixture_id: 33, competition: 'brasileirao', season: 2026, market_id: 5, outcome_side: 'Over', line_value: 2.75, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 34: quarto NEGATIVO, em Handicap. É a forma normal de escrever handicap, e
+          # a única coisa que a faz funcionar é o `ABS`.
+          - {fixture_id: 34, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Home', line_value: -0.25, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 35: mercado SEM linha. `is_half_line` tem de continuar NULL (não FALSE): a
+          # porta não se aplica e passa trivialmente. Não é isenção.
+          - {fixture_id: 35, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+      - input: ref('int_futebol_premissas_ou')
+        format: sql
+        rows: |
+          SELECT 30 AS fixture_id, 'Over' AS outcome, 2.0 AS line_value,
+                 15 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ou_pts
+          UNION ALL SELECT 31, 'Over', 2.25, 15, 0, 0
+          UNION ALL SELECT 32, 'Over', 2.5,  15, 0, 0
+          UNION ALL SELECT 33, 'Over', 2.75, 15, 0, 0
+
+      - input: ref('int_futebol_premissas_ah')
+        format: sql
+        rows: |
+          SELECT 34 AS fixture_id, 'Home' AS outcome, -0.25 AS line_value,
+                 15 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts
+
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT 35 AS fixture_id, 'Home' AS outcome, 15 AS pts_premissas,
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
+
+      - input: ref('int_futebol_premissas_btts')
+        rows: []
+      - input: ref('int_futebol_premissas_dc')
+        rows: []
+      - input: ref('int_futebol_corroboracao')
+        rows: []
+      - input: ref('fact_fixtures')
+        format: sql
+        rows: |
+          SELECT id AS fixture_id, TIMESTAMP '2099-01-01 00:00:00+00' AS kickoff_utc
+          FROM UNNEST([30,31,32,33,34,35]) AS id
+
+    expect:
+      rows:
+        - {fixture_id: 30, market: 'goals_over_under', is_half_line: false, porta_linha_meia: false, passou_no_gate: false, motivo_primario: 'linha_nao_meia'}
+        - {fixture_id: 31, market: 'goals_over_under', is_half_line: false, porta_linha_meia: false, passou_no_gate: false, motivo_primario: 'linha_nao_meia'}
+        - {fixture_id: 32, market: 'goals_over_under', is_half_line: true,  porta_linha_meia: true,  passou_no_gate: true,  motivo_primario: }
+        - {fixture_id: 33, market: 'goals_over_under', is_half_line: false, porta_linha_meia: false, passou_no_gate: false, motivo_primario: 'linha_nao_meia'}
+        - {fixture_id: 34, market: 'asian_handicap',   is_half_line: false, porta_linha_meia: false, passou_no_gate: false, motivo_primario: 'linha_nao_meia'}
+        - {fixture_id: 35, market: 'match_winner',     is_half_line: ,      porta_linha_meia: true,  passou_no_gate: true,  motivo_primario: }

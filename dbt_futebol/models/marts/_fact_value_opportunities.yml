@@ -46,7 +46,7 @@ models:
       - name: line_value
         description: "NULL no 1X2, BTTS e Dupla Chance; a linha L (1.5/2.5/3.5/...) no Gols O/U; o handicap (ótica do mandante, mesmo p/ Home e Away) no Handicap asiático."
       - name: is_half_line
-        description: "TRUE se a linha é meia (.5, sem push/meio-push); FALSE p/ linha cheia/quarter; NULL onde não há linha (1X2/BTTS/DC). O gate só materializa asian_handicap/goals_over_under quando is_half_line (#2 — evita edge superdimensionado por push ignorado)."
+        description: "TRUE só se a linha é meia (.5, a única sem push nem meio-push); FALSE p/ linha cheia (x.0) e p/ os DOIS quartos (.25 e .75, que dão meio-push); NULL onde não há linha (1X2/BTTS/DC). O gate só materializa asian_handicap/goals_over_under quando is_half_line (#2 — evita edge superdimensionado por push ignorado). Predicado em `futebol_e_linha_meia()`; até a #101 a linha de quarto .25 saía TRUE aqui."
       - name: valor_fonte
         description: "Fonte do de-vig/edge: 'pinnacle' (mercados 1/4/5 da Pinnacle; e Dupla Chance, derivada do 1X2 da Pinnacle) ou 'consenso' (mediana das casas — BTTS, pois a Pinnacle não precifica; rotular como estimativa no front; exige edge>=consensus_min_edge no gate). #1"
         tests:

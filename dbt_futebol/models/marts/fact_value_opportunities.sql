@@ -363,9 +363,12 @@ scored AS (
         LEAST(GREATEST(
             pts_valor + pts_premissas + pts_corroboracao
             - (penalidades_globais_pts + penalidades_especificas_pts), 0), 100) AS score,
-        -- #2: linha "meia" (.5) é a única SEM push/meio-push. line_value*2 ímpar => meia.
-        -- TRUE só p/ .5; FALSE p/ linha cheia (2.0) e quarter; NULL onde não há linha (1X2/BTTS/DC).
-        (MOD(CAST(ROUND(ABS(line_value) * 2) AS INT64), 2) = 1) AS is_half_line
+        -- #2: linha "meia" (.5) é a única SEM push/meio-push.
+        -- TRUE só p/ .5; FALSE p/ linha cheia (2.0) e p/ os dois quartos (.25/.75);
+        -- NULL onde não há linha (1X2/BTTS/DC). O predicado mora em
+        -- `futebol_linha_meia.sql` desde a #101 — até lá ele era comparado em MEIOS aqui,
+        -- e o `.25` passava como meia porque o BigQuery arredonda 0.5 para longe do zero.
+        {{ futebol_e_linha_meia('line_value') }} AS is_half_line
     FROM unioned
 ),
 
