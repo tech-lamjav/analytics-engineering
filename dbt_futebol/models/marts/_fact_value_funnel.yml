@@ -195,7 +195,13 @@ models:
           "quando ficou registrado" são o mesmo instante — por isso este campo substituiu
           o `dbt_loaded_at` em vez de conviver com ele. Em linha `corrente` ele é sempre
           ANTERIOR ao `kickoff_utc`, e é isso que a `assert_funil_congelado_no_apito` prova.
-        tests: [not_null]
+        tests:
+          # `tag:guarda` porque o agendado roda SÓ essa seleção. Carimbo nulo é o sintoma
+          # exato da cutover malfeita (merge sobre a tabela do passo 1), e sem a tag ele
+          # ficaria mudo justamente no dia em que precisa gritar.
+          - not_null:
+              config:
+                tags: ['guarda']
       - name: origem
         description: >
           `backfill` no build que CRIA a tabela — aquelas linhas foram recalculadas com o
@@ -208,10 +214,16 @@ models:
           seguinte — ela voltou a ser escrita antes do apito, então passou a ser registro
           de época de verdade.
         tests:
-          - not_null
+          # idem `gravado_em`: `tag:guarda` porque é o carimbo que denuncia a cutover
+          # malfeita, e o agendado só roda essa seleção.
+          - not_null:
+              config:
+                tags: ['guarda']
           - accepted_values:
               arguments:
                 values: ['backfill', 'corrente']
+              config:
+                tags: ['guarda']
     tests:
       # O GRÃO — e aqui ele inclui a JANELA, ao contrário do board (ADR 0004/0011).
       #
@@ -219,13 +231,19 @@ models:
       # cobre: a `assert_funil_reconcilia_com_devig` compara CONJUNTOS de chaves com
       # `EXCEPT DISTINCT`, que é insensível a duplicata — um fan-out que duplicasse toda
       # linha passaria por ela nos dois sentidos e só apareceria aqui.
+      #
+      # ⚠️ Sobre `line_key` e não `line_value`: as duas dão o mesmo grão (uma é função
+      # determinística da outra, e o BigQuery agrupa NULLs), mas é `line_key` que entra na
+      # `unique_key` do merge. Testando a chave REAL, esta é literalmente a guarda que o
+      # comentário do modelo promete — a que acende se o merge parar de casar e passar a
+      # inserir.
       - dbt_utils.unique_combination_of_columns:
           arguments:
             combination_of_columns:
               - fixture_id
               - market
               - outcome
-              - line_value
+              - line_key
               - janela
           config:
             tags: ['guarda']

@@ -146,10 +146,9 @@ A ordem, e ela é apertada porque o `workflow-futebol-odds` dispara com frequên
 Se uma execução agendada couber entre (2) e (3) e fizer o merge ruim, o conserto é o mesmo (3) e
 (4) de novo — o estado não é absorvente.
 
-⚠️ **Entre (2) e (3) as duas guardas novas dão ERRO, e é esperado.** Elas rodam da imagem nova
-contra a tabela velha: `assert_funil_congelado_no_apito` não acha a coluna `origem` e
-`assert_funil_imutavel_por_dia_de_kickoff` não acha o selo. É erro de compilação, não guarda
-vermelha, e passa sozinho no (4). Está escrito aqui porque a alternativa é alguém gastar um dia
+⚠️ **Entre (2) e (3) as QUATRO guardas do funil dão ERRO, e é esperado.** Elas rodam da imagem
+nova contra a tabela velha: as duas novas não acham `origem` nem o selo, e as duas do passo 1 não
+acham `line_key`. É erro de compilação, não guarda vermelha, e passa sozinho no (4). Está escrito aqui porque a alternativa é alguém gastar um dia
 rediagnosticando um alarme que a própria ordem do deploy produziu — já aconteceu duas vezes com o
 board t24h.
 

@@ -608,21 +608,9 @@ LEFT JOIN fixtures USING (fixture_id)
 -- foto em registro: o merge só recebe candidato de jogo que AINDA NÃO COMEÇOU, então
 -- nenhuma linha de kickoff passado é reescrita por build nenhum nem por deploy nenhum.
 --
--- É no APITO INICIAL, não no status final: entre um e outro há duas horas em que os
--- modelos de premissa continuam rodando, e tudo escrito ali seria nota nascida DEPOIS
--- de a bola rolar — nota que ninguém podia ler antes de apostar. É a fresta que a
--- ADR 0009 existe para fechar.
---
--- JOGO ADIADO REABRE, e de graça: o predicado lê o kickoff CORRENTE de `fact_fixtures`,
--- não o que estava lá quando a linha foi escrita. `PST`/`SUSP` empurram o kickoff para o
--- futuro, a linha volta a ser gravável, e é o comportamento certo — o jogo voltou a ser
--- apostável e o que estava escrito descrevia uma partida que não aconteceu.
---
--- FIXTURE AUSENTE É FAIL-OPEN (kickoff NULL -> TRUE, ADR 0003). `NULL > CURRENT_TIMESTAMP()`
--- é NULL, e sem o COALESCE a linha nunca mais seria escrita: ela sumiria do funil e a
--- `assert_funil_reconcilia_com_devig` acenderia vermelha, com razão. Preferimos a linha
--- eternamente gravável à linha perdida — não dá para congelar no apito de um jogo cuja
--- hora não se sabe.
+-- O predicado mora em `futebol_funil.sql` — o mesmo que as duas guardas leem. Copiá-lo
+-- aqui faria dele cinco cópias, e cópia que diverge do que a guarda espera é divergência
+-- MUDA nos dois sentidos (ver o cabeçalho do macro).
 -- ============================================================================
-WHERE COALESCE(_fx_kickoff_utc > CURRENT_TIMESTAMP(), TRUE)
+WHERE {{ futebol_funil_e_gravavel('_fx_kickoff_utc') }}
 {% endif %}

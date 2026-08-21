@@ -17,6 +17,12 @@ version: 2
 # alguém mexer nos pesos e o teste ficar vermelho por score, é o número daqui que se
 # ajusta; não é o caso de teste que está errado.
 #
+# ⚠️ `overrides: macros: is_incremental` é OBRIGATÓRIO em todo teste daqui desde que o
+# funil virou incremental (#96): o dbt exige que cada um declare qual dos dois ramos
+# exercita. `false` é o ramo de FULL REFRESH — o build que cria a tabela, sem o filtro de
+# congelamento —, que é onde as portas se leem puras, sem o kickoff interferindo. Só o
+# último teste usa `true`, porque é o que mede o congelamento em si.
+#
 # ⚠️ As linhas do de-vig são MOCKS, não amostras: algumas combinações não ocorrem em
 # produção de propósito, porque isolar uma porta às vezes exige quebrar a implicação
 # que a liga a outra. Onde isso acontece está dito na linha.
@@ -33,10 +39,6 @@ unit_tests:
   # ---------------------------------------------------------------------------
   - name: funil_cada_porta_reprova_sozinha
     model: fact_value_funnel
-    # O funil virou incremental na #96, e o dbt passa a exigir que todo unit test declare
-    # qual dos dois ramos ele exercita. Este roda o ramo de FULL REFRESH — o build que
-    # cria a tabela, sem o filtro de congelamento —, que é onde as portas se leem puras,
-    # sem o kickoff interferindo. O ramo incremental tem teste próprio, o quarto.
     overrides:
       macros:
         is_incremental: false
@@ -148,10 +150,6 @@ unit_tests:
   # ---------------------------------------------------------------------------
   - name: funil_duas_portas_o_empate_e_o_insumo_nulo
     model: fact_value_funnel
-    # O funil virou incremental na #96, e o dbt passa a exigir que todo unit test declare
-    # qual dos dois ramos ele exercita. Este roda o ramo de FULL REFRESH — o build que
-    # cria a tabela, sem o filtro de congelamento —, que é onde as portas se leem puras,
-    # sem o kickoff interferindo. O ramo incremental tem teste próprio, o quarto.
     overrides:
       macros:
         is_incremental: false
@@ -236,10 +234,6 @@ unit_tests:
   # ---------------------------------------------------------------------------
   - name: funil_quatro_janelas_um_candidato_uma_corrente
     model: fact_value_funnel
-    # O funil virou incremental na #96, e o dbt passa a exigir que todo unit test declare
-    # qual dos dois ramos ele exercita. Este roda o ramo de FULL REFRESH — o build que
-    # cria a tabela, sem o filtro de congelamento —, que é onde as portas se leem puras,
-    # sem o kickoff interferindo. O ramo incremental tem teste próprio, o quarto.
     overrides:
       macros:
         is_incremental: false
@@ -308,8 +302,6 @@ unit_tests:
   # ---------------------------------------------------------------------------
   - name: funil_linha_meia_e_por_quarto_de_linha
     model: fact_value_funnel
-    # Ramo de full refresh (ver a nota no primeiro teste): o que se mede aqui é o
-    # predicado da linha meia, e o congelamento não tem nada a dizer sobre ele.
     overrides:
       macros:
         is_incremental: false

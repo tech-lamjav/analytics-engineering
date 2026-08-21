@@ -4,8 +4,8 @@ models:
   - name: fact_value_funnel_selo
     description: >
       O SELO DE IMUTABILIDADE DO FUNIL (#96, ADR 0011). 1 linha por
-      (fixture_id, dia_kickoff) já passado, com a contagem e a soma de nota que o
-      `fact_value_funnel` tinha na primeira vez em que aquele dia ficou para trás.
+      (fixture_id, dia_kickoff) JÁ APITADO, com a contagem e a soma de nota que o
+      `fact_value_funnel` tinha na primeira execução depois do apito daquele fixture.
       Escrito UMA VEZ e nunca reescrito.
 
       Existe porque o aceite da #96 pede uma propriedade ENTRE BUILDS — "contagem e soma de
@@ -35,7 +35,11 @@ models:
         description: "O jogo. Está na chave para que o adiamento (`PST`/`SUSP`) não vire guarda vermelha permanente."
         tests: [not_null]
       - name: dia_kickoff
-        description: "`DATE(kickoff_utc)` em UTC. Só entram dias ESTRITAMENTE anteriores a `CURRENT_DATE()`: um dia só está inteiro no passado quando o seguinte começou."
+        description: >
+          `DATE(kickoff_utc)` em UTC. O selo fecha no APITO de cada fixture, não na virada
+          do dia: o grão é por fixture, então não há meio-dia em curso a proteger, e
+          esperar a meia-noite deixaria o dia mais novo até 24 h sem selo — justamente o dia
+          em que um rebuild indevido é mais provável, logo depois de um deploy.
         tests: [not_null]
       - name: linhas
         description: "Quantas linhas o funil tinha para esse (fixture, dia) no instante do selo."

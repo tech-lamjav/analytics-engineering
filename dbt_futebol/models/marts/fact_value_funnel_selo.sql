@@ -3,7 +3,7 @@
     on_schema_change='append_new_columns',
     full_refresh=false,
     cluster_by=['dia_kickoff'],
-    description='O SELO DE IMUTABILIDADE DO FUNIL (#96, ADR 0011). 1 linha por (fixture_id, dia_kickoff) já passado, com a CONTAGEM e a SOMA DE NOTA que o fact_value_funnel tinha na primeira vez em que aquele dia ficou para trás. Escrito UMA VEZ e nunca reescrito — é a única testemunha externa que a guarda de imutabilidade pode consultar: um rebuild que reescrevesse o passado apagaria, junto, qualquer evidência guardada DENTRO do próprio funil. É a mesma lição da costura B da task [F] e da guarda de reconciliação: guarda que lê só o próprio produto não é guarda. NÃO VAI PARA O SUPABASE e não tem leitor no app.'
+    description='O SELO DE IMUTABILIDADE DO FUNIL (#96, ADR 0011). 1 linha por (fixture_id, dia_kickoff) JÁ APITADO, com a CONTAGEM e a SOMA DE NOTA que o fact_value_funnel tinha na primeira execução depois do apito daquele fixture. Escrito UMA VEZ e nunca reescrito — é a única testemunha externa que a guarda de imutabilidade pode consultar: um rebuild que reescrevesse o passado apagaria, junto, qualquer evidência guardada DENTRO do próprio funil. É a mesma lição da costura B da task [F] e da guarda de reconciliação: guarda que lê só o próprio produto não é guarda. NÃO VAI PARA O SUPABASE e não tem leitor no app.'
 ) }}
 
 -- ============================================================================
@@ -32,7 +32,7 @@
 -- dos dois deixa a guarda vermelha permanentemente — e guarda permanentemente vermelha
 -- morre ignorada.
 -- ============================================================================
-WITH passados AS (
+WITH apitados AS (
     SELECT
         fixture_id,
         DATE(kickoff_utc) AS dia_kickoff,
@@ -42,10 +42,12 @@ WITH passados AS (
     -- decisão do modelo (fail-open, ADR 0003). Selá-la seria congelar o que o funil
     -- deliberadamente não congela.
     WHERE kickoff_utc IS NOT NULL
-      -- `< CURRENT_DATE()` e não `kickoff < now`: um dia só está inteiro no passado
-      -- quando o dia seguinte começou. Selar um dia ainda em curso congelaria a metade
-      -- dele que ainda estava sendo escrita.
-      AND DATE(kickoff_utc) < CURRENT_DATE()
+      -- NO APITO, e não na virada do dia. O grão é por FIXTURE, então não há "metade do
+      -- dia ainda sendo escrita" a proteger: um jogo que já começou está inteiramente
+      -- congelado, e esperar a meia-noite deixaria o dia mais novo até 24 h sem selo —
+      -- justamente o dia em que um rebuild indevido é mais provável, logo depois de um
+      -- deploy. É a mesma fronteira que congela o funil, e de propósito.
+      AND kickoff_utc < CURRENT_TIMESTAMP()
 ),
 
 agregado AS (
@@ -57,7 +59,7 @@ agregado AS (
         -- de leitura de uma tabela do BigQuery não é estável entre execuções. Em NUMERIC
         -- a soma é exata, e a guarda compara igualdade sem tremer no último bit (#92).
         SUM(CAST(score AS NUMERIC))     AS soma_nota
-    FROM passados
+    FROM apitados
     GROUP BY fixture_id, dia_kickoff
 )
 
