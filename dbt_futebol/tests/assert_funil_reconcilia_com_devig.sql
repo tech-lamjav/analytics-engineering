@@ -24,11 +24,38 @@
 -- contagens iguais convivem confortavelmente com um erro que tira uma linha de um lado e
 -- põe outra do outro.
 --
+-- ⚠️ ESCOPADA AO QUE AINDA É GRAVÁVEL (#96). Desde o congelamento no apito (ADR 0011) as
+-- duas tabelas deixaram de ter o mesmo universo, e a igualdade sem escopo passou a ser
+-- falsa por construção nos DOIS sentidos:
+--
+--   · o funil guarda história que a fonte não guarda. Ele nunca expurga (~45 mil
+--     linhas/mês, para sempre); o de-vig só emite enquanto a coleta emite aquele fixture.
+--     No primeiro dia em que a fonte soltar um jogo velho, a guarda sem escopo acenderia
+--     vermelha POR ESTAR CERTA — e guarda permanentemente vermelha morre ignorada;
+--   · a fonte pode passar a emitir candidato de jogo já apitado, e o funil — corretamente
+--     — não o grava mais. Cobrar essa linha seria cobrar a violação do congelamento.
+--
+-- O escopo é, então, o conjunto de que o modelo é responsável NESTA execução: candidato
+-- cujo fixture ainda não começou (ou cujo kickoff se desconhece, que é gravável para
+-- sempre por fail-open). Dentro dele a igualdade continua exata e os dois modos de falha
+-- acima continuam cobertos.
+--
+-- ⚠️ O preço do escopo, dito em voz alta: a história JÁ CONGELADA sai da conferência. Uma
+-- linha que suma de um dia encerrado não acende aqui — acende em
+-- `assert_funil_imutavel_por_dia_de_kickoff`, que é a guarda escrita para essa metade.
+--
 -- ⚠️ Ponto cego declarado, o de sempre (ADR 0005, subtask C4): até a C4 fechar, o job do
 -- agendado devolve sucesso mesmo com esta guarda vermelha. Ela encurta o tempo até alguém
 -- saber; não impede a tabela errada de ser publicada.
 
-WITH fonte AS (
+WITH kickoff AS (
+    -- O kickoff CORRENTE, lido do mesmo lugar que o modelo lê. Jogo adiado volta a ser
+    -- gravável sozinho, porque o kickoff dele voltou para o futuro.
+    SELECT fixture_id, kickoff_utc
+    FROM {{ ref('fact_fixtures') }}
+),
+
+fonte AS (
     SELECT
         fixture_id,
         {{ futebol_market_slug('market_id') }}          AS market,
@@ -36,7 +63,14 @@ WITH fonte AS (
         COALESCE(CAST(line_value AS STRING), 'NONE')    AS line_key,
         janela_usada                                    AS janela
     FROM {{ ref('int_futebol_odds_devig') }}
+    LEFT JOIN kickoff USING (fixture_id)
     WHERE market_id IN ({{ futebol_mercados_pontuados_ids() }})
+      -- O MESMO predicado que congela o modelo, COALESCE e tudo: kickoff no futuro, ou
+      -- fixture que `fact_fixtures` não conhece (fail-open — o modelo grava essa linha
+      -- para sempre, então a fonte tem de cobrá-la para sempre). Copiado aqui de
+      -- propósito e não extraído para macro: são três linhas e o macro esconderia
+      -- justamente o que esta guarda precisa deixar visível.
+      AND COALESCE(kickoff_utc > CURRENT_TIMESTAMP(), TRUE)
 ),
 
 funil AS (
@@ -47,6 +81,8 @@ funil AS (
         COALESCE(CAST(line_value AS STRING), 'NONE')    AS line_key,
         janela
     FROM {{ ref('fact_value_funnel') }}
+    -- O funil carrega o kickoff, então aqui o predicado se lê direto da própria linha.
+    WHERE COALESCE(kickoff_utc > CURRENT_TIMESTAMP(), TRUE)
 )
 
 SELECT

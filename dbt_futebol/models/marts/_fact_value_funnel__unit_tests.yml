@@ -33,6 +33,13 @@ unit_tests:
   # ---------------------------------------------------------------------------
   - name: funil_cada_porta_reprova_sozinha
     model: fact_value_funnel
+    # O funil virou incremental na #96, e o dbt passa a exigir que todo unit test declare
+    # qual dos dois ramos ele exercita. Este roda o ramo de FULL REFRESH — o build que
+    # cria a tabela, sem o filtro de congelamento —, que é onde as portas se leem puras,
+    # sem o kickoff interferindo. O ramo incremental tem teste próprio, o quarto.
+    overrides:
+      macros:
+        is_incremental: false
     description: >
       Nove candidatos idênticos fora de uma coisa cada: o base (passa em tudo) e um por
       porta. Prova que as oito portas são independentes entre si e que
@@ -141,6 +148,13 @@ unit_tests:
   # ---------------------------------------------------------------------------
   - name: funil_duas_portas_o_empate_e_o_insumo_nulo
     model: fact_value_funnel
+    # O funil virou incremental na #96, e o dbt passa a exigir que todo unit test declare
+    # qual dos dois ramos ele exercita. Este roda o ramo de FULL REFRESH — o build que
+    # cria a tabela, sem o filtro de congelamento —, que é onde as portas se leem puras,
+    # sem o kickoff interferindo. O ramo incremental tem teste próprio, o quarto.
+    overrides:
+      macros:
+        is_incremental: false
     description: >
       Uma linha reprovando em duas portas ao mesmo tempo — as DUAS colunas FALSE, que é a
       propriedade que a coluna única de motivo destruiria; a "12" da Dupla Chance na sua
@@ -222,6 +236,13 @@ unit_tests:
   # ---------------------------------------------------------------------------
   - name: funil_quatro_janelas_um_candidato_uma_corrente
     model: fact_value_funnel
+    # O funil virou incremental na #96, e o dbt passa a exigir que todo unit test declare
+    # qual dos dois ramos ele exercita. Este roda o ramo de FULL REFRESH — o build que
+    # cria a tabela, sem o filtro de congelamento —, que é onde as portas se leem puras,
+    # sem o kickoff interferindo. O ramo incremental tem teste próprio, o quarto.
+    overrides:
+      macros:
+        is_incremental: false
     description: >
       O mesmo candidato coletado nas quatro janelas vira quatro linhas, e só a mais
       recente tem `janela_e_corrente`. O veredito das portas varia entre elas (é isso
@@ -287,6 +308,11 @@ unit_tests:
   # ---------------------------------------------------------------------------
   - name: funil_linha_meia_e_por_quarto_de_linha
     model: fact_value_funnel
+    # Ramo de full refresh (ver a nota no primeiro teste): o que se mede aqui é o
+    # predicado da linha meia, e o congelamento não tem nada a dizer sobre ele.
+    overrides:
+      macros:
+        is_incremental: false
     description: >
       Os quatro quartos de linha (.0, .25, .5, .75) em Gols O/U, uma linha de quarto
       NEGATIVA em Handicap, e um mercado sem linha. Só `.5` é meia; linha de quarto pode
@@ -356,3 +382,87 @@ unit_tests:
         - {fixture_id: 33, market: 'goals_over_under', is_half_line: false, porta_linha_meia: false, passou_no_gate: false, motivo_primario: 'linha_nao_meia'}
         - {fixture_id: 34, market: 'asian_handicap',   is_half_line: false, porta_linha_meia: false, passou_no_gate: false, motivo_primario: 'linha_nao_meia'}
         - {fixture_id: 35, market: 'match_winner',     is_half_line: ,      porta_linha_meia: true,  passou_no_gate: true,  motivo_primario: }
+
+  # ---------------------------------------------------------------------------
+  # 4. O CONGELAMENTO NO APITO (#96, ADR 0011).
+  #
+  # É a propriedade que transforma a tabela de foto em registro, e ela vive num
+  # `{% if is_incremental() %}` — o ramo que NENHUM dos três testes acima alcança,
+  # porque o unit test de modelo incremental roda o ramo de full refresh por default.
+  # O `overrides: macros: is_incremental: true` é o que traz o filtro para dentro do
+  # teste.
+  #
+  # Os três casos são os três estados que um kickoff pode ter na hora da escrita, e o
+  # aceite da #96 nomeia cada um deles:
+  #
+  #   · FUTURO   -> grava (o jogo ainda é apostável);
+  #   · PASSADO  -> não grava (é o congelamento; nota nascida com a bola rolando seria
+  #                nota que ninguém podia ler antes de apostar);
+  #   · NULL     -> grava (fail-open, ADR 0003: perder a linha quebraria a reconciliação,
+  #                e não dá para congelar no apito de um jogo cuja hora não se sabe).
+  #
+  # O JOGO ADIADO é o caso do kickoff futuro, e por isso não tem fixture próprio: o
+  # filtro lê o kickoff CORRENTE de `fact_fixtures`, não o que estava lá quando a linha
+  # foi escrita. `PST`/`SUSP` empurram o kickoff para frente e o fixture 30 passa a ser
+  # exatamente o fixture 31 — o mesmo predicado, a mesma resposta.
+  # ---------------------------------------------------------------------------
+  - name: funil_incremental_so_grava_antes_do_apito
+    model: fact_value_funnel
+    overrides:
+      macros:
+        is_incremental: true
+    description: >
+      No ramo incremental, o candidato de jogo já apitado NÃO é escrito e o de jogo por
+      acontecer é. É o congelamento da ADR 0011, e é ele que garante que nenhum build e
+      nenhum deploy reescreve uma linha depois do apito. O kickoff desconhecido continua
+      gravável de propósito, e a `origem` das linhas escritas é `corrente` — o carimbo que
+      as distingue do backfill, que é a única parte do funil recalculada com o código de
+      hoje.
+    given:
+      - input: ref('int_futebol_odds_devig')
+        rows:
+          # 30: jogo por acontecer -> grava. (É também o jogo adiado: o `PST` devolve o
+          # kickoff para o futuro e ele vira este caso.)
+          - {fixture_id: 30, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          # 31: a bola já rolou -> NÃO grava. Escrever aqui seria nota nascida depois do
+          # apito, que é a fresta que a ADR 0009 existe para fechar.
+          - {fixture_id: 31, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          # 32: fixture que `fact_fixtures` não conhece -> grava (fail-open).
+          - {fixture_id: 32, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT 30 AS fixture_id, 'Home' AS outcome, 15 AS pts_premissas,
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
+          UNION ALL SELECT 31, 'Home', 15, 0, 0
+          UNION ALL SELECT 32, 'Home', 15, 0, 0
+
+      - input: ref('int_futebol_premissas_ou')
+        rows: []
+      - input: ref('int_futebol_premissas_ah')
+        rows: []
+      - input: ref('int_futebol_premissas_btts')
+        rows: []
+      - input: ref('int_futebol_premissas_dc')
+        rows: []
+      - input: ref('int_futebol_corroboracao')
+        rows: []
+
+      # O dbt exige um mock de `this` em unit test de modelo incremental. O modelo NÃO lê
+      # `this` — o congelamento é um predicado sobre o kickoff, não sobre o que já está
+      # gravado —, então o mock é vazio e serve só para satisfazer a exigência.
+      - input: this
+        rows: []
+
+      # O 32 NÃO tem linha aqui, de propósito: é o fixture ausente.
+      - input: ref('fact_fixtures')
+        format: sql
+        rows: |
+          SELECT 30 AS fixture_id, TIMESTAMP '2099-01-01 00:00:00+00' AS kickoff_utc
+          UNION ALL SELECT 31, TIMESTAMP '2020-01-01 00:00:00+00'
+
+    expect:
+      rows:
+        - {fixture_id: 30, janela: 't15m', origem: 'corrente'}
+        - {fixture_id: 32, janela: 't15m', origem: 'corrente'}

@@ -1,0 +1,62 @@
+version: 2
+
+models:
+  - name: fact_value_funnel_selo
+    description: >
+      O SELO DE IMUTABILIDADE DO FUNIL (#96, ADR 0011). 1 linha por
+      (fixture_id, dia_kickoff) já passado, com a contagem e a soma de nota que o
+      `fact_value_funnel` tinha na primeira vez em que aquele dia ficou para trás.
+      Escrito UMA VEZ e nunca reescrito.
+
+      Existe porque o aceite da #96 pede uma propriedade ENTRE BUILDS — "contagem e soma de
+      nota por dia de kickoff já passado não mudam" — e nenhuma consulta ao funil de agora
+      sabe o que o funil de ontem dizia. Um rebuild completo produz uma tabela internamente
+      coerente e inteiramente nova: qualquer evidência guardada DENTRO do funil seria
+      reescrita junto com ele. O selo é o registro que o rebuild não alcança, e é a mesma
+      lição da costura B da task [F] e da `assert_funil_reconcilia_com_devig` — guarda que
+      lê só o próprio produto não é guarda.
+
+      ⚠️ O grão inclui o FIXTURE, e não é detalhe: selar por dia deixaria a guarda vermelha
+      para sempre no primeiro `PST`. O jogo adiado muda de dia, some do agregado do dia
+      velho, e o selo daquele dia fica ÓRFÃO — a guarda o reconhece pelo dia corrente do
+      fixture e o ignora, e o fixture é selado de novo quando o dia NOVO dele passar.
+
+      ⚠️ `full_refresh=false` pelo mesmo motivo do funil: a fase de RECOVERY do
+      `workflow_futebol_odds` roda o mesmo `--select` com `--full-refresh`, e um selo
+      reconstruído a partir do funil de agora é um selo que concorda com qualquer coisa.
+
+      ⚠️ Se o funil PRECISAR ser reconstruído de propósito, o selo cai JUNTO, no mesmo
+      passo. Derrubar só um dos dois deixa a guarda permanentemente vermelha — e guarda
+      permanentemente vermelha morre ignorada.
+
+      ⚠️ NÃO VAI PARA O SUPABASE: não tem leitor no app.
+    columns:
+      - name: fixture_id
+        description: "O jogo. Está na chave para que o adiamento (`PST`/`SUSP`) não vire guarda vermelha permanente."
+        tests: [not_null]
+      - name: dia_kickoff
+        description: "`DATE(kickoff_utc)` em UTC. Só entram dias ESTRITAMENTE anteriores a `CURRENT_DATE()`: um dia só está inteiro no passado quando o seguinte começou."
+        tests: [not_null]
+      - name: linhas
+        description: "Quantas linhas o funil tinha para esse (fixture, dia) no instante do selo."
+        tests: [not_null]
+      - name: soma_nota
+        description: >
+          `SUM(CAST(score AS NUMERIC))`. NUMERIC, e não FLOAT64, de propósito: soma de float
+          depende da ordem das parcelas e a ordem de leitura de uma tabela do BigQuery não é
+          estável entre execuções — a guarda tremeria no último bit sem defeito nenhum (#92).
+          NULL só se toda linha do dia tiver nota NULL.
+      - name: selado_em
+        description: "Quando o selo foi escrito. Diagnóstico: diz de que build veio o número que a guarda está cobrando."
+        tests: [not_null]
+    tests:
+      # O grão. `tag:guarda` porque o selo é INSERT-ONLY por anti-join, e não por
+      # `unique_key`: se o anti-join quebrar, o selo duplica em silêncio e a guarda de
+      # imutabilidade passa a comparar contra duas testemunhas que discordam.
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - dia_kickoff
+          config:
+            tags: ['guarda']

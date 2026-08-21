@@ -120,6 +120,53 @@ mil linhas/mês**. Dez anos de operação, com o dobro de ligas, não chegam a 1
 nem a 5 GB. **Não há expurgo do funil**, e a política se revisita se a tabela passar de 10
 milhões de linhas — que é uma forma de dizer que ela não se revisita.
 
+## A virada é um passo só, e ele derruba a tabela
+
+O passo 1 entregou o funil como tabela reconstruída. Virá-lo append-only não é uma mudança que
+o próximo build absorve sozinho: a `unique_key` do merge inclui `line_key`, que não existe nas
+linhas de lá, e num `MERGE ... ON` NULL nunca casa com NULL — a primeira execução sobre a tabela
+velha **duplicaria** toda linha de jogo futuro em vez de atualizá-la, e as linhas antigas ficariam
+com `origem` NULL para sempre.
+
+A cutover, então, é: **derrubar a tabela e deixar o primeiro build recriá-la**. Ele roda o ramo
+de full refresh, carimba `backfill` em 16/06 em diante — que é exatamente o que o carimbo quer
+dizer — e a partir daí toda escrita é incremental e congelada. O selo (`fact_value_funnel_selo`)
+nasce na mesma execução, sobre esses números.
+
+A ordem, e ela é apertada porque o `workflow-futebol-odds` dispara com frequência:
+
+1. mergear a AE e **deployar o workflow da DE** (o `--select` enumera modelo a modelo, e modelo
+   fora da lista nasce parado; nome desconhecido é só warning, então o workflow pode ir antes);
+2. `./build-and-push.sh dbt_futebol`;
+3. **imediatamente** `bq rm -f -t smartbetting-dados:futebol.fact_value_funnel`;
+4. disparar o workflow à mão e conferir: nenhuma linha com `origem` NULL, e o selo com linhas.
+
+Se uma execução agendada couber entre (2) e (3) e fizer o merge ruim, o conserto é o mesmo (3) e
+(4) de novo — o estado não é absorvente.
+
+⚠️ E daqui sai uma regra permanente: **funil e selo caem juntos, ou nenhum dos dois cai.** Um
+selo reconstruído a partir do funil de agora é um selo que concorda com qualquer coisa; um funil
+reconstruído sob um selo velho deixa a guarda vermelha para sempre — e guarda permanentemente
+vermelha morre ignorada.
+
+## As guardas mudam de escopo, e é por estarem certas
+
+Duas guardas do passo 1 ficariam vermelhas **por acerto** depois do congelamento, e por isso
+passam a ser escopadas ao que ainda não começou:
+
+- **reconciliação** — o funil nunca expurga e a fonte só emite enquanto a coleta emite aquele
+  fixture. No primeiro dia em que o de-vig soltar um jogo velho, o funil guarda mais história do
+  que a fonte. Ela passa a comparar o conjunto de que o modelo é responsável nesta execução:
+  candidato de kickoff futuro (ou desconhecido, que é gravável para sempre por fail-open);
+- **paridade com o board** — as duas tabelas param de andar juntas no instante do apito. O funil
+  congela ali; o board continua recalculando até o expurgo levá-lo, relendo premissas que a #78
+  já mostrou não serem reprodutíveis entre builds. Ela passa a comparar só o jogo por acontecer,
+  que é também o único conjunto em que a paridade interessa — é o que o assinante ainda pode
+  apostar.
+
+O que sai junto com os dois escopos é a história já congelada. Quem cobre essa metade é a guarda
+de imutabilidade, e ela consegue porque compara contra um registro escrito **fora** do funil.
+
 ## Os carimbos, e o que eles tornam legível
 
 Cada linha carrega `gravado_em` e `origem` (`backfill` | `corrente`). O backfill recalcula

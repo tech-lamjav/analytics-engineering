@@ -38,6 +38,25 @@
 -- `fact_value_funnel`, com linha construída. A guarda impede as duas cópias de divergirem
 -- onde o assinante enxerga; não onde a análise da [A] vai olhar.
 --
+-- ⚠️ ESCOPADA AO JOGO QUE AINDA NÃO COMEÇOU (#96), e sem isso ela não sobreviveria ao
+-- congelamento. Desde a ADR 0011 as duas tabelas param de andar juntas no instante do
+-- apito: o funil congela a linha ali e o board CONTINUA recalculando a dele até o expurgo
+-- levá-la — o que só acontece quando o status vira ao vivo ou terminal, ou quando a
+-- carência de 24 h vence. Nessa fresta o board relê premissas que foram recoletadas
+-- depois do apito, e a #78 já mostrou premissa que acende em número diferente de linhas a
+-- cada build com o insumo congelado. As duas tabelas divergiriam ali por acerto das duas,
+-- e a guarda acenderia vermelha sobre o comportamento que a ADR 0011 mandou construir.
+--
+-- O escopo é o mesmo predicado que governa a escrita do funil — kickoff no futuro, ou
+-- kickoff desconhecido (fail-open dos dois lados: o board não expurga fixture ausente e o
+-- funil não para de gravá-lo). Dentro dele a paridade continua sendo a igualdade EXATA de
+-- payload que o aceite da #95 pediu, e é onde ela vale: é o conjunto que o assinante
+-- ainda pode apostar.
+--
+-- ⚠️ O que sai junto com o escopo: uma divergência de fórmula que só aparecesse em jogo já
+-- apitado passa por aqui em silêncio. Não há como ser diferente — depois do apito não
+-- existe mais um par comparável, porque um dos dois lados parou no tempo de propósito.
+--
 -- ⚠️ ESTA GUARDA TEM DATA DE VALIDADE. No passo 2 o board passa a ser o funil filtrado, a
 -- paridade vira tautologia e ela é APOSENTADA no mesmo commit. Guarda que não pode falhar
 -- é ruído com cara de cobertura.
@@ -67,24 +86,29 @@
     'valor_fonte', 'pin_n_outcomes', 'is_half_line', 'competition', 'season'
 ] %}
 
-WITH board AS (
-    SELECT
-        fixture_id,
-        market,
-        outcome,
-        COALESCE(CAST(line_value AS STRING), 'NONE')    AS line_key,
-        janela_usada                                    AS janela,
-        score,
-        {{ payload | join(',\n        ') }}
-    FROM {{ ref('fact_value_opportunities') }}
-),
-
-fixtures AS (
+WITH fixtures AS (
     SELECT
         fixture_id,
         status_short AS _fx_status_short,
         kickoff_utc  AS _fx_kickoff_utc
     FROM {{ ref('fact_fixtures') }}
+),
+
+board AS (
+    SELECT
+        b.fixture_id,
+        b.market,
+        b.outcome,
+        COALESCE(CAST(b.line_value AS STRING), 'NONE')  AS line_key,
+        b.janela_usada                                  AS janela,
+        b.score,
+        b.{{ payload | join(',\n        b.') }}
+    FROM {{ ref('fact_value_opportunities') }} b
+    -- o escopo do cabeçalho, escrito contra `fact_fixtures` porque o board não publica o
+    -- kickoff. LEFT + COALESCE(..., TRUE): fixture ausente FICA, do mesmo jeito que fica
+    -- do lado do funil.
+    LEFT JOIN fixtures fx USING (fixture_id)
+    WHERE COALESCE(fx._fx_kickoff_utc > CURRENT_TIMESTAMP(), TRUE)
 ),
 
 -- O funil na leitura que o board faria: janela corrente, gate aprovado, e — só para a
@@ -105,6 +129,8 @@ funil_publicavel AS (
     LEFT JOIN fixtures fx USING (fixture_id)
     WHERE f.janela_e_corrente
       AND f.passou_no_gate
+      -- kickoff no futuro, ou desconhecido: o par comparável (ver o cabeçalho).
+      AND COALESCE(f.kickoff_utc > CURRENT_TIMESTAMP(), TRUE)
       AND NOT COALESCE(
             {{ futebol_expurga_do_board('fx._fx_status_short', 'fx._fx_kickoff_utc') }},
             FALSE

@@ -21,10 +21,22 @@ models:
       `assert_funil_reconcilia_com_devig`, que lê a FONTE (o de-vig) e nunca o próprio
       funil.
 
-      ⚠️ Materialização TABELA nesta entrega: como ela nasce cobrindo desde a primeira odd
-      coletada, o backfill sai de graça. O append-only com congelamento no apito (ADR 0011)
-      é a próxima entrega — e é ela que impede o rebuild de reescrever o passado quando as
-      portas mudarem (A1/A2/A3/A5).
+      ⚠️ APPEND-ONLY, CONGELADO NO APITO (#96, ADR 0011). A linha é escrita e atualizada
+      enquanto o `kickoff` do fixture está no FUTURO, e nenhuma escrita acontece depois
+      dele: o funil não é uma foto do que o código de hoje diria, é registro do que o Motor
+      disse. É o que faz a A7 valer a pena entrar ANTES da A1 — quando o preço sair da nota
+      e as portas mudarem, o funil de antes continua exatamente como estava.
+
+      ⚠️ `full_refresh=false` NO CONFIG, e é load-bearing: a fase de RECOVERY do
+      `workflow_futebol_odds` roda o mesmo `--select` com `--full-refresh`. Sem essa trava,
+      a primeira recuperação de deriva determinística apagaria o histórico inteiro — em
+      silêncio, e com o job verde.
+
+      ⚠️ RETENÇÃO: **não há expurgo do funil**. São ~45 mil linhas/mês; dez anos de operação
+      com o dobro de ligas não chegam a 10 milhões de linhas nem a 5 GB. A política se
+      revisita se a tabela passar de 10 milhões de linhas — que é uma forma de dizer que ela
+      não se revisita. O expurgo continua sendo do board (ADR 0009), e o funil guarda jogo
+      encerrado DE PROPÓSITO: é ele que responde quanto rendeu a faixa descartada.
 
       ⚠️ NÃO VAI PARA O SUPABASE (ADR 0006/0011): o app não lê funil. Sem migração no
       Postgres, sem RPC, sem tocar `check_schema_parity`.
@@ -56,6 +68,14 @@ models:
                 values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Yes', 'No', '1X', '12', 'X2']
       - name: line_value
         description: "NULL no 1X2, BTTS e Dupla Chance; a linha L (1.5/2.5/...) no Gols O/U; o handicap na ótica do mandante (o mesmo p/ Home e Away) no Handicap asiático."
+      - name: line_key
+        description: >
+          `line_value` como STRING, com NULL virando 'NONE'. É a coluna do grão que entra
+          na `unique_key` do merge, e ela existe por um motivo mecânico: num `MERGE ... ON`
+          NULL nunca casa com NULL, então `line_value` cru na chave faria toda linha de
+          1X2, BTTS e Dupla Chance ser reinserida a cada execução — em silêncio, até a
+          guarda de grão acender.
+        tests: [not_null]
       - name: janela
         description: "A janela de coleta que originou esta avaliação. São QUATRO por candidato (daily < t24h < t1h < t15m), não três — a `daily` entrou em 07/08/2026. É a quarta coluna do grão."
         tests:
@@ -167,6 +187,31 @@ models:
         description: "Parcela da penalidade global: best_odd > 4,5 (−15)."
       - name: pen_odd_juice
         description: "Parcela da penalidade global: best_odd < 1,40 (−10). FALSE na Dupla Chance de propósito — o gate de odd próprio (>= 1,25) já cobre o retorno mínimo."
+
+      # ------------------------------------------------------------------ os carimbos
+      - name: gravado_em
+        description: >
+          QUANDO o Motor disse isto (#96). Sob append-only, "quando o dbt carregou" e
+          "quando ficou registrado" são o mesmo instante — por isso este campo substituiu
+          o `dbt_loaded_at` em vez de conviver com ele. Em linha `corrente` ele é sempre
+          ANTERIOR ao `kickoff_utc`, e é isso que a `assert_funil_congelado_no_apito` prova.
+        tests: [not_null]
+      - name: origem
+        description: >
+          `backfill` no build que CRIA a tabela — aquelas linhas foram recalculadas com o
+          código de hoje sobre odds antigas, e são a única parte do funil que NÃO é
+          registro do que foi dito na época. `corrente` em toda escrita incremental, e essa
+          sim é registro de época. Com o carimbo, o dia da virada da A1 fica legível na
+          série sem ninguém precisar lembrar a data.
+
+          ⚠️ Linha `backfill` de jogo ainda futuro vira `corrente` no primeiro merge
+          seguinte — ela voltou a ser escrita antes do apito, então passou a ser registro
+          de época de verdade.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['backfill', 'corrente']
     tests:
       # O GRÃO — e aqui ele inclui a JANELA, ao contrário do board (ADR 0004/0011).
       #
