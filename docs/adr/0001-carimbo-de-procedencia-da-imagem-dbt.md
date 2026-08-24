@@ -107,5 +107,24 @@ no master e não na imagem. Sintoma e detector desligados pela mesma causa.
   fail-closed funcionando, não um defeito.
 - O `dbt_nba` **não tem nenhum teste `tag:guarda`** (os 10 são todos do futebol). O carimbo é
   a única cobertura que a NBA tem contra esta classe.
-- Os serviços Cloud Run do `data-engineering` sofrem da mesma deriva e ainda **não** estão
-  cobertos; o detector já é uma tabela declarativa de alvos para recebê-los.
+- ~~Os serviços Cloud Run do `data-engineering` sofrem da mesma deriva e ainda **não** estão
+  cobertos; o detector já é uma tabela declarativa de alvos para recebê-los.~~
+  **Corrigido em 24/08/2026 (DE #44).** A primeira metade continua verdadeira — e foi medida:
+  os 13 serviços da NBA rodaram **dois meses** (25/06–24/08) com `src/` defasado, sem que nada
+  acusasse. A segunda metade era **falsa** e atrasou o conserto: o desenho é genérico quanto ao
+  *alvo*, não quanto ao *repositório*. O `procedencia.sh` hasheia paths relativas a
+  `git rev-parse --show-toplevel`, que aqui é sempre o `analytics-engineering`; as paths de um
+  serviço estão no `data-engineering`. Acrescentar um nome à tabela `ALVOS` não teria funcionado.
+  A cobertura dos serviços passou a ser um mecanismo **irmão, com dono próprio**:
+  [`data-engineering/docs/adr/0001-carimbo-de-procedencia-dos-servicos-cloud-run.md`](https://github.com/tech-lamjav/data-engineering/blob/master/docs/adr/0001-carimbo-de-procedencia-dos-servicos-cloud-run.md).
+  O critério que decidiu foi versionamento acoplado: quem escreve o carimbo
+  (`deploy_cloud_run.sh`) e quem o confere têm de mudar a função de hash e o manifesto no mesmo
+  commit — e o escritor mora lá. Este ADR segue dono **apenas** dos dois jobs dbt.
+
+## Emenda de 24/08/2026 — as citações "Q4" e "Q14" nunca existiram
+
+O `checa_deriva.sh` remetia a "ADR 0001, Q4" e o `procedencia.sh` a "Q14 do ADR 0001". **Este
+documento nunca teve perguntas numeradas**: elas vieram da sessão de grilling que o gerou e não
+foram reconciliadas quando o texto virou ADR. Ponteiro quebrado dentro do artefato que existe
+justamente para ser lido por quem está confuso. Os dois comentários passaram a citar a seção
+real (*Decisões*, item 2, e este bullet de *Consequências*).

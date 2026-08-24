@@ -50,7 +50,8 @@ if [ -z "$PROJECT_NAME" ]; then
 fi
 
 # Tabela declarativa: projeto -> paths que carregam comportamento.
-# Acrescentar um alvo é acrescentar um ramo aqui (ver Q14 do ADR 0001).
+# Acrescentar um alvo é acrescentar um ramo aqui (ver a decisão 2 do ADR 0001 — o critério é
+# "carrega comportamento", não "vai para a imagem").
 # `requirements.txt`, `profiles.yml` e o Dockerfile entram porque também vão para a imagem
 # e mudam o que ela faz (versão do dbt, target do BigQuery, etapas do build).
 case "$PROJECT_NAME" in
