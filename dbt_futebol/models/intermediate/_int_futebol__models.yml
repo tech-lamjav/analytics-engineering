@@ -182,10 +182,8 @@ models:
       Em jogos FUTUROS o resultado é ~idêntico ao antigo (diferença média de 0,003 gol/jogo), ou
       seja, a correção muda o backtest e não mexe em produção.
       ⚠️ MEDIÇÃO (task [F], ADR 0007): o modelo aceita as vars pit_escopo (da_competicao|todas) e
-      pit_recorte (temporada|ultimos_10), cujos DEFAULTS reproduzem exatamente o comportamento
-      descrito acima — no default o SQL compilado é idêntico ao de antes de as vars existirem, e
-      tests/assert_taskf_pit_default_igual_baseline prova a igualdade contra um baseline congelado
-      antes delas. Produção nunca as passa; elas servem às células de medição, materializadas no
+      pit_recorte (temporada|ultimos_10). ⚠️ Desde a #91 os DEFAULTS são `todas` + `ultimos_10`
+      e NÃO reproduzem mais o comportamento descrito acima — ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. A guarda tests/assert_taskf_pit_default_igual_baseline foi RECONGELADA na #91 contra a célula `ambos`: ela segue provando que o default não se move sozinho, só que agora o default é outro. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no
       dataset futebol_taskF (target `taskF`). A tabela do campeonato (rank/points/ppg/n_teams/
       goal_diff) NÃO segue os eixos: classificação existe dentro de uma competição, então ela
       permanece competição+temporada em todas as células, por construção (ADR 0008).
@@ -333,9 +331,7 @@ models:
       ⚠️ MEDIÇÃO (task [F], ADR 0007, #52 e #54): o spine de xG é fonte de histórico
       competição-scoped PRÓPRIA deste modelo e aceita as DUAS vars da medição — pit_escopo
       (da_competicao|todas) e, desde a #54, pit_recorte (temporada|ultimos_10), que sob
-      `ultimos_10` tira o filtro de season e lê as 10 partidas mais recentes. Os DEFAULTS
-      reproduzem o comportamento acima — no default o SQL compilado é idêntico ao de antes das
-      vars. Produção nunca as passa; elas servem às células de medição (dataset futebol_taskF,
+      `ultimos_10` tira o filtro de season e lê as 10 partidas mais recentes. ⚠️ Desde a #91 os DEFAULTS são `todas` + `ultimos_10` e NÃO reproduzem mais o comportamento acima — ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição (dataset futebol_taskF,
       target `taskF`).
       Alcança superioridade_xg. NÃO alcança superioridade_tabela (rank/ppg vêm do team_form_pit,
       competição-scoped em todas as células, ADR 0008) nem h2h_favoravel, por motivo oposto: o
@@ -389,8 +385,7 @@ models:
       medição — pit_escopo (da_competicao|todas) e, desde a #54, pit_recorte
       (temporada|ultimos_10). Sob `ultimos_10` o spine e a mediana de ritmo trocam o filtro de
       season por um teto de 10 partidas; o last5 só perde o filtro de season (5 já é subconjunto
-      de 10). Os DEFAULTS reproduzem o comportamento acima — no default o SQL compilado é idêntico
-      ao de antes das vars. Produção nunca as passa; elas servem às células de medição (dataset
+      de 10). ⚠️ Desde a #91 os DEFAULTS são `todas` + `ultimos_10` e NÃO reproduzem mais o comportamento acima — ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição (dataset
       futebol_taskF, target `taskF`). Alcança xg_combinado_alto,
       xg_baixo_combinado, ritmo_alto, historico_over e historico_under. No ritmo, o POOL de times
       da mediana segue sendo o da competição do jogo em qualquer célula (é o benchmark "a liga em
@@ -445,9 +440,8 @@ models:
       competição-scoped PRÓPRIA deste modelo e aceita as DUAS vars da medição — pit_escopo
       (da_competicao|todas) e, desde a #54, pit_recorte (temporada|ultimos_10). ⚠️ Ele é o ÚNICO
       site em que o recorte ENCOLHE o histórico: não tem filtro de season nem no default, então
-      sob `ultimos_10` entra só o teto de 10 partidas. Os DEFAULTS reproduzem o comportamento
-      acima — no default o SQL compilado é idêntico ao de antes das vars. Produção nunca as passa;
-      elas servem às células de medição (dataset futebol_taskF, target `taskF`).
+      sob `ultimos_10` entra só o teto de 10 partidas. ⚠️ Desde a #91 os DEFAULTS são `todas` + `ultimos_10` e NÃO reproduzem mais o comportamento acima — ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F];
+      as vars seguem existindo para as OUTRAS células da medição (dataset futebol_taskF, target `taskF`).
       Alcança raramente_perde_por_2 e favorito_irregular. NÃO alcança supremacia nem sem_rodizio
       (rank/ppg/n_teams vêm do team_form_pit, competição-scoped em todas as células, ADR 0008).
       ⚠️ O margin_stats não tem filtro de season nem no default — já atravessa temporada hoje —,
@@ -502,9 +496,7 @@ models:
       ⚠️ MEDIÇÃO (task [F], ADR 0007, #52 e #54): o last5 de BTTS é fonte de histórico
       competição-scoped PRÓPRIA deste modelo e aceita as DUAS vars da medição — pit_escopo
       (da_competicao|todas) e, desde a #54, pit_recorte (temporada|ultimos_10), que aqui é só a
-      saída do filtro de season (o last5 já é janela de contagem de 5, subconjunto de 10). Os
-      DEFAULTS reproduzem o comportamento acima — no default o SQL compilado é idêntico ao de
-      antes das vars. Produção nunca as passa; elas servem às células de medição (dataset
+      saída do filtro de season (o last5 já é janela de contagem de 5, subconjunto de 10). ⚠️ Desde a #91 os DEFAULTS são `todas` + `ultimos_10` e NÃO reproduzem mais o comportamento acima — ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição (dataset
       futebol_taskF, target `taskF`).
       Alcança historico_btts e historico_seco.
     columns:
@@ -556,9 +548,7 @@ models:
       competição-scoped PRÓPRIA deste modelo e aceita as DUAS vars da medição — pit_escopo
       (da_competicao|todas) e, desde a #54, pit_recorte (temporada|ultimos_10). Sob `ultimos_10`
       o teto de 10 alcança o thrash_rate (média sobre tudo o que está no recorte) e não alcança o
-      last5_lost (janela de 5 dentro dele). Os DEFAULTS reproduzem o comportamento acima — no
-      default o SQL compilado é idêntico ao de antes das vars. Produção nunca as passa; elas
-      servem às células de medição (dataset futebol_taskF, target `taskF`).
+      last5_lost (janela de 5 dentro dele). ⚠️ Desde a #91 os DEFAULTS são `todas` + `ultimos_10` e NÃO reproduzem mais o comportamento acima — ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição (dataset futebol_taskF, target `taskF`).
       Alcança equilibrio_defensivo e invicto_recente. lado_coberto_forte e adversario_limitado
       seguem o que o 1X2 fizer: leem x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados
       em booleano.

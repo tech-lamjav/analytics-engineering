@@ -1,16 +1,16 @@
 {{ config(
     materialized='table',
-    description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). ⚠️ Task 0 (look-ahead): ambos_marcam/defesa_forte/ataque_trava/ataque_dos_dois/defesas_vazaveis leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats. historico_btts/historico_seco já eram limpos (last5 com kickoff <). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso). ⚠️ MEDIÇÃO (task [F], ADR 0007): o last5 de BTTS aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que aqui é só a saída do filtro de season, porque o last5 já é janela de contagem de 5) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, as contagens de last5 viram NULL sem histórico nenhum; a aplicabilidade é o lado (Yes/No).'
+    description='S4 do Motor de Score — premissas de contexto do mercado AMBOS MARCAM / BTTS (market_id 8). ⚠️ Task 0 (look-ahead): ambos_marcam/defesa_forte/ataque_trava/ataque_dos_dois/defesas_vazaveis leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats. historico_btts/historico_seco já eram limpos (last5 com kickoff <). 2 linhas por fixture: Yes e No. Sim: dois ataques ativos e defesas vazáveis (4 premissas, Σ34). Não (espelho): uma defesa forte ou um ataque que trava (3 premissas, Σ28). Σ por lado < 55 -> sem clamp. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.4). Convenções herdadas do S2: clean sheet%/failed-to-score% sobre o TOTAL da temporada (SAFE_DIVIDE p/ played_total=0); gols feitos médios por VENUE (mandante em casa, visitante fora). historico_btts/seco = últimos 5 jogos FINALIZADOS de cada time na MESMA competição, anteriores ao jogo (>=3 de 5 ~ 60%). Sem penalidade específica (só as globais, aplicadas no mart). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities (BTTS via de-vig de CONSENSO, pois a Pinnacle não precifica BTTS — valor_fonte=consenso). ⚠️ MEDIÇÃO (task [F], ADR 0007): o last5 de BTTS aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, que aqui é só a saída do filtro de season, porque o last5 já é janela de contagem de 5). ⚠️ Desde a #91 (ADR 0010) os DEFAULTS são `todas` + `ultimos_10` — a célula `ambos` — e NÃO reproduzem mais o comportamento descrito acima; ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no dataset futebol_taskF. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, as contagens de last5 viram NULL sem histórico nenhum; a aplicabilidade é o lado (Yes/No).'
 ) }}
-{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
+{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — desde a #91 o DEFAULT destas vars é o que produção usa.
 
     Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
     própria: o `last5` de BTTS, que alimenta `historico_btts` e `historico_seco`. Ela responde ao
     mesmo eixo, senão a célula sai MISTURADA — `defesa_forte` com histórico juntado e
     `historico_btts` sem —, e um número assim não responde a pergunta da spec.
 
-    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes destas vars.
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. ⚠️ Desde a #91 o default é `todas`/`ultimos_10` — o
+    SQL compilado no default deixou de ser o de antes destas vars, por decisão.
 
     O eixo de RECORTE (`pit_recorte`) alcança a MESMA fonte desde a #54, e aqui ele é MESMO uma
     linha: o `last5` já é uma janela de contagem de 5, e 5 é subconjunto de 10 em qualquer ordem
@@ -56,9 +56,9 @@ pit AS (
 -- (consistente com os joins de tss, que já são season-scoped).
 finished AS (
     SELECT competition_id, season, kickoff_utc, home_team_id, away_team_id,
-           (goals_home > 0 AND goals_away > 0) AS btts_occurred
+           (score_fulltime_home > 0 AND score_fulltime_away > 0) AS btts_occurred
     FROM {{ ref('fact_fixtures') }}
-    WHERE status_short = 'FT' AND goals_home IS NOT NULL AND goals_away IS NOT NULL
+    WHERE {{ futebol_jogo_encerrado() }}
 ),
 team_fixtures_long AS (
     SELECT home_team_id AS team_id, competition_id, season, kickoff_utc, btts_occurred FROM finished

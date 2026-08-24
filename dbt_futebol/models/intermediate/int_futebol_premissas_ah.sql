@@ -1,9 +1,9 @@
 {{ config(
     materialized='table',
     description='S3 do Motor de Score — premissas de contexto do mercado HANDICAP ASIATICO (market_id 4). ⚠️ Task 0 (look-ahead): supremacia/tende_golear/adversario_fragil_fora/mando_forte/sem_rodizio/defesa_fora_solida leem int_futebol_team_form_pit (point-in-time por fixture) — o lado FAVORITO era 100% contaminado. raramente_perde_por_2 e favorito_irregular já eram limpos (margin_stats com kickoff_utc <) e não mudaram. 2 linhas por (fixture, line_value): outcome_side Home e Away. Convenção dos dados (API-Football, confirmada 2026-06-24): line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ os dois lados — "Home -1.5" e "Away -1.5" são o PAR complementar (de-vig soma ~1.03, pin_n_outcomes=2). Logo o handicap NA ÓTICA DO LADO = IF(side=Home, line_value, -line_value): side_handicap<0 => FAVORITO (dá handicap), >0 => AZARÃO (recebe), =0 => pick (nenhuma premissa dispara). Favorito: 5 premissas (Σ40, §12.3); Azarão: 3 (Σ30). Penalidade específica: handicap_alto (-12, |line_value|>=2.5). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. Gate/edge/Score saem no mart fact_value_opportunities (gate de completude Pinnacle = par >=2, igual O/U).
-    ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura. ⚠️ MEDIÇÃO (task [F], ADR 0007): o margin_stats aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. supremacia e sem_rodizio NÃO seguem o eixo (rank/ppg/n_teams vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008). ⚠️ O margin_stats não tem filtro de season nem no default — ele já atravessa temporada hoje —, então sob `todas` ele passa a contar todas as competições E todo o tempo coletado. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. A aplicabilidade aqui é o LADO (is_favorito/is_azarao) — sem ela toda linha contaria 3 ou 5 cegas por desenho. A lista de ligas de pontos corridos do sem_rodizio saiu para futebol_ligas_pontos_corridos(), lida também pelo mapa.'
+    ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura. ⚠️ MEDIÇÃO (task [F], ADR 0007): o margin_stats aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10). ⚠️ Desde a #91 (ADR 0010) os DEFAULTS são `todas` + `ultimos_10` — a célula `ambos` — e NÃO reproduzem mais o comportamento descrito acima; ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no dataset futebol_taskF. supremacia e sem_rodizio NÃO seguem o eixo (rank/ppg/n_teams vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008). ⚠️ O margin_stats não tem filtro de season nem no default — ele já atravessa temporada hoje —, então sob `todas` ele passa a contar todas as competições E todo o tempo coletado. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. A aplicabilidade aqui é o LADO (is_favorito/is_azarao) — sem ela toda linha contaria 3 ou 5 cegas por desenho. A lista de ligas de pontos corridos do sem_rodizio saiu para futebol_ligas_pontos_corridos(), lida também pelo mapa.'
 ) }}
-{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
+{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — desde a #91 o DEFAULT destas vars é o que produção usa.
 
     Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
     própria: o `margin_stats`, que alimenta `raramente_perde_por_2` e `favorito_irregular`. Ela
@@ -22,8 +22,8 @@
     `supremacia` e `sem_rodizio` ficam de fora por desenho: leem rank/ppg/n_teams do
     team_form_pit, que os mantém competição-scoped em todas as células (ADR 0008).
 
-    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes destas vars.
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. ⚠️ Desde a #91 o default é `todas`/`ultimos_10` — o
+    SQL compilado no default deixou de ser o de antes destas vars, por decisão.
 
     O eixo de RECORTE (`pit_recorte`) alcança o mesmo `margin_stats` desde a #54, e ele é o único
     site em que o recorte ENCOLHE o histórico: sem filtro de season para remover, sob
@@ -89,14 +89,17 @@ pit AS (
 -- Margem (gols pró − contra) por time em cada jogo FINALIZADO; vira a base de
 -- "perde/vence por 2+". Reusa o padrão de fixtures finalizadas do O/U.
 finished AS (
-    SELECT competition_id, kickoff_utc, home_team_id, away_team_id, goals_home, goals_away
+    SELECT competition_id, kickoff_utc, home_team_id, away_team_id,
+           score_fulltime_home, score_fulltime_away
     FROM {{ ref('fact_fixtures') }}
-    WHERE status_short = 'FT' AND goals_home IS NOT NULL AND goals_away IS NOT NULL
+    WHERE {{ futebol_jogo_encerrado() }}
 ),
 team_results AS (
-    SELECT home_team_id AS team_id, competition_id, kickoff_utc, goals_home - goals_away AS margin FROM finished
+    SELECT home_team_id AS team_id, competition_id, kickoff_utc,
+           score_fulltime_home - score_fulltime_away AS margin FROM finished
     UNION ALL
-    SELECT away_team_id, competition_id, kickoff_utc, goals_away - goals_home FROM finished
+    SELECT away_team_id, competition_id, kickoff_utc,
+           score_fulltime_away - score_fulltime_home FROM finished
 ),
 fixture_teams AS (
     SELECT fixture_id, competition_id, kickoff_utc, home_team_id AS team_id FROM fixtures

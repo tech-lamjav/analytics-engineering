@@ -1,8 +1,8 @@
 {{ config(
     materialized='table',
-    description='S5 do Motor de Score — premissas de contexto do mercado DUPLA CHANCE (market_id 12). ⚠️ Task 0 (look-ahead): equilibrio_defensivo/adversario_limitado leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; lado_coberto_forte herda a correção via int_futebol_premissas_1x2 (era a premissa MAIS contaminada, com as duas fontes sujas). invicto_recente já era limpa. 2 linhas por fixture: 1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). DC é aposta de proteção: vale quando o mercado superprecifica a zebra do lado DESCOBERTO (O). 4 premissas (Σ34, sem clamp — bem abaixo de 55), espelha §12.5. lado_coberto_forte REUSA forca_mismatch/superioridade_tabela do int_futebol_premissas_1x2 (do lado S); adversario_limitado reusa o h2h_favoravel do 1X2. equilibrio_defensivo e invicto_recente derivam de fact_team_season_stats (gols sofridos no total) e dos jogos FINALIZADOS da MESMA season/competição anteriores ao jogo (goleados = cedeu 3+, e derrotas nos últimos 5) — o filtro de season evita sangrar a temporada passada pela pausa de off-season. O 12 (sem empate) NÃO é produzido (não casa com o padrão S/O da §12.5). Penalidade específica (odd_muito_baixa <1,20) e o gate próprio (melhor_odd >=1,25, sem odd_juice) são aplicados no mart fact_value_opportunities. Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. ⚠️ MEDIÇÃO (task [F], ADR 0007): o team_hist aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, cujo teto de 10 alcança o thrash_rate e não o last5_lost) —, cujos DEFAULTS reproduzem exatamente o comportamento descrito acima; no default o SQL compilado é idêntico ao de antes de as vars existirem. Produção nunca a passa; ela serve às células de medição, materializadas no dataset futebol_taskF. lado_coberto_forte e adversario_limitado seguem o que o 1X2 fizer: leem x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados em booleano. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, s_losses_last5 vira NULL sem histórico e os x_* deixaram de ser COALESCEados: quando a premissa correspondente está na lista premissas_cegas do 1X2, o reuso chega NULL — a cegueira deixa de atravessar dois modelos sem rastro.'
+    description='S5 do Motor de Score — premissas de contexto do mercado DUPLA CHANCE (market_id 12). ⚠️ Task 0 (look-ahead): equilibrio_defensivo/adversario_limitado leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; lado_coberto_forte herda a correção via int_futebol_premissas_1x2 (era a premissa MAIS contaminada, com as duas fontes sujas). invicto_recente já era limpa. 2 linhas por fixture: 1X (mandante ou empate, S=Home) e X2 (empate ou visitante, S=Away). DC é aposta de proteção: vale quando o mercado superprecifica a zebra do lado DESCOBERTO (O). 4 premissas (Σ34, sem clamp — bem abaixo de 55), espelha §12.5. lado_coberto_forte REUSA forca_mismatch/superioridade_tabela do int_futebol_premissas_1x2 (do lado S); adversario_limitado reusa o h2h_favoravel do 1X2. equilibrio_defensivo e invicto_recente derivam de fact_team_season_stats (gols sofridos no total) e dos jogos FINALIZADOS da MESMA season/competição anteriores ao jogo (goleados = cedeu 3+, e derrotas nos últimos 5) — o filtro de season evita sangrar a temporada passada pela pausa de off-season. O 12 (sem empate) NÃO é produzido (não casa com o padrão S/O da §12.5). Penalidade específica (odd_muito_baixa <1,20) e o gate próprio (melhor_odd >=1,25, sem odd_juice) são aplicados no mart fact_value_opportunities. Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. ⚠️ MEDIÇÃO (task [F], ADR 0007): o team_hist aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10, cujo teto de 10 alcança o thrash_rate e não o last5_lost). ⚠️ Desde a #91 (ADR 0010) os DEFAULTS são `todas` + `ultimos_10` — a célula `ambos` — e NÃO reproduzem mais o comportamento descrito acima; ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no dataset futebol_taskF. lado_coberto_forte e adversario_limitado seguem o que o 1X2 fizer: leem x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados em booleano. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, s_losses_last5 vira NULL sem histórico e os x_* deixaram de ser COALESCEados: quando a premissa correspondente está na lista premissas_cegas do 1X2, o reuso chega NULL — a cegueira deixa de atravessar dois modelos sem rastro.'
 ) }}
-{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — produção nunca passa estas vars.
+{#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — desde a #91 o DEFAULT destas vars é o que produção usa.
 
     Além do que vem do team_form_pit, este modelo tem UMA fonte de histórico competição-scoped
     própria: o `team_hist`, que alimenta `equilibrio_defensivo` (thrash_rate) e `invicto_recente`
@@ -15,8 +15,8 @@
     `lado_coberto_forte` e `adversario_limitado` seguem o que o 1X2 fizer: leem
     x_superioridade_tabela e x_h2h_favoravel de lá, já colapsados em booleano.
 
-    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes destas vars.
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. ⚠️ Desde a #91 o default é `todas`/`ultimos_10` — o
+    SQL compilado no default deixou de ser o de antes destas vars, por decisão.
 
     O eixo de RECORTE (`pit_recorte`) alcança a MESMA fonte desde a #54: sob `ultimos_10` o
     filtro de season sai e entra um teto de contagem, que atinge o `thrash_rate` (média sobre
@@ -70,16 +70,18 @@ pit AS (
 -- resultado por time. O filtro de season (aplicado no team_hist) evita sangrar jogos da
 -- temporada passada pela pausa de off-season (consistente com tss/1X2/O/U/BTTS, season-scoped).
 finished AS (
-    SELECT competition_id, season, kickoff_utc, home_team_id, away_team_id, goals_home, goals_away
+    SELECT competition_id, season, kickoff_utc, home_team_id, away_team_id,
+           score_fulltime_home, score_fulltime_away
     FROM {{ ref('fact_fixtures') }}
-    WHERE status_short = 'FT' AND goals_home IS NOT NULL AND goals_away IS NOT NULL
+    WHERE {{ futebol_jogo_encerrado() }}
 ),
 team_results_long AS (
     SELECT home_team_id AS team_id, competition_id, season, kickoff_utc,
-           goals_away AS conceded, (goals_away > goals_home) AS lost FROM finished
+           score_fulltime_away AS conceded,
+           (score_fulltime_away > score_fulltime_home) AS lost FROM finished
     UNION ALL
     SELECT away_team_id, competition_id, season, kickoff_utc,
-           goals_home, (goals_home > goals_away) FROM finished
+           score_fulltime_home, (score_fulltime_home > score_fulltime_away) FROM finished
 ),
 team_fixtures AS (
     SELECT fixture_id, competition_id, season, kickoff_utc, home_team_id AS team_id FROM fixtures

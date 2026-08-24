@@ -37,9 +37,15 @@ fp_fixtures_pit AS (
         competition_id,
         season,
         COUNT(*) AS n_fixtures,
+        -- ⚠️ #71: `score_fulltime_*` entrou porque o PIT passou a LER essas colunas em vez de
+        -- `goals_*`. Sem elas, um jogo cujo placar de tempo normal fosse corrigido sem que
+        -- `goals_*` mudasse passaria pela guarda como se o insumo estivesse intacto — deriva
+        -- real, muda. `goals_*` fica: a `fact_fixtures` continua expondo as duas, e digitalizar
+        -- as quatro custa nada e cobre os dois idiomas.
         BIT_XOR(FARM_FINGERPRINT(TO_JSON_STRING(STRUCT(
             fixture_id, competition, home_team_id, away_team_id,
-            kickoff_utc, status_short, goals_home, goals_away
+            kickoff_utc, status_short, goals_home, goals_away,
+            score_fulltime_home, score_fulltime_away
         )))) AS fp_fixtures
     FROM {{ ref('fact_fixtures') }}
     GROUP BY competition_id, season

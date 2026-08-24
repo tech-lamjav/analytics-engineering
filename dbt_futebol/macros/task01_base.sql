@@ -310,13 +310,26 @@ prem_linha AS (
     {%- endfor %}
 ),
 
-{#- Piso de amostra do jogo: o MENOR played_total entre os dois times, porque as
+{#- Piso de amostra do jogo: o MENOR played_total_disponivel entre os dois times, porque as
     premissas comparam os dois. Sem linha no PIT = sem histórico = 0 (mesma leitura da
-    degradação graciosa do modelo). -#}
+    degradação graciosa do modelo).
+
+    ⚠️ #91: lê `played_total_disponivel`, e NÃO `played_total`. Sob `pit_recorte = ultimos_10`
+    — que virou o default nesta mesma entrega — `played_total` é a contagem USADA e satura em
+    10, enquanto o disponível é quantas partidas anteriores EXISTEM no escopo. A regra da [F]
+    (ADR 0007) é que o piso corte o DISPONÍVEL: o piso pergunta "esse time tem passado
+    suficiente p/ a premissa significar algo", e essa pergunta é sobre o que existe, não sobre
+    o que o teto deixou passar.
+
+    No piso 5 a troca é inócua pela identidade `LEAST(d,10) >= 5 ⟺ d >= 5` — só deixa de ser
+    a partir do piso 10, onde `played_total` saturado empataria todo mundo em 10 e o piso
+    pararia de filtrar qualquer coisa. Trocar agora é o que impede esse defeito de nascer
+    calado quando alguém subir o piso. -#}
 pit AS (
     SELECT
         j.fixture_id,
-        LEAST(COALESCE(h.played_total, 0), COALESCE(a.played_total, 0)) AS min_jogos
+        LEAST(COALESCE(h.played_total_disponivel, 0),
+              COALESCE(a.played_total_disponivel, 0)) AS min_jogos
     FROM jogos_encerrados AS j
     LEFT JOIN {{ ref('int_futebol_team_form_pit') }} AS h
            ON h.fixture_id = j.fixture_id
