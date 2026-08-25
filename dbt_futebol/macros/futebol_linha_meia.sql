@@ -45,13 +45,21 @@
   ({0, 1, 3}) pode ser alcançado por arredondamento a partir dela.
 
   ⚠️ POR QUE MACRO E NÃO SQL NO MODELO — e esta é a lição que o próprio defeito ensinou:
-  a expressão tinha TRÊS cópias (`fact_value_opportunities`, `fact_value_funnel` e a
-  análise `taskA_linha_de_base`), e o funil nasceu com o defeito porque copiou a
+  a expressão tinha QUATRO cópias (`fact_value_opportunities`, `fact_value_funnel`, a
+  análise `taskA_linha_de_base` e o `task01_meia_linha` do `macros/task01_base.sql`), e o funil
+  nasceu com o defeito porque copiou a
   expressão do board **byte a byte**, de propósito, para que a guarda
   `assert_funil_paridade_com_board` pudesse provar que o funil descreve o board. Predicado
   copiado é predicado que diverge no primeiro refactor — e aqui a divergência seria muda:
-  a paridade continuaria verde comparando dois erros iguais. Com um macro só, os três não
+  a paridade continuaria verde comparando dois erros iguais. Com um macro só, os quatro não
   têm como discordar. É a mesma razão de `futebol_expurgo.sql`.
+
+  ⚠️ E A QUARTA COPIA SÓ ENTROU AQUI NA #113, DEPOIS — a #101 corrigiu três e contou três. A que
+  faltava não estava no board: estava na MEDIÇÃO (`task01_meia_linha`, o filtro de linha do
+  universo dos Testes 2, 3 e 4), que é onde o defeito decidia peso de premissa em vez de decidir
+  o que aparece na tela. Na janela congelada da [F] ela deixava entrar 3.140 de 9.252 linhas —
+  34% do universo de medição — como se fossem meias. Contar cópia de cabeça é o modo de falha
+  que este parágrafo agora registra duas vezes.
 
   ⚠️ NULL É NULL, DE PROPÓSITO. Mercado sem linha (1X2 / BTTS / Dupla Chance) tem
   `line_value` NULL e o predicado resolve para NULL — não para FALSE. A porta não se
