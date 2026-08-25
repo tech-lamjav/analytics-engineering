@@ -12,8 +12,8 @@
     mantém competição-scoped em todas as células (ADR 0008). O `fact_h2h` também fica de fora, e
     por motivo oposto: ele JÁ cruza campeonatos hoje, e restringi-lo seria mudar premissa.
 
-    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes desta var.
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. ⚠️ Desde a #91 o default é `todas`/`ultimos_10` — o
+    SQL compilado no default deixou de ser o de antes desta var, por decisão.
 
     O eixo de RECORTE (`pit_recorte`) alcança a MESMA fonte desde a #54: sob `ultimos_10` o
     filtro de season sai e o spine passa a ler as N partidas mais recentes do time, atravessando

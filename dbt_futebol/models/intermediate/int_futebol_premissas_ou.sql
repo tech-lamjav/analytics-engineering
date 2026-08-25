@@ -12,9 +12,8 @@
     mas `ritmo_alto` não é uma delas: só a mediana da liga é benchmark de competição, o ritmo de
     cada time é histórico e segue o eixo.
 
-    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. No default
-    (`da_competicao`/`temporada`) o SQL compilado é IDÊNTICO ao de antes destas vars — nenhum
-    ramo novo é emitido no caminho que produção usa.
+    Valores aceitos, validação e o porquê do fail-closed em macros/taskf_eixos.sql. ⚠️ Desde a #91 o default é `todas`/`ultimos_10` — o
+    SQL compilado no default deixou de ser o de antes destas vars, por decisão.
 
     O eixo de RECORTE (`pit_recorte`) alcança as MESMAS fontes desde a #54. Ele não é uma linha
     por site: no spine e na mediana o filtro de season sai E entra um teto de contagem, que exige

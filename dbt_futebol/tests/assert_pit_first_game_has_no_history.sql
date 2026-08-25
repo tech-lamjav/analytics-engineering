@@ -7,8 +7,10 @@
 -- Falha = alguma fonte voltou a ser lida sem âncora no kickoff.
 {#-
     ⚠️ "PRIMEIRO JOGO" É RELATIVO À CÉLULA (task [F], issue #49, ADR 0007), e a partição abaixo
-    segue os dois eixos porque o join do modelo segue. Em produção nada muda: no default a
-    partição é (team_id, competition_id, season) e o SQL compilado é IDÊNTICO ao de antes.
+    segue os dois eixos porque o join do modelo segue. ⚠️ Desde a #91 (ADR 0010) o default é
+    `todas`/`ultimos_10`, então em produção a partição é `team_id` SOZINHO — sem competition_id e
+    sem season. A partição (team_id, competition_id, season) que este bloco descrevia é a da
+    célula `da_competicao`/`temporada`, hoje alcançável só passando as vars.
 
     Por que não deixar o guard falhar fora do default e mandar excluí-lo. Sob `pit_escopo: todas`
     ele acusa 224 linhas — e elas são o mecanismo da medição FUNCIONANDO: o primeiro jogo de Copa
