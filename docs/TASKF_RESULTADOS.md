@@ -2992,3 +2992,180 @@ O rebaseline dos quatro números da [F] que a #78 avisou que ficariam vermelhos 
 reconstrução das células (`superioridade_xg`, `xg_combinado_alto`, `xg_baixo_combinado`,
 `ritmo_alto`). Isso é a #82 reescopada, sequenciada pela ADR 0010, e exige `dbt run --target
 taskF`. A #92 termina na régua.
+
+---
+
+## #82 — A âncora da remedição, em duas passadas
+
+⚠️ **ESTA SEÇÃO NÃO É PARTE DO 2×2.** O 2×2 das quatro células continua sendo o de 12–13/08,
+commit `7fdd1a3`, e as tabelas acima não foram tocadas. O que esta seção mede é uma célula `ambos`
+NOVA, sob o código que a #91 virou default, que existe para um único fim: ser o lado esquerdo da
+conferência que a **ADR 0010** pôs no lugar da reconciliação contra a [0.1] — *rodar o Teste 2 do
+pipeline novo sobre a janela congelada e cobrar que ele reproduza a célula `ambos`*.
+
+Ela mora em `futebol_taskF.taskf_teste2_ancora`, e não na acumulativa, por um motivo medido: a
+primeira invariante da Costura B cobra `git_sha` idêntico nas quatro células
+(`assert_taskf_celulas_mesmo_universo`, CTE `execucao`). Gravar `ambos` de outro commit ali dentro
+deixaria a guarda vermelha com razão — o 2×2 deixaria de ser uma comparação.
+
+### Carimbo de execução
+
+| Passada | Execução | Corte do universo | Destino |
+|---|---|---|---|
+| **P1** — código pós-#91, predicado de meia-linha ANTIGO | 2026-08-25 14:17:42 UTC, commit `7b4f9d2` | `kickoff` em [16/06, 04/08 12:00 UTC) — **169 jogos**, 8.567 linhas | `taskf_teste2_ancora_p1` |
+| **P2** — o mesmo, com a #113 mergeada. **É a âncora** | 2026-08-25 14:24:22 UTC, commit `6f9dcc6` | mesmos **169 jogos**, **5.605 linhas** | `taskf_teste2_ancora` |
+
+Nas duas, `odds_loaded_at` = **12/08 13:24:15** — o mesmo das quatro células de 12–13/08. A fase 1
+não foi re-rodada de propósito: os fatos que a medição lê já são os mesmos dos de produção (ver
+"Os fatos não se moveram", abaixo), e reconstruí-los reinjetaria a variação que a #55 mediu.
+
+### Por que DUAS passadas
+
+Porque o delta entre a célula de 12–13/08 e a âncora carrega quatro causas, e um delta de causa
+única é conferível enquanto um de quatro é uma esperança. A decomposição:
+
+| Passo | O que isola | Linhas do universo | Linhas movidas (de 60) | Campos movidos |
+|---|---|---|---|---|
+| 12–13/08 → **P1** | #78 (média reproduzível, 17/08) + #71 (AET/PEN no `team_log`) + #91 (o piso corta o disponível) + as views realinhadas | 8.567 → 8.567 | 60 | 848 |
+| **P1** → **P2** | #113 — a linha de quarto sai do universo | 8.567 → **5.605** | 60 | 934, dos quais 60 são o próprio `linhas_no_universo` |
+
+### O passo 1 move tudo, e o mecanismo tem número
+
+Das 60 linhas medidas, **as 60 se movem** — e não é achado, é a #71. `AET` e `PEN` passaram a
+contar no `team_log`, e no passado que alimenta esta janela existem **140 partidas nesse estado**
+(121 `PEN` + 19 `AET`, contra 7.888 `FT`). Elas são quase todas de mata-mata — e a janela congelada
+é 46,7% Copa do Mundo. Toda premissa que lê histórico de time muda de contagem por construção.
+
+A conferência de que é isso e não outra coisa é o comportamento das premissas que **não** leem
+histórico: `sem_rodizio`, `h2h_favoravel` e `desfalque_adversario` movem **um campo cada** — e o
+campo é `jogos_medios_disp`, que é o próprio `min_jogos`. Os campos mais movidos do passo 1 são,
+em ordem: `jogos_medios_disp` (59 linhas), `pct_amostra_curta` (49), `n_p5` (49), `diferenca_p5`
+(49) — a assinatura de um piso de amostra que passou a contar outras partidas.
+
+### ⚠️ Os dois números da linha de quarto, e por que eles diferem
+
+A #113 publica **3.140** linhas de quarto e este doc publica **2.962** (8.567 − 5.605). Os dois
+estão certos, em denominadores diferentes: os 3.140 foram contados no de-vig de PRODUÇÃO reduzido
+à janela corrente, com os predicados do `task01_base` **menos o filtro de jogo encerrado** — 179
+jogos. Os 2.962 são a mesma conta dentro do universo de medição de verdade, os 169 jogos
+encerrados e precificados. A diferença são os 10 jogos que a #113 não filtrou.
+
+### O passo 2 é cirúrgico, e é o que a #113 previu
+
+Fora o `linhas_no_universo` (que muda em todas as 60 linhas, porque o universo encolheu 34,6%), o
+movimento do passo 2 está **inteiramente em Handicap e Gols** — os mercados 4 e 5, os únicos com
+linha que pode dar push:
+
+| mercado | linhas medidas que se movem além do universo | campos |
+|---|---|---|
+| Gols | 26 | 571 |
+| Handicap | 16 | 344 |
+| 1X2 / BTTS / Dupla Chance | **0** | 1 |
+
+O único campo fora de 4/5 é `forca_mismatch` (1X2), `jogos_medios_disp` 70,4 → 70,3 — 0,1 num
+campo diagnóstico, entre duas reconstruções dos modelos. É o empate de grade que o cabeçalho da
+`analyses/taskf_remedicao.sql` descreve, e a ADR 0010 já decidiu sobre esse número: *registrar e
+seguir, não preservar*.
+
+### As premissas que a #82 nasceu para rebaselinar, nas três leituras
+
+`n` e `diferença` no piso 0, e diferença no piso 5, em pontos percentuais:
+
+| mercado | premissa | benchmark | n₀ 13/08 → P1 → P2 | dif₀ 13/08 → P1 → P2 | dif₅ 13/08 → P1 → P2 |
+|---|---|---|---|---|---|
+| 1X2 | `superioridade_xg` | sharp | 129 → 129 → 129 | 2,6 → 2,6 → 2,6 | **−5,6 → −3,8 → −3,8** |
+| Gols | `xg_combinado_alto` | sharp | 361 → 361 → **231** | −2,5 → −2,5 → **+0,2** | −5,6 → −4,9 → −2,3 |
+| Gols | `xg_combinado_alto` | consenso | 274 → 274 → **152** | −4,3 → −4,3 → −0,7 | −7,1 → −6,4 → −1,1 |
+| Gols | `xg_baixo_combinado` | sharp | 319 → 319 → 224 | 1,1 → 1,1 → 1,0 | 2,3 → 2,3 → 2,3 |
+| Gols | `xg_baixo_combinado` | consenso | 628 → 628 → 407 | 1,8 → 1,8 → 0,6 | 2,8 → 3,0 → 0,5 |
+| Gols | `ritmo_alto` | sharp | 511 → 519 → 333 | −9,2 → −8,2 → −7,7 | −17,7 → −14,5 → −13,1 |
+| Gols | `ritmo_alto` | consenso | 584 → 597 → 370 | −4,6 → −3,7 → −0,2 | −10,4 → −8,2 → −2,4 |
+
+E as duas premissas mais fortes do Handicap, que a ADR 0010 tinha precificado como ressalva do
+recorte, agora com o universo corrigido:
+
+| premissa | benchmark | n₀ 13/08 → P1 → P2 | dif₀ 13/08 → P1 → P2 |
+|---|---|---|---|
+| `raramente_perde_por_2` | sharp | 394 → 415 → **193** | 8,2 → 8,3 → **5,5** |
+| `raramente_perde_por_2` | consenso | 392 → 407 → 270 | 6,7 → 6,9 → 6,9 |
+| `favorito_irregular` | sharp | 420 → 423 → **194** | 7,9 → 8,0 → **5,7** |
+| `favorito_irregular` | consenso | 407 → 409 → 271 | 5,8 → 5,8 → 5,5 |
+| `tende_golear` | sharp | 159 → 159 → 74 | 8,2 → 8,2 → **13,8** |
+| `clean_sheets_altos` | sharp | 92 → 86 → 51 | 23,7 → 26,8 → 25,3 |
+
+⚠️ **O que isto diz para a [B], e é o achado desta issue:** metade da amostra das duas premissas
+mais fortes do Handicap era linha de quarto, e o ganho delas cai ~2,5 pp quando ela sai. `xg_combinado_alto`
+troca de sinal contra a Pinnacle (−2,5 → +0,2). Nenhum desses números é o publicado da [0.1], e
+nenhum deles é comparável a ele — mas eles são a leitura que sobrevive à #113, e a [B] julga sobre
+o pipeline que serve o catálogo.
+
+### Os fatos não se moveram — medido, não suposto
+
+A âncora foi construída sobre os fatos de 12/08 do `futebol_taskF`, e é legítimo porque eles
+descrevem o mesmo passado que produção descreve hoje:
+
+| o quê, na janela congelada | `futebol` | `futebol_taskF` |
+|---|---|---|
+| `fact_odds_snapshot`, t15m / t1h / t24h | 191.454 / 204.928 / 194.184 | idêntico |
+| `int_futebol_odds_devig` reduzido à janela corrente | 19.610 | 19.610, `EXCEPT DISTINCT` zero nos dois sentidos |
+| `fact_fixtures` com kickoff < 04/08 12:00 | 8.036 | 8.037 |
+| `fact_fixture_stats` do mesmo recorte | 15.534 | 15.532 |
+
+O de-vig do `futebol_taskF` é um build **pré-#37** (uma linha por aposta) contra as quatro janelas
+de produção — mas sob a redução à janela corrente, que todo consumidor aplica, os dois dão o mesmo
+conjunto linha a linha. E as duas premissas de movimento de linha não leem o de-vig
+(`int_futebol_premissas_ou.sql`, CTE de movimento, lê `fact_odds_snapshot` direto).
+
+⚠️ **As duas divergências, com nome, e vão para a remedição como ressalva:**
+- fixture **1492145** (brasileirão, 25/02, `PST`, sem gols) existe no `futebol_taskF` e sumiu de
+  produção. Não entra em histórico nenhum.
+- fixture **1492290** (brasileirão, **21/07 — dentro da janela congelada**) tem `fact_fixture_stats`
+  em produção (times 1062 e 118) que o `futebol_taskF` não tem. As premissas de xG/ritmo desse jogo
+  podem divergir entre a âncora e o Teste 2 de produção **por dado, não por código**.
+
+⚠️ **As views do `futebol_taskF` eram de 12/08 e foram realinhadas ao código de hoje antes da P1**
+(`dbt run --target taskF --select path:models/staging int_futebol_desfalques
+int_futebol_player_importance int_futebol_corroboracao`), porque view é CÓDIGO e não fato — a #42
+e a #38 as tinham mudado. Nisso o `stg_futebol_injuries_coleta` (tabela, 591 linhas) foi criado no
+dataset: ele lê a landing direto, que é append-only e é a mesma que produção lê.
+
+### O que invalida esta âncora
+
+Qualquer mudança de COMPORTAMENTO em `macros/task01_base.sql`, no de-vig, no
+`int_futebol_team_form_pit` ou nos cinco modelos de premissas entre esta medição e a remedição.
+
+⚠️ **Estender o `cutoff` do `task01_base` a timestamp NÃO invalida** — e é preciso dizer isso, porque
+a remedição tem essa extensão como pré-requisito declarado, e a lista lida ao pé da letra faria a
+remedição matar a própria âncora. O que a âncora exige é que o instante usado seja o teto
+(`2026-08-04 12:00:00 UTC`) e que o universo devolva os mesmos **169 jogos / 5.605 linhas**. Mudar a
+assinatura para conseguir exatamente isso é o oposto de invalidá-la; o que invalidaria seria mudar
+quais jogos ou quais linhas entram. Não há guarda automática — a âncora é tabela
+fora do dbt. O que existe é o `git_sha` gravado em cada linha (`6f9dcc6`) e esta lista.
+
+### Reprodução
+
+```bash
+# do dbt_futebol/, com o commit 6f9dcc6 em mãos
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+  --select int_futebol_team_form_pit int_futebol_premissas_1x2 int_futebol_premissas_ou \
+           int_futebol_premissas_ah int_futebol_premissas_btts int_futebol_premissas_dc \
+  --exclude assert_taskf_pit_default_igual_baseline
+
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
+  --select taskf_pit_por_celula taskf_teste2 \
+  --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', taskf_destino: ancora}'
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_pit_por_celula.sql
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_teste2.sql
+
+# os dois deltas
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_remedicao \
+  --vars '{taskf_remedicao_agora: taskf_teste2_ancora_p1, taskf_remedicao_anterior: taskf_teste2}'
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_remedicao \
+  --vars '{taskf_remedicao_agora: taskf_teste2_ancora, taskf_remedicao_anterior: taskf_teste2_ancora_p1}'
+```
+
+⚠️ A Costura A entra na exclusão porque o baseline dela ainda é o de 12/08 (célula `base`, commit
+`a3b954e` — `baseline_pit_meta`). O recongelamento é passo do **deploy** da #91 e sai de PRODUÇÃO;
+recongelar a partir daqui carimbaria o baseline com os fatos de 12/08 do dataset de medição.

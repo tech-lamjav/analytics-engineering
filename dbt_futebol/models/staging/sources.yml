@@ -584,6 +584,42 @@ sources:
           Mesmo papel e mesmas regras da taskf_teste2_54 acima: registro histórico, não se escreve
           nela, e a próxima mudança de schema cria a sua própria cópia com o número do ticket.
 
+      - name: taskf_teste2_ancora
+        description: >
+          A ÂNCORA DA REMEDIÇÃO (#82, ADR 0010): a célula `ambos` medida de novo sob o código que a
+          #91 virou default, no mesmo universo congelado e com o mesmo schema da acumulativa ao
+          lado. É o lado esquerdo da única conferência que sobrevive à troca de janela — o Teste 2
+          do pipeline novo, rodado sobre a janela congelada, tem de reproduzi-la.
+
+          ⚠️ Ela existe SEPARADA da taskf_teste2 por um motivo medido, não por organização: a
+          primeira invariante da Costura B cobra `git_sha` idêntico nas quatro células, então
+          sobrescrever `ambos` com uma medição de outro commit deixaria o 2×2 de ser uma
+          comparação — e a ADR 0010 promete que `futebol_taskF` permanece o registro congelado
+          dele. Escrita pelo MESMO analyses/taskf_teste2.sql, com `--vars '{taskf_destino: ancora}'`
+          (macros/taskf_destino.sql, fail-closed).
+
+          ⚠️ O que a invalida: qualquer mudança em `task01_base`, no de-vig, no
+          int_futebol_team_form_pit ou nos cinco modelos de premissas entre a medição dela e a
+          remedição. O `git_sha` da linha é o que permite conferir isso depois.
+
+      - name: taskf_teste2_ancora_p1
+        description: >
+          A PRIMEIRA das duas passadas da #82: a célula `ambos` sob o código pós-#91 mas ANTES da
+          #113, ou seja, ainda com a linha de quarto entrando no universo como se fosse meia.
+          Existe para que o movimento entre a célula de 12–13/08 e a âncora seja decomponível em
+          DUAS causas em vez de uma só — 12–13/08 → P1 é o efeito de #78 + #71 + #91 sobre a
+          medição; P1 → âncora é o efeito do universo corrigido pela #113. Sem ela, o delta
+          misturaria quatro causas e um defeito se esconderia dentro dele.
+
+          ⚠️ Registro histórico, como as taskf_teste2_54/_55: não se escreve nela. Comparada por
+          analyses/taskf_remedicao.sql com `--vars '{taskf_remedicao_agora: taskf_teste2_ancora,
+          taskf_remedicao_anterior: taskf_teste2_ancora_p1}'`.
+
+      - name: taskf_pit_por_celula_ancora
+        description: >
+          O carimbo do PIT da âncora — mesma relação com o taskf_pit_por_celula que a
+          taskf_teste2_ancora tem com a taskf_teste2, e escrito na mesma execução (#82).
+
       - name: taskf_teste2
         description: >
           A saída do Teste 2 da medição, uma linha por (célula, UNIVERSO, mercado, premissa,

@@ -13,9 +13,16 @@
 -- o default. "O default reproduz o comportamento de antes das vars" deixou de ser verdade no
 -- mesmo commit em que deixou de ser desejável.
 --
--- O que ela afirma AGORA: o default não se move sozinho. O baseline foi regravado (pelo
--- analyses/taskf_congela_baseline.sql) a partir da célula `ambos` com AET/PEN no histórico
--- (#71), e a guarda segue comparando linha a linha contra ele. Deixou de ser guarda de
+-- O que ela afirma AGORA: o default não se move sozinho. O baseline É REGRAVADO (pelo
+-- analyses/taskf_congela_baseline.sql) a partir da célula `ambos` com AET/PEN no histórico (#71),
+-- e a guarda segue comparando linha a linha contra ele.
+--
+-- ⚠️ E ISSO É FUTURO, NÃO PASSADO — o recongelamento é PASSO DE DEPLOY da #91, a partir de
+-- PRODUÇÃO, e em 25/08 ele ainda não tinha acontecido: `futebol_taskF.baseline_pit_meta` diz
+-- 12/08 12:22:46, commit `a3b954e`, que é a célula `base`. Enquanto ele não rodar, esta guarda
+-- fica VERMELHA em qualquer build do PIT no default, e é por isso que a receita da âncora da #82
+-- a exclui por escrito. Recongelar a partir do `futebol_taskF` seria pior que não recongelar:
+-- carimbaria o baseline de produção com os fatos de 12/08 do dataset de medição. Deixou de ser guarda de
 -- vazamento-de-andaime e virou guarda de DERIVA: falha = a saída de produção mudou sem que o
 -- insumo tenha mudado, que é o mesmo modo de falha que ela sempre pegou, só que agora sobre o
 -- caminho que o board de fato serve.

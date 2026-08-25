@@ -148,6 +148,22 @@ alguém investigaria como achado. Quem implementar precisa de granularidade de t
 seja estendendo o `cutoff` do macro, seja lendo a definição de universo da própria [F]. As duas
 janelas ladrilham exatamente nesse instante, e é por isso que ele precisa ser o mesmo dos dois lados.
 
+⚠️ **EMENDA DE 25/08 (#82, executada): a âncora NÃO cabe dentro da acumulativa.** Este documento
+diz "reconstruir a célula `ambos`", e a leitura literal disso é sobrescrevê-la em
+`futebol_taskF.taskf_teste2`. Não dá: a primeira invariante da Costura B
+(`assert_taskf_celulas_mesmo_universo`, CTE `execucao`) cobra `git_sha` **idêntico nas quatro
+células**, e uma célula medida noutro commit deixaria a guarda vermelha com razão — o 2×2 deixaria
+de ser uma comparação, e este mesmo documento promete que `futebol_taskF` permanece o registro
+congelado dele. A âncora nasce em `taskf_teste2_ancora`, por uma var fail-closed (`taskf_destino`,
+macros/taskf_destino.sql) na MESMA análise, e as acumulativas ficam intocadas.
+
+E ela saiu em **duas passadas**, não uma: entre a medição da [F] e hoje entrou também a **#113** —
+a quarta cópia do predicado de meia-linha, que deixava a linha de QUARTO entrar no universo de
+medição como se fosse meia (3.140 de 9.252 linhas na janela congelada). Uma correção nesse caminho
+depois da âncora a mataria pelo mesmo argumento de identidade de código que o parágrafo abaixo faz
+sobre a #71. P1 mede sem a #113 e isola #78+#71+#91; P2 mede com ela e é a âncora. Resultados e
+carimbos em `docs/TASKF_RESULTADOS.md`, seção "#82 — A âncora da remedição, em duas passadas".
+
 Isso torna a **#82 pré-requisito**, e a reescopa: de *"rebaselinar os 4 números da [F]"* para
 **"reconstruir a célula `ambos` sob o código pós-#78, como âncora da remedição"**. Sem isso a
 comparação falharia justamente em `superioridade_xg`, `xg_combinado_alto`, `xg_baixo_combinado` e
