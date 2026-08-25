@@ -204,9 +204,10 @@
         --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', taskf_destino: ancora}'
       (os dois `bq query <` na mesma ordem)
 
-    ⚠️ A Costura A entra na exclusão porque o BASELINE dela ainda é o de 12/08 (célula `base`,
-    commit a3b954e — `baseline_pit_meta`), e o recongelamento é passo do DEPLOY da #91, a partir de
-    produção. Recongelar daqui carimbaria o baseline com os fatos de 12/08 do dataset de medição.
+    ⚠️ A Costura A entra na exclusão porque ela é DEFAULT-ONLY por definição: qualquer célula que
+    não seja o default a deixa vermelha por desenho. O baseline foi recongelado em 25/08 17:59 UTC
+    a partir de PRODUÇÃO (commit 887a1f9, 21.078 linhas), então o motivo antigo — "o baseline ainda
+    é o de 12/08, célula `base`, commit a3b954e" — não vale mais. A exclusão, sim.
 
     ⚠️ O CARIMBO DO PIT vem DEPOIS do build da mesma célula, sempre. O rótulo dele sai das vars em
     tempo de compilação e o dado sai do que está materializado: fora de ordem, uma célula é
