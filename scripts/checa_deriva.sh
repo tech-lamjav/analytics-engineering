@@ -27,8 +27,15 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 cd "$REPO_ROOT"
 
 # Tabela declarativa de alvos. Acrescentar um alvo é acrescentar um nome aqui — desde que
-# `scripts/procedencia.sh` conheça as paths dele. Os serviços Cloud Run do repo
-# data-engineering entram por esta mesma porta quando chegarem (ver ADR 0001, Q4).
+# `scripts/procedencia.sh` conheça as paths dele.
+#
+# ⚠️ ISTO VALE SÓ PARA ALVOS DESTE REPO. Os serviços Cloud Run do `data-engineering` NÃO
+# entram por esta porta, ao contrário do que este comentário afirmou até 24/08/2026: o
+# `procedencia.sh` hasheia paths relativas ao `git rev-parse --show-toplevel`, que aqui é
+# sempre o analytics-engineering. O desenho é genérico quanto ao ALVO, não quanto ao
+# REPOSITÓRIO. Eles têm detector irmão e dono próprio lá — ver
+# data-engineering/docs/adr/0001-carimbo-de-procedencia-dos-servicos-cloud-run.md
+# (o bullet corrigido em Consequências do ADR 0001 conta por quê).
 if [ $# -gt 0 ]; then
     ALVOS=("$@")
 else
