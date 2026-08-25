@@ -212,11 +212,6 @@
 {%- set c      = taskf_celula() -%}
 {%- set j      = taskf_universo() -%}
 {%- set pisos  = taskf_pisos() -%}
-{#- Qual coluna do PIT carrega a contagem DISPONÍVEL. Sob recorte de `temporada` ela não existe no
-    modelo, e não por esquecimento: sem teto, disponível É o played_total, e emitir a coluna no
-    default mudaria o SQL compilado do caminho que produção usa — o que a ADR 0007 promete que não
-    acontece. A projeção abaixo é, portanto, exata nas quatro células, e não uma aproximação. -#}
-{%- set col_disponivel = 'played_total_disponivel' if c.recorte == 'ultimos_10' else 'played_total' -%}
 {%- set tabela = 'smartbetting-dados.futebol_taskF.taskf_teste2' -%}
 
 {#- Uma lista, três usos: o DDL, a lista de colunas do INSERT e a ordem da projeção. Escrita duas
@@ -259,18 +254,25 @@ INSERT INTO `{{ tabela }}` ({{ nomes_colunas | join(', ') }})
 
 WITH {{ task01_base() }},
 
-{#- A CONTAGEM DISPONÍVEL, no mesmo formato em que o task01_base() calcula a usada: o MENOR
+{#- A CONTAGEM USADA, no mesmo formato em que o task01_base() calcula a disponível: o MENOR
     entre os dois times, porque as premissas comparam os dois, e 0 quando não há linha no PIT.
 
-    Por que aqui e não dentro do task01_base(): o macro é o artefato que produziu os números
-    publicados da [0.1] e não é tocado por esta medição — mesmo argumento que pôs o recorte do
-    universo congelado nesta análise, e não num parâmetro novo dele. A conta é a mesma, sobre a
-    mesma tabela; o que muda é a coluna lida. -#}
-pit_disponivel AS (
+    ⚠️ ESTE CTE JÁ CALCULOU A DISPONÍVEL, e passou a calcular a USADA na #91. A inversão é
+    consequência do ADR 0010: o `min_jogos` do task01_base() virou a contagem DISPONÍVEL, então
+    quem sobra para ser calculado aqui é a outra. O seam não mudou de lugar nem de motivo — o
+    macro é o artefato que produziu os números publicados da [0.1] e não é tocado por esta
+    medição, mesmo argumento que pôs o recorte do universo congelado nesta análise e não num
+    parâmetro novo dele. A conta é a mesma, sobre a mesma tabela; o que muda é a coluna lida.
+
+    A usada é sempre `played_total`, sem ramo por célula: sob `ultimos_10` ela já vem saturada no
+    teto pelo próprio modelo, e sob `temporada` não existe teto, então ela É a disponível. É por
+    isso que a Costura B cobra as duas iguais numa célula e divergentes na outra — e é o que
+    dispensa aqui o ramo por coluna que o task01_base() precisa ter. -#}
+pit_usado AS (
     SELECT
         j.fixture_id,
-        LEAST(COALESCE(h.{{ col_disponivel }}, 0),
-              COALESCE(a.{{ col_disponivel }}, 0)) AS min_jogos_disponivel
+        LEAST(COALESCE(h.played_total, 0),
+              COALESCE(a.played_total, 0)) AS min_jogos_usado
     FROM jogos_encerrados AS j
     LEFT JOIN {{ ref('int_futebol_team_form_pit') }} AS h
            ON h.fixture_id = j.fixture_id
@@ -299,15 +301,16 @@ apostas_marcadas AS (
     SELECT
         a.*,
         COALESCE(f.round, '')                  AS round,
-        {#- O `min_jogos` que vem do task01_base() é o USADO: ele sai do played_total do PIT, que
-            sob recorte de contagem já vem saturado. Ganha aqui um nome que diz isso — o `a.*`
-            acima mantém o original, então as duas formas convivem no CTE e só a nomeada chega à
+        {#- O `min_jogos` que vem do task01_base() é o DISPONÍVEL desde a #91 (ADR 0010): ele sai
+            do played_total_disponivel do PIT sob recorte de contagem, e do played_total sob
+            `temporada`, onde as duas coincidem. Ganha aqui um nome que diz isso — o `a.*` acima
+            mantém o original, então as duas formas convivem no CTE e só a nomeada chega à
             tabela, que assim não tem coluna cujo sentido depende da célula que se está lendo. -#}
-        a.min_jogos                            AS min_jogos_usado,
-        COALESCE(d.min_jogos_disponivel, 0)    AS min_jogos_disponivel
+        a.min_jogos                            AS min_jogos_disponivel,
+        COALESCE(u.min_jogos_usado, 0)         AS min_jogos_usado
     FROM apostas AS a
-    LEFT JOIN pit_disponivel AS d
-           ON d.fixture_id = a.fixture_id
+    LEFT JOIN pit_usado AS u
+           ON u.fixture_id = a.fixture_id
     LEFT JOIN {{ ref('fact_fixtures') }} AS f
            ON f.fixture_id = a.fixture_id
 ),

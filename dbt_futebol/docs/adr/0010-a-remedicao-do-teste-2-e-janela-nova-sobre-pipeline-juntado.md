@@ -176,8 +176,15 @@ worktree**.
 `played_total` satura no teto do recorte, e a regra da [F] é que o piso corte o **disponível** (ADR
 0007). O `pit` do `macros/task01_base.sql:320` lê `played_total`; com o default virado, ele precisa
 ler `played_total_disponivel` — que o modelo passa a emitir, porque hoje ele só é emitido fora do
-default. No piso 5 a troca é inócua pela identidade `LEAST(d, 10) >= piso ⟺ d >= piso`; no **piso
-10** ela deixa de ser, e "piso 10" passa a querer dizer "exatamente 10" em vez de "pelo menos 10".
+default. ⚠️ **CORREÇÃO (review do PR #111).** A versão original deste parágrafo afirmava que a troca é
+inócua no piso 5 mas deixa de ser no **piso 10**, onde "piso 10" passaria a querer dizer
+"exatamente 10" em vez de "pelo menos 10". **Isso é falso.** A identidade
+`LEAST(d, 10) >= p ⟺ d >= p` vale para **todo** `p <= 10`, o piso 10 inclusive: com `d = 15`,
+`LEAST` dá 10 e `10 >= 10` passa. Como `taskf_pisos()` é `[0, 3, 5, 10]`, a troca é **no-op de
+filtragem nos quatro pisos**. Ela continua valendo a pena, e a decisão não muda — mas pelo motivo
+certo: o piso passa a **significar** o que a [F] diz que ele significa, e o defeito deixa de estar
+armado para o dia em que alguém puser um piso acima de 10, onde o `played_total` saturado
+empataria todo mundo e o piso pararia de filtrar. O que cai é a urgência, não a decisão.
 O raio disso é a medição e só ela: nenhum modelo de `marts/` lê `min_jogos` nem
 `int_futebol_team_form_pit`.
 

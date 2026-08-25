@@ -160,6 +160,12 @@
 
 
 {% macro task01_base(cutoff=none) %}
+{#- O piso de amostra segue o RECORTE da célula: sob `ultimos_10` o modelo emite as duas
+    contagens e o piso lê a DISPONÍVEL; sob `temporada` a coluna do disponível não existe
+    (sem teto, disponível É a usada) e a leitura tem de cair no `played_total`. Ler a coluna
+    sem essa guarda compila em Jinja e só estoura no BigQuery, com `Unrecognized name`. -#}
+{%- set _eixos = taskf_eixos() -%}
+{%- set _col_piso = 'played_total_disponivel' if _eixos.recorte == 'ultimos_10' else 'played_total' -%}
 
 {#- Jogos encerrados. `cutoff` congela a janela p/ reconciliar contra número publicado;
     sem ele, o universo é tudo que já foi liquidado até hoje (o caso dos tickets #5+). -#}
@@ -310,28 +316,32 @@ prem_linha AS (
     {%- endfor %}
 ),
 
-{#- Piso de amostra do jogo: o MENOR played_total entre os dois times, porque as
-    premissas comparam os dois. Sem linha no PIT = sem histórico = 0 (mesma leitura da
-    degradação graciosa do modelo).
+{#- Piso de amostra do jogo: o MENOR entre os dois times, porque as premissas comparam os
+    dois. Sem linha no PIT = sem histórico = 0 (mesma leitura da degradação graciosa do modelo).
 
-    ⚠️ A #91 chegou a trocar isto por `played_total_disponivel` e a troca foi DESFEITA no
-    review, por três motivos. (1) Quebrava em execução: o modelo só emite
-    `played_total_disponivel` sob `pit_recorte = ultimos_10`, e este macro lia a coluna sem
-    guarda — toda célula `temporada` estourava com `Unrecognized name`. (2) Quebrava a Costura
-    B: o `min_jogos` daqui é lido como a contagem USADA em `analyses/taskf_teste2.sql`, então
-    apontá-lo para o disponível igualava `jogos_medios_usado` a `jogos_medios_disp` e a guarda
-    `assert_taskf_contagens_por_recorte` disparava `ultimos_10_sem_teto`. (3) Não comprava
-    nada: `taskf_pisos()` é `[0, 3, 5, 10]` e `LEAST(d,10) >= p ⟺ d >= p` para TODO `p <= 10`
-    — inclusive o 10, ao contrário do que o comentário revertido afirmava. A troca era no-op
-    de filtragem nos quatro pisos.
+    ⚠️ ELE CORTA O DISPONÍVEL, NÃO O USADO (ADR 0010, condição de destrave 1 — a regra vem da
+    [F], ADR 0007). O piso pergunta "esse time tem passado suficiente p/ a premissa significar
+    algo", e essa pergunta é sobre quantas partidas EXISTEM no escopo, não sobre quantas o teto
+    do recorte deixou passar. A coluna lida sai do `_col_piso` no topo do macro, que segue o
+    recorte da célula — ver a guarda lá.
 
-    O mérito da ideia continua de pé — o piso deveria perguntar quanto passado EXISTE, não
-    quanto o teto deixou passar — mas isso muda o baseline da [0.1] e a Costura B junto, então
-    é ticket próprio, não carona numa entrega sobre histórico de time. -#}
+    ⚠️ Hoje a troca é INÓCUA como filtro, e o registro disso importa porque duas versões deste
+    comentário e o próprio ADR 0010 erraram a conta. `taskf_pisos()` é `[0, 3, 5, 10]` e
+    `LEAST(d, 10) >= p ⟺ d >= p` para TODO `p <= 10` — inclusive o piso 10, que continua
+    querendo dizer "pelo menos 10" e NÃO "exatamente 10". O que a troca compra é (a) o sentido
+    certo, e (b) não nascer calado o dia em que alguém puser um piso acima de 10, onde o
+    `played_total` saturado empataria todo mundo e o piso pararia de filtrar.
+
+    ⚠️ QUEM LÊ ISTO COMO "A CONTAGEM USADA" ESTÁ ERRADO desde a #91, e há um leitor assim:
+    `analyses/taskf_teste2.sql` precisa das DUAS contagens para a Costura B
+    (`assert_taskf_contagens_por_recorte`). Ele calcula a usada por conta própria, num CTE ao
+    lado, pelo mesmo motivo que já calculava a disponível antes desta virada — este macro é o
+    artefato que produziu os números publicados da [0.1] e não ganha parâmetro por causa da
+    medição. -#}
 pit AS (
     SELECT
         j.fixture_id,
-        LEAST(COALESCE(h.played_total, 0), COALESCE(a.played_total, 0)) AS min_jogos
+        LEAST(COALESCE(h.{{ _col_piso }}, 0), COALESCE(a.{{ _col_piso }}, 0)) AS min_jogos
     FROM jogos_encerrados AS j
     LEFT JOIN {{ ref('int_futebol_team_form_pit') }} AS h
            ON h.fixture_id = j.fixture_id
