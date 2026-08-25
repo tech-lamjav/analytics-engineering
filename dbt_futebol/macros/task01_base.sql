@@ -106,14 +106,25 @@
 
 
 {#- Só meia-linha em Handicap e Over/Under: elimina push, que não tem liquidação
-    binária. MOD() do BQ devolve negativo p/ linha AH negativa -> ABS() antes.
+    binária.
 
     Existe como macro porque a guarda de descarte precisa do MESMO predicado fora da
     CTE `apostas`. Duplicá-lo deixaria a guarda derivar em silêncio da coisa que ela
-    guarda. `alias` inclui o ponto: task01_meia_linha('o.') -#}
+    guarda. `alias` inclui o ponto: task01_meia_linha('o.')
+
+    ⚠️ O TESTE EM SI NÃO MORA AQUI (#113). Ele mora em futebol_e_linha_meia(), com o board, o
+    funil e a linha de base — porque esta ERA a quarta cópia dele, e ela carregava o defeito que
+    a #101 corrigiu nas outras três: comparado em MEIOS
+    (`MOD(CAST(ABS(lv) * 2 AS INT64), 2) = 1`), o `.25` entra como meia, porque o BigQuery
+    arredonda meio para longe do zero e `0,25 * 2 = 0,5` vira 1. Medido na janela congelada da
+    [F]: 3.140 de 9.252 linhas do universo de medição eram linha de quarto — 34% do total e 40%
+    das linhas de Handicap e Gols. O `.75` escapava por sorte, não por construção.
+
+    O que sobra aqui é o ESCOPO — quais mercados têm linha que pode dar push —, que é decisão do
+    Teste 2 e não do predicado. -#}
 {% macro task01_meia_linha(alias='') %}
     ({{ alias }}market_id NOT IN (4, 5)
-     OR MOD(CAST(ABS({{ alias }}line_value) * 2 AS INT64), 2) = 1)
+     OR {{ futebol_e_linha_meia(alias ~ 'line_value') }})
 {% endmacro %}
 
 
