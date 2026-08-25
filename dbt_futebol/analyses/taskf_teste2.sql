@@ -111,6 +111,13 @@
     por extenso de propósito: ele é o contrato que as células seguintes têm de cumprir, e um
     INSERT de formato diferente falha alto em vez de alargar a tabela em silêncio.
 
+    ⚠️ E O DESTINO PODE SER A ÂNCORA, E NÃO ESTA TABELA (#82, ADR 0010). A célula `ambos` medida
+    sob o código pós-#91 NÃO se grava aqui: a primeira invariante da Costura B cobra `git_sha`
+    idêntico nas quatro células, e sobrescrever `ambos` com outro commit deixaria o 2×2 de ser uma
+    comparação. Ela vai para a tabela irmã `taskf_teste2_ancora`, pela var `taskf_destino`
+    (`medicao` | `ancora`, fail-closed) — ver macros/taskf_destino.sql. Esta tabela permanece o
+    registro congelado do 2×2 medido em 12–13/08, que é o que a ADR 0010 promete.
+
     ⚠️ E É POR ISSO QUE MUDAR O SCHEMA EXIGE DROPAR A TABELA. `CREATE TABLE IF NOT EXISTS` não
     acrescenta coluna a uma tabela que já existe: com o schema novo, o INSERT de lista explícita
     falha na primeira célula. Aconteceu três vezes — a #54 (as duas contagens de amostra), a #55
@@ -181,6 +188,26 @@
     As três guardas leem SÓ a tabela acumulativa (por `source()`), não penduram em modelo nenhum
     e por isso não entram nas fases 1 e 2 de carona.
 
+    FASE 4, só na #82 (ADR 0010): a ÂNCORA DA REMEDIÇÃO. É a fase 2 outra vez, na célula `ambos` —
+    que é o DEFAULT desde a #91, então sem `--vars` de eixo — com o destino trocado. O par
+    `taskf_teste2_ancora` / `taskf_pit_por_celula_ancora` recebe a medição e as acumulativas não são
+    tocadas, o que é o ponto: a Costura B continua verde sobre um 2×2 de um commit só.
+
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+        --select int_futebol_team_form_pit int_futebol_premissas_1x2 int_futebol_premissas_ou \
+                 int_futebol_premissas_ah int_futebol_premissas_btts int_futebol_premissas_dc \
+        --exclude assert_taskf_pit_default_igual_baseline
+
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_pit_por_celula \
+        --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', taskf_destino: ancora}'
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_teste2 \
+        --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', taskf_destino: ancora}'
+      (os dois `bq query <` na mesma ordem)
+
+    ⚠️ A Costura A entra na exclusão porque o BASELINE dela ainda é o de 12/08 (célula `base`,
+    commit a3b954e — `baseline_pit_meta`), e o recongelamento é passo do DEPLOY da #91, a partir de
+    produção. Recongelar daqui carimbaria o baseline com os fatos de 12/08 do dataset de medição.
+
     ⚠️ O CARIMBO DO PIT vem DEPOIS do build da mesma célula, sempre. O rótulo dele sai das vars em
     tempo de compilação e o dado sai do que está materializado: fora de ordem, uma célula é
     gravada com o nome de outra. Ver o cabeçalho de analyses/taskf_pit_por_celula.sql.
@@ -212,7 +239,7 @@
 {%- set c      = taskf_celula() -%}
 {%- set j      = taskf_universo() -%}
 {%- set pisos  = taskf_pisos() -%}
-{%- set tabela = 'smartbetting-dados.futebol_taskF.taskf_teste2' -%}
+{%- set tabela = taskf_destino('taskf_teste2') -%}
 
 {#- Uma lista, três usos: o DDL, a lista de colunas do INSERT e a ordem da projeção. Escrita duas
     vezes, ela derivaria — e um INSERT posicional com colunas trocadas de lugar não dá erro, dá

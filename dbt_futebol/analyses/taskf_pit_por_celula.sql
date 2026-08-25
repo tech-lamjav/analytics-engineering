@@ -61,13 +61,17 @@
       bq query --use_legacy_sql=false --project_id=smartbetting-dados \
         < target/compiled/dbt_futebol/analyses/taskf_pit_por_celula.sql
 
+    ⚠️ NA #82 O DESTINO É OUTRO. A âncora da remedição escreve em `taskf_pit_por_celula_ancora`,
+    pela var `taskf_destino` (`medicao` | `ancora`, fail-closed) — ver macros/taskf_destino.sql e o
+    cabeçalho de analyses/taskf_teste2.sql, FASE 4. Esta acumulativa fica intocada.
+
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
 */
 
 {%- set c      = taskf_celula() -%}
-{%- set tabela = 'smartbetting-dados.futebol_taskF.taskf_pit_por_celula' -%}
+{%- set tabela = taskf_destino('taskf_pit_por_celula') -%}
 {#- Ver o cabeçalho: sob `temporada` a coluna não existe no modelo porque sem teto ela seria o
     próprio played_total. -#}
 {%- set col_disponivel = 'played_total_disponivel' if c.recorte == 'ultimos_10' else 'played_total' -%}
