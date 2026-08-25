@@ -119,8 +119,12 @@ unit_tests:
     given:
       - input: ref('fact_fixtures')
         rows:
-          - {fixture_id: 1, competition: 'copa_do_brasil', competition_id: 73, season: 2026, home_team_id: 10, away_team_id: 20, kickoff_utc: '2026-08-01 20:00:00', status_short: 'NS', goals_home: , goals_away: }
-          - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 30, away_team_id: 40, kickoff_utc: '2026-08-01 20:00:00', status_short: 'NS', goals_home: , goals_away: }
+          # ⚠️ #71: score_fulltime_* entrou porque o histórico passou a ler ESSAS colunas em vez
+          # de goals_* (goals_* inclui gol de prorrogação). goals_* fica: o mock alimenta o
+          # modelo inteiro, não só a CTE `finished`. Os dois jogos são 'NS', então nenhum entra
+          # no histórico de qualquer jeito — o que este teste exercita é a herança de cegueira.
+          - {fixture_id: 1, competition: 'copa_do_brasil', competition_id: 73, season: 2026, home_team_id: 10, away_team_id: 20, kickoff_utc: '2026-08-01 20:00:00', status_short: 'NS', goals_home: , goals_away: , score_fulltime_home: , score_fulltime_away: }
+          - {fixture_id: 2, competition: 'brasileirao', competition_id: 71, season: 2026, home_team_id: 30, away_team_id: 40, kickoff_utc: '2026-08-01 20:00:00', status_short: 'NS', goals_home: , goals_away: , score_fulltime_home: , score_fulltime_away: }
 
       # format: sql porque premissas_cegas é ARRAY<STRING>, e o formato de dicionário
       # entrega todo valor como escalar (o cast de STRING para ARRAY falha).

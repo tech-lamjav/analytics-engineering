@@ -1,10 +1,28 @@
 {{ config(tags=['taskf']) }}
--- COSTURA A da task [F] (issue #49, ADR 0007) — o default das vars reproduz produção.
+-- COSTURA A da task [F] (issue #49, ADR 0007) — o default do PIT não se move sozinho.
 --
--- A ADR 0007 deixa no código de produção uma var que produção nunca usa, e promete que o default
--- dela preserva o comportamento. Este teste é o que transforma a promessa em fato verificado:
--- enquanto ele passar, "o default preserva o comportamento" é verificação, e não comentário.
--- Falha = o andaime da medição vazou para o caminho que o board serve.
+-- ⚠️ ESTA GUARDA MUDOU DE SENTIDO NA #91, E O BASELINE FOI RECONGELADO COM ELA.
+--
+-- O que ela afirmava até 24/08/2026: a ADR 0007 deixou no código de produção duas vars que
+-- produção nunca passava, e prometeu que o DEFAULT delas preservava o comportamento anterior.
+-- A guarda transformava a promessa em fato verificado, e falha significava "o andaime da
+-- medição vazou para o caminho que o board serve".
+--
+-- Essa premissa morreu por decisão, não por acidente: a #91 (ADR 0010, Recomendação 1 da [F])
+-- virou os defaults para `todas` + `ultimos_10` — a célula `ambos` —, e produção passou a USAR
+-- o default. "O default reproduz o comportamento de antes das vars" deixou de ser verdade no
+-- mesmo commit em que deixou de ser desejável.
+--
+-- O que ela afirma AGORA: o default não se move sozinho. O baseline foi regravado (pelo
+-- analyses/taskf_congela_baseline.sql) a partir da célula `ambos` com AET/PEN no histórico
+-- (#71), e a guarda segue comparando linha a linha contra ele. Deixou de ser guarda de
+-- vazamento-de-andaime e virou guarda de DERIVA: falha = a saída de produção mudou sem que o
+-- insumo tenha mudado, que é o mesmo modo de falha que ela sempre pegou, só que agora sobre o
+-- caminho que o board de fato serve.
+--
+-- É o cabeçalho da própria guarda que autorizava esta saída: "as duas saídas honestas são
+-- recongelar o baseline de propósito (no mesmo commit da mudança que o justifica) ou baixar o
+-- piso de propósito — as duas explícitas, nenhuma silenciosa".
 --
 -- QUEM RODA. Não é o agendado: a tag é `taskf` e não `guarda`, de propósito — o pipeline horário
 -- executa `dbt test --select tag:guarda` e o ticket que criou este teste (#50) promete que nada
@@ -35,15 +53,18 @@
 -- o baseline de propósito (no mesmo commit da mudança que o justifica) ou baixar o piso de
 -- propósito — as duas explícitas, nenhuma silenciosa.
 --
--- Falsificada uma vez com `--vars '{pit_escopo: todas}'`, que a deixa vermelha (12.868
--- divergências). Consequência disso: nas células juntadas esta guarda é VERMELHA POR DESENHO,
--- porque a saída ali de fato não é a de produção. Ela é a ÚNICA exclusão que a medição precisa —
--- é default-only por definição, já que o que ela afirma é justamente "o default reproduz
--- produção":
+-- ⚠️ A FALSIFICAÇÃO INVERTEU DE LADO NA #91. Ela foi falsificada uma vez com
+-- `--vars '{pit_escopo: todas}'`, que a deixava vermelha (12.868 divergências) — porque `todas`
+-- era a célula juntada e o baseline era o da célula `base`. Hoje `todas` + `ultimos_10` É o
+-- default e o baseline, então quem a deixa vermelha agora é o caminho ANTIGO:
 --
 --   dbt build --target taskF --select int_futebol_team_form_pit \
---     --vars '{pit_escopo: todas}' \
+--     --vars '{pit_escopo: da_competicao, pit_recorte: temporada}' \
 --     --exclude assert_taskf_pit_default_igual_baseline
+--
+-- A regra por trás não mudou: esta guarda é default-only por definição, então QUALQUER célula
+-- que não seja o default a deixa vermelha por desenho e tem de excluí-la. O que mudou é qual
+-- célula é o default. Ela segue sendo a única exclusão que a medição precisa.
 --
 -- ⚠️ Esta receita já mandou excluir também o `assert_pit_first_game_has_no_history`. NÃO EXCLUA
 -- MAIS (#52): a partição dele passou a seguir os eixos da célula, ele é verde nas quatro, e
