@@ -81,13 +81,23 @@
     contra uma cópia nova — o padrão é `taskf_teste2_<ticket>`, declarada em sources.yml. -#}
 {%- set anterior = var('taskf_remedicao_anterior', 'taskf_teste2_55') -%}
 
+{#- E qual é o lado ATUAL. Também é var, desde a #82: a âncora da remedição mora em
+    `taskf_teste2_ancora` e não na acumulativa (macros/taskf_destino.sql), e a pergunta desta
+    análise — "a re-medição devolveu os mesmos números?" — é exatamente a que a #82 faz da célula
+    `ambos` antiga contra a nova. Sem isto, a comparação viraria de novo uma query solta, que é o
+    defeito que este arquivo existe para não repetir. -#}
+{%- set atual = var('taskf_remedicao_agora', 'taskf_teste2') -%}
+
 WITH agora AS (
-    SELECT * FROM {{ source('futebol_taskF', 'taskf_teste2') }}
+    SELECT * FROM {{ source('futebol_taskF', atual) }}
     WHERE universo = 'completo'
 ),
 
 antes AS (
     SELECT * FROM {{ source('futebol_taskF', anterior) }}
+    {%- if anterior == 'taskf_teste2' %}
+    WHERE universo = 'completo'
+    {%- endif %}
 ),
 
 {#- FULL OUTER: linha que existe só de um lado é achado, não ausência de achado. -#}
