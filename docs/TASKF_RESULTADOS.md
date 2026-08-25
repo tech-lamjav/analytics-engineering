@@ -3042,6 +3042,14 @@ campo é `jogos_medios_disp`, que é o próprio `min_jogos`. Os campos mais movi
 em ordem: `jogos_medios_disp` (59 linhas), `pct_amostra_curta` (49), `n_p5` (49), `diferenca_p5`
 (49) — a assinatura de um piso de amostra que passou a contar outras partidas.
 
+### ⚠️ Os dois números da linha de quarto, e por que eles diferem
+
+A #113 publica **3.140** linhas de quarto e este doc publica **2.962** (8.567 − 5.605). Os dois
+estão certos, em denominadores diferentes: os 3.140 foram contados no de-vig de PRODUÇÃO reduzido
+à janela corrente, com os predicados do `task01_base` **menos o filtro de jogo encerrado** — 179
+jogos. Os 2.962 são a mesma conta dentro do universo de medição de verdade, os 169 jogos
+encerrados e precificados. A diferença são os 10 jogos que a #113 não filtrou.
+
 ### O passo 2 é cirúrgico, e é o que a #113 previu
 
 Fora o `linhas_no_universo` (que muda em todas as 60 linhas, porque o universo encolheu 34,6%), o
@@ -3123,8 +3131,15 @@ dataset: ele lê a landing direto, que é append-only e é a mesma que produçã
 
 ### O que invalida esta âncora
 
-Qualquer mudança em `macros/task01_base.sql`, no de-vig, no `int_futebol_team_form_pit` ou nos cinco
-modelos de premissas entre esta medição e a remedição. Não há guarda automática — a âncora é tabela
+Qualquer mudança de COMPORTAMENTO em `macros/task01_base.sql`, no de-vig, no
+`int_futebol_team_form_pit` ou nos cinco modelos de premissas entre esta medição e a remedição.
+
+⚠️ **Estender o `cutoff` do `task01_base` a timestamp NÃO invalida** — e é preciso dizer isso, porque
+a remedição tem essa extensão como pré-requisito declarado, e a lista lida ao pé da letra faria a
+remedição matar a própria âncora. O que a âncora exige é que o instante usado seja o teto
+(`2026-08-04 12:00:00 UTC`) e que o universo devolva os mesmos **169 jogos / 5.605 linhas**. Mudar a
+assinatura para conseguir exatamente isso é o oposto de invalidá-la; o que invalidaria seria mudar
+quais jogos ou quais linhas entram. Não há guarda automática — a âncora é tabela
 fora do dbt. O que existe é o `git_sha` gravado em cada linha (`6f9dcc6`) e esta lista.
 
 ### Reprodução
