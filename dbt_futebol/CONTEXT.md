@@ -97,6 +97,37 @@ app never reads it.
 _Avoid_: reading the funil as a board with more rows, or expecting a rebuilt table to
 preserve a funil at all
 
+**Linha de base remedida**:
+The *antes* of every comparison the [A] makes: each porta's count, alone and marginal,
+read from the funil with one janela fixed per candidato. It is a reading, never a
+re-implementation of the five branches — two measurements of the same thing weeks apart
+are only comparable if they came from the same table. It needs no seed: the funil is
+append-only, so the slice between two deploys **is** the freeze, and what the analysis
+records is the cut predicate, not a copy of the numbers.
+_Avoid_: baseline (taken by the Costura A of the [F]), "linha de base do board" (that is
+the retired hand-made copy)
+
+**Escopo vivo / escopo histórico**:
+The two populations a funil reading can have. **Vivo** is the fixtures that have not
+kicked off — and because every future-fixture row is rewritten on each odds cycle, it
+carries the current code by construction, with no confounder from a deploy. **Histórico**
+is the whole funil, which buys an order of magnitude more fixtures at the price of rows
+whose score was written under older code. A deploy that changes only one porta invalidates
+the histórico for that porta alone; the other seven keep the larger N. Which one a number
+comes from is a column, never a caveat in prose.
+_Avoid_: calling the vivo "o board" — the board is the published subset, the escopo vivo
+is the whole candidate universe of the same fixtures
+
+**Cobertura da Pinnacle**:
+Whether Pinnacle priced the outcome set at all (`pin_n_outcomes`) — the branch filter the
+board has carried since before ADR 0002, and a **different question** from whether the set
+is complete. A line Pinnacle never priced falls back to consenso and gets a perfectly valid
+fair probability; it still fails this one. It is the older of two gates with the same
+intent, and it is asymmetric across markets: the BTTS branch gates on `n_outcomes_valor`
+and so admits consenso, while Handicap and Gols gate on Pinnacle and do not.
+_Avoid_: labelling it "completude do conjunto" — that name belongs to the ADR 0002 rule,
+which lives in the de-vig and surfaces as prob justa being absent
+
 **Saída não catalogada**:
 An outcome that was priced, inside a market the Motor does model, that the Motor chooses
 not to score — Dupla Chance prices 1X, 12 and X2, and only 1X and X2 are published. It
@@ -220,7 +251,14 @@ yields **no** fair probability. Normalising over a partial set inflates every pr
 in it (one outcome alone yields certainty), so a partial set is not a weak estimate but an
 invalid one. A line built on an incomplete set keeps its real outcome count as diagnosis
 and loses fair probability, edge and value points.
-_Avoid_: treating a partial set as a degraded estimate
+
+**Pinnacle being absent is not an incomplete set.** In a market Pinnacle normally covers,
+its absence sends the line to the consenso fallback, which de-vigs its own complete set and
+does yield a fair probability — at the price of a 3× higher edge floor. The two are
+routinely conflated because the board's Handicap and Gols branches gate on
+`pin_n_outcomes` under the name "completude"; see **cobertura da Pinnacle**.
+_Avoid_: treating a partial set as a degraded estimate; reading a consenso line as an
+incomplete set
 
 **Double Chance (conjunto)**:
 Its three outcomes (1X/12/X2) are *not* exhaustive — they sum to ~2 — so Double Chance is
