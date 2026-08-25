@@ -103,7 +103,8 @@ read from the funil with one janela fixed per candidato. It is a reading, never 
 re-implementation of the five branches — two measurements of the same thing weeks apart
 are only comparable if they came from the same table. It needs no seed: the funil is
 append-only, so the slice between two deploys **is** the freeze, and what the analysis
-records is the cut predicate, not a copy of the numbers.
+records is the cut predicate, not a copy of the numbers. Lives in
+`analyses/taskA_linha_de_base_funil.sql`; the numbers are in `docs/TASKA_RESULTADOS.md`.
 _Avoid_: baseline (taken by the Costura A of the [F]), "linha de base do board" (that is
 the retired hand-made copy)
 

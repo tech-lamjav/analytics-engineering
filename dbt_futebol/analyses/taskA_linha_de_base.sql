@@ -1,5 +1,52 @@
 {#
-    LINHA DE BASE DO BOARD — entregável de aceite da task [A].
+    ⚠️⚠️ APOSENTADA em 25/08/2026 (#106). NÃO É MAIS A LINHA DE BASE DA TASK [A].
+
+    A linha de base agora sai de `taskA_linha_de_base_funil.sql`, que LÊ o `fact_value_funnel`
+    em vez de reimplementar os cinco ramos. Duas medições da mesma coisa em semanas diferentes
+    só são comparáveis se saírem da MESMA tabela — e este arquivo acumulou três invalidações
+    sem ninguém notar, exatamente porque cada rerodada era uma tabela nova:
+
+      1. ele mede uma porta de odd (`n3_faixa_odd`) que **não existe em produção** — é proposta
+         da A5 (#104). Uma porta que não existe não pode remover linha do *antes*, ou o
+         antes/depois da A5 mede zero contra zero;
+      2. os números da entrega original são pré-`.25` (#101) — o arquivo já foi corrigido pelo
+         commit `c33608c`, mas os números publicados na época não se reproduzem;
+      3. eles são pré-#91, que solta o histórico do time da competição e move a nota.
+
+    Some junto com a A5.
+
+    ─────────────────────────────────────────────────────────────────────────────────
+    O QUE AINDA SERVE:
+
+      • a OUTRA METADE DA RECONCILIAÇÃO da #106 — e é por isso que ela não foi apagada.
+        Rerodar as duas, ENTRE DOIS CICLOS DE ODDS, é como se prova que o funil descreve o
+        board: este arquivo lê `int_futebol_odds_devig` ao vivo e o funil lê a tabela
+        congelada, então um ciclo no meio move o de-vig debaixo das duas. Os números da
+        conferência e a explicação de cada divergência moram no `docs/TASKA_RESULTADOS.md`,
+        seção do #106, e não aqui.
+
+            DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile \
+              --select taskA_linha_de_base taskA_linha_de_base_funil
+            bq query --use_legacy_sql=false --format=csv \
+              < target/compiled/dbt_futebol/analyses/taskA_linha_de_base.sql
+            bq query --use_legacy_sql=false --format=csv \
+              < target/compiled/dbt_futebol/analyses/taskA_linha_de_base_funil.sql
+
+        ⚠️ As duas divergências são ESTRUTURAIS e esperadas: este arquivo inclui o EMPATE do
+        1X2 (que o funil tira da fila) e exclui a saída "12" da DC (que o `INNER JOIN` com as
+        premissas engole e o funil carimba `porta_saida_catalogada = FALSE`). Os dois blocos
+        têm o mesmo tamanho — um por fixture — então os TOTAIS coincidem por acidente
+        aritmético, com conjuntos diferentes. Comparar só o total esconde as duas.
+        Divergência ALÉM dessas duas é defeito do funil (ADR 0011 declarou quem perde).
+      • o ESBOÇO DO REGIME `novo` (`n1_casas4`, `n2_outlier`, `n3_faixa_odd`, `n4_nota40`,
+        `n5_consenso50`) e a nota normalizada por teto de mercado/lado, que a A3 e a A5 vão
+        querer. O funil não tem essa nota — ela não existe em produção.
+
+    O QUE NÃO SERVE MAIS: qualquer número daqui como *antes* de qualquer subtask da [A].
+    O *antes* está em `docs/TASKA_RESULTADOS.md`, seção do #106.
+    ─────────────────────────────────────────────────────────────────────────────────
+
+    LINHA DE BASE DO BOARD — entregável de aceite original da task [A].
 
     "Uma query mostrando, no board de hoje, quantas oportunidades cada porta remove,
     separadamente. Serve de linha de base."
@@ -36,7 +83,7 @@
 
     Rodar com:
       DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --select taskA_linha_de_base
-      bq query --use_legacy_sql=false < ../target/compiled/dbt_futebol/analyses/taskA_linha_de_base.sql
+      bq query --use_legacy_sql=false < target/compiled/dbt_futebol/analyses/taskA_linha_de_base.sql
 #}
 
 WITH fixtures AS (
