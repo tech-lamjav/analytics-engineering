@@ -8,6 +8,15 @@
 -- células não têm como significar coisa alguma. É a única das três invariantes que compara a
 -- medição contra algo de FORA dela.
 --
+-- ⚠️ ELA É VERDE POR CONGELAMENTO DESDE A ADR 0010, E ISSO É DELIBERADO. O cabeçalho abaixo
+-- previa que ela ficaria vermelha "na próxima remedição", quando as células fossem reconstruídas.
+-- Elas não serão: a ADR 0010 decidiu que a remedição roda em produção, e a #82 pôs a célula
+-- reconstruída em `taskf_teste2_ancora`, fora da acumulativa que esta guarda lê. Então ela segue
+-- comparando a `base` de 12–13/08 contra os números publicados da [0.1] — duas coisas paradas,
+-- que continuam batendo e continuarão. A aposentadoria dela (com o dataset de medição) é limpeza
+-- da task [B]; até lá, verde aqui significa "o registro congelado segue íntegro", e não "a
+-- medição de hoje reproduz a [0.1]".
+--
 -- ⚠️ E É `base` NO UNIVERSO `completo` (#58). Esta é a única das quatro guardas que NÃO se
 -- generaliza para os outros universos, e a razão não é economia: o lado esquerdo da comparação são
 -- os números PUBLICADOS da [0.1], que existem para um recorte só — os 169 jogos de 16/06 a 04/08.

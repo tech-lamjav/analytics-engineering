@@ -400,8 +400,9 @@ reading tied windows as movement. Guarded by `assert_premissas_sem_agregado_inst
 _Avoid_: "a média" unqualified, when the question is whether two builds can be compared
 
 **Escopo do PIT**:
-Which competitions a PIT aggregate counts. Today it is *da competição*: only fixtures of the
-same competition as the one being rated. It is **not one join** — `int_futebol_team_form_pit`
+Which competitions a PIT aggregate counts. Since #91 it is *todas*: every competition a team has
+played counts, whatever the one being rated. (Until then it was *da competição*, and production
+only serves the new default once the #91 deploy lands.) It is **not one join** — `int_futebol_team_form_pit`
 holds one, and each of the five premissa models holds its own local history besides (the `last5`
 of Gols, BTTS and Dupla Chance, the Handicap's `margin_stats`, the xG/ritmo spine). Nine
 predicates over six models; the axis reaches all of them or the cell comes out mixed. Table sheet
@@ -409,9 +410,28 @@ in ADR 0007.
 _Avoid_: "juntar os campeonatos" (silent about whether escopo, recorte, or both is changing)
 
 **Recorte do PIT**:
-Which stretch of past fixtures a PIT aggregate counts. Today it is season-to-date. A counting
-recorte ("the last N") crosses the season boundary by construction; a season recorte does not.
+Which stretch of past fixtures a PIT aggregate counts. Since #91 it is the last 10 fixtures;
+until then it was season-to-date. A counting recorte ("the last N") crosses the season boundary
+by construction; a season recorte does not — which is why the pair was flipped together, and not
+the escopo alone (ADR 0010).
 _Avoid_: janela — that word is taken by the odds collection window, and the two are unrelated
+
+**Âncora da remedição**:
+The célula `ambos` measured again under the code that #91 made the default, over the frozen
+universe, which the remediation's Teste 2 must reproduce. It replaces the reconciliation against
+the [0.1], which dies by construction once both the window and the pipeline change (ADR 0010). It
+lives outside the accumulative table, because a cell measured at another commit would break the
+same-execution invariant the 2×2 rests on.
+_Avoid_: baseline (taken by the Costura A), reconciliação (taken by the [0.1] one)
+
+**Meia-linha / linha de quarto**:
+A meia-linha (.5) is the only Handicap or Over/Under line that cannot push or half-push; a linha
+de quarto (.25/.75) is half a bet on each of its two neighbours, so part of the stake can come
+back. The 2-way de-vig normalises over two outcomes that are not exhaustive on anything but a
+meia-linha, so the published edge there describes a bet nobody can place. The test is
+`futebol_e_linha_meia()` and lives in one macro because it had four copies and three of them were
+wrong (#101, #113).
+_Avoid_: "linha inteira" for .25/.75 — a linha cheia is .0, and it pushes differently
 
 **Célula de medição**:
 One combination of escopo and recorte under which the whole premissa layer is rematerialised

@@ -602,6 +602,19 @@ sources:
           int_futebol_team_form_pit ou nos cinco modelos de premissas entre a medição dela e a
           remedição. O `git_sha` da linha é o que permite conferir isso depois.
 
+      - name: taskf_teste2_ancora_p1
+        description: >
+          A PRIMEIRA das duas passadas da #82: a célula `ambos` sob o código pós-#91 mas ANTES da
+          #113, ou seja, ainda com a linha de quarto entrando no universo como se fosse meia.
+          Existe para que o movimento entre a célula de 12–13/08 e a âncora seja decomponível em
+          DUAS causas em vez de uma só — 12–13/08 → P1 é o efeito de #78 + #71 + #91 sobre a
+          medição; P1 → âncora é o efeito do universo corrigido pela #113. Sem ela, o delta
+          misturaria quatro causas e um defeito se esconderia dentro dele.
+
+          ⚠️ Registro histórico, como as taskf_teste2_54/_55: não se escreve nela. Comparada por
+          analyses/taskf_remedicao.sql com `--vars '{taskf_remedicao_agora: taskf_teste2_ancora,
+          taskf_remedicao_anterior: taskf_teste2_ancora_p1}'`.
+
       - name: taskf_pit_por_celula_ancora
         description: >
           O carimbo do PIT da âncora — mesma relação com o taskf_pit_por_celula que a

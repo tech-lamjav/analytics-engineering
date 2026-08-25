@@ -93,9 +93,15 @@ WITH agora AS (
     WHERE universo = 'completo'
 ),
 
+{#- As cópias _54 e _55 são anteriores à coluna `universo` (#58) e contêm só o que hoje se chama
+    `completo`. Qualquer outra tabela do lado antigo tem os quatro universos, e comparar sem
+    recortar faria a junção abrir 4x — a chave não inclui universo, e o resultado seria um delta
+    inflado com cara de achado. -#}
+{%- set anterior_tem_universo = anterior not in ['taskf_teste2_54', 'taskf_teste2_55'] -%}
+
 antes AS (
     SELECT * FROM {{ source('futebol_taskF', anterior) }}
-    {%- if anterior == 'taskf_teste2' %}
+    {%- if anterior_tem_universo %}
     WHERE universo = 'completo'
     {%- endif %}
 ),
