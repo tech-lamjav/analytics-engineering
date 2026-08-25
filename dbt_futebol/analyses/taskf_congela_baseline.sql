@@ -7,12 +7,22 @@
     o lado esquerdo da igualdade que transforma essa promessa em fato verificável — o direito é
     tests/assert_taskf_pit_default_igual_baseline.sql.
 
-    ⚠️ RODA UMA VEZ SÓ, e ANTES de a var entrar no modelo. Re-congelar depois da var apaga a
-    guarda: o baseline passaria a sair do mesmo código que ele deveria auditar, e a Costura A
-    ficaria verde por construção. Se um dia for preciso re-congelar (mudança legítima de
-    comportamento do modelo), isso é decisão de quem revisa, não passo de rotina.
+    ⚠️ NÃO É PASSO DE ROTINA. Re-congelar sem uma mudança de comportamento que o justifique apaga
+    a guarda: o baseline passaria a sair do mesmo código que ele deveria auditar, e a Costura A
+    ficaria verde por construção. Re-congelar é decisão de quem revisa, no mesmo commit da
+    mudança que a justifica — nunca um passo executado porque a guarda ficou vermelha.
 
-    JÁ FOI RODADO: 2026-08-12 12:22 UTC, commit a3b954e, 21.054 linhas e 37 partições.
+    RODADO DUAS VEZES, e a segunda mudou o sentido da guarda:
+
+      2026-08-12 12:22 UTC, commit a3b954e, 21.054 linhas, 37 partições — do `futebol_taskF`,
+      célula `base`. Congelava "o default preserva o comportamento de antes das vars".
+
+      2026-08-25 17:59 UTC, commit 887a1f9, 21.078 linhas, 37 partições — **de PRODUÇÃO**, passo
+      de deploy da #91. A #91 (ADR 0010) virou os defaults para `todas` + `ultimos_10` e produção
+      passou a USAR o default: a premissa antiga morreu por decisão no mesmo commit em que deixou
+      de ser desejável. A guarda deixou de ser de vazamento-de-andaime e virou guarda de DERIVA
+      sobre o caminho que o board de fato serve. O baseline anterior ficou preservado nas cópias
+      `baseline_*_pre91` do mesmo dataset.
 
     Três tabelas, todas FORA do dbt de propósito — nenhuma é modelo, então nenhum `dbt run` as
     reconstrói:
@@ -27,18 +37,30 @@
                                           idênticas para sempre.
       baseline_pit_meta                   quando, de qual commit, quantas linhas.
 
-    Como rodar (do dbt_futebol/). O passo 1 é o que povoa o dataset de medição: com --target
-    taskF todo `ref()` resolve para futebol_taskF, então a ancestria (staging + fact_fixtures +
-    fact_standings_snapshot) tem de existir lá antes — o `+` no seletor é o que a constrói, lendo
-    as sources cruas, que são fixas no dataset de origem e não seguem o target:
+    ⚠️ COMO RODAR: `--target prod`, NÃO `--target taskF`. As três tabelas de baseline moram no
+    `futebol_taskF` porque são artefato da medição (os nomes acima são literais e não seguem o
+    target), mas o que elas congelam tem de sair de PRODUÇÃO. Congelar a partir do `futebol_taskF`
+    carimbaria o baseline de produção com os fatos parados do dataset de medição — pior que não
+    recongelar, e foi por isso que a receita anterior (`--target taskF`, com um `dbt run
+    --select +int_futebol_team_form_pit` antes para povoar a ancestria) saiu daqui.
 
-      DBT_PROFILES_DIR=.. ../.venv/bin/dbt run --target taskF \
-        --select +int_futebol_team_form_pit
+    Não há `dbt run` nenhum neste caminho: o `int_futebol_team_form_pit` de produção é `table` e
+    já está materializado pelo agendado. O que se congela é a saída que o board serve, não uma
+    reconstrução local dela. Confira antes que ela é pós-deploy da mudança que justifica o
+    recongelamento (`futebol.__TABLES__.last_modified_time` contra o carimbo do Cloud Run job).
 
-      DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
-        --select taskf_congela_baseline --vars '{freeze_git_sha: '"$(git rev-parse --short HEAD)"'}'
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target prod \
+        --select taskf_congela_baseline --vars '{freeze_git_sha: <sha da imagem em produção>}'
       bq query --use_legacy_sql=false --project_id=smartbetting-dados \
         < target/compiled/dbt_futebol/analyses/taskf_congela_baseline.sql
+
+    O `freeze_git_sha` é o `PROCEDENCIA_SHA` do job — o commit que PRODUZIU a tabela —, nunca o
+    `git rev-parse HEAD` local: de um worktree ele carimba um commit que nem está no master.
+
+    Depois, a verificação que fecha o passo:
+
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt test --target prod \
+        --select assert_taskf_pit_default_igual_baseline
 
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 */
