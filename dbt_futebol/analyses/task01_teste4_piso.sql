@@ -147,6 +147,11 @@ composicao AS (
         CAST(NULL AS FLOAT64)                               AS gap_alta_baixa,
         CAST(NULL AS STRING)                                AS faixa,
         CAST(NULL AS FLOAT64)                               AS roi_faixa,
+{#- ⚠️ `jogos_medios` MUDA DE SENTIDO CONFORME A CÉLULA desde a #91 (ADR 0010). O `min_jogos`
+            do task01_base() é a contagem DISPONÍVEL, então sob recorte `ultimos_10` — o default — esta
+            média é sem teto e sobe; sob `temporada` é a mesma de sempre. Ele é diagnóstico de amostra,
+            não resultado: nenhuma conclusão da [0.1] se apoia nele, e comparar este número entre
+            células é comparar duas definições. Ver ADR 0010, seção 5. -#}
         ROUND(AVG(v.min_jogos), 1)                          AS jogos_medios
     FROM (SELECT *, IF(ganhou, best_odd, 0) - 1 AS lucro_ FROM validas) AS v
     CROSS JOIN (SELECT DISTINCT piso FROM pesos) AS p

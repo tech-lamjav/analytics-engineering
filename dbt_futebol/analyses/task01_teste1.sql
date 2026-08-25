@@ -91,6 +91,11 @@ agregado AS (
     SELECT
         l.market_id,
         l.premissa,
+{#- ⚠️ `jogos_medios` MUDA DE SENTIDO CONFORME A CÉLULA desde a #91 (ADR 0010). O `min_jogos`
+            do task01_base() é a contagem DISPONÍVEL, então sob recorte `ultimos_10` — o default — esta
+            média é sem teto e sobe; sob `temporada` é a mesma de sempre. Ele é diagnóstico de amostra,
+            não resultado: nenhuma conclusão da [0.1] se apoia nele, e comparar este número entre
+            células é comparar duas definições. Ver ADR 0010, seção 5. -#}
         AVG(IF(l.acesa, l.min_jogos, NULL))                     AS jogos_medios,
         AVG(IF(l.acesa, IF(l.min_jogos < 5, 1.0, 0.0), NULL))   AS frac_curta
         {%- for piso in [0, 5, 10] %},

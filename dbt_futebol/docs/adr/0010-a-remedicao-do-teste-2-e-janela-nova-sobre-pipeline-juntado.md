@@ -174,19 +174,42 @@ worktree**.
 
 ⚠️ **Sob `ultimos_10`, o piso de amostra passa a cortar a contagem errada se ninguém mexer.** O
 `played_total` satura no teto do recorte, e a regra da [F] é que o piso corte o **disponível** (ADR
-0007). O `pit` do `macros/task01_base.sql:320` lê `played_total`; com o default virado, ele precisa
+0007). O `pit` do `macros/task01_base.sql` lê `played_total`; com o default virado, ele precisa
 ler `played_total_disponivel` — que o modelo passa a emitir, porque hoje ele só é emitido fora do
-default. ⚠️ **CORREÇÃO (review do PR #111).** A versão original deste parágrafo afirmava que a troca é
-inócua no piso 5 mas deixa de ser no **piso 10**, onde "piso 10" passaria a querer dizer
-"exatamente 10" em vez de "pelo menos 10". **Isso é falso.** A identidade
-`LEAST(d, 10) >= p ⟺ d >= p` vale para **todo** `p <= 10`, o piso 10 inclusive: com `d = 15`,
-`LEAST` dá 10 e `10 >= 10` passa. Como `taskf_pisos()` é `[0, 3, 5, 10]`, a troca é **no-op de
-filtragem nos quatro pisos**. Ela continua valendo a pena, e a decisão não muda — mas pelo motivo
-certo: o piso passa a **significar** o que a [F] diz que ele significa, e o defeito deixa de estar
-armado para o dia em que alguém puser um piso acima de 10, onde o `played_total` saturado
-empataria todo mundo e o piso pararia de filtrar. O que cai é a urgência, não a decisão.
-O raio disso é a medição e só ela: nenhum modelo de `marts/` lê `min_jogos` nem
+default. O raio disso é a medição e só ela: nenhum modelo de `marts/` lê `min_jogos` nem
 `int_futebol_team_form_pit`.
+
+⚠️ **CORREÇÃO DA ARITMÉTICA (review do PR #111, implementada em `bd10cd5`).** A versão original do
+parágrafo acima afirmava que a troca é inócua no piso 5 mas deixa de ser no **piso 10**, onde "piso
+10" passaria a querer dizer "exatamente 10" em vez de "pelo menos 10". **Isso é falso.** A
+identidade `LEAST(d, 10) >= p ⟺ d >= p` vale para **todo** `p <= 10`, o piso 10 inclusive: com
+`d = 15`, `LEAST` dá 10 e `10 >= 10` passa. Como `taskf_pisos()` é `[0, 3, 5, 10]`, a troca é
+**no-op de filtragem nos quatro pisos**. A decisão não muda — o piso passa a **significar** o que a
+[F] diz que ele significa, e o defeito deixa de estar armado para o dia em que alguém puser um piso
+acima de 10, onde o `played_total` saturado empataria todo mundo e o piso pararia de filtrar. O que
+cai é a urgência, não o mérito.
+
+⚠️ **E O RAIO NÃO É SÓ FILTRO: TRÊS ANÁLISES REPORTAM `min_jogos` COMO VALOR.** O parágrafo do raio
+acima está certo sobre `marts/`, mas não distingue quem usa `min_jogos` como **corte** de quem o usa
+como **número publicado**. A esmagadora maioria dos consumidores filtra (`>= piso`), e para esses a
+identidade acima garante que nada muda. Estes três **reportam**:
+
+| onde | o quê |
+|---|---|
+| `analyses/task01_teste1.sql` | `AVG(min_jogos) AS jogos_medios` |
+| `analyses/task01_teste2.sql` | `AVG(min_jogos) AS jogos_medios` |
+| `analyses/task01_teste4_piso.sql` | `ROUND(AVG(min_jogos), 1) AS jogos_medios` |
+
+Nas células de recorte `ultimos_10` — o default desde a #91 — esse `jogos_medios` passa a ser a
+média **sem teto** em vez da saturada em 10, e portanto **sobe**. Nas células `temporada` nada muda,
+porque ali as duas contagens são a mesma coluna.
+
+**Decidido: registrar e seguir, não preservar.** O `jogos_medios` é diagnóstico de amostra, não
+resultado — nenhuma conclusão da [0.1] se apoia nele, e as três análises já mudam de valor sob o
+novo default por causa do escopo e do recorte, que é uma mudança muito maior que esta. Preservá-lo
+como média da usada custaria um CTE `pit_usado` em cada uma das três só para manter comparável um
+número que já não é comparável. Quem for reler os `jogos_medios` da [0.1] tem de reler sob a célula
+em que foram medidos, e é isso que este parágrafo existe para dizer.
 
 ⚠️ Virar o default mata a premissa da Costura A (`tests/assert_taskf_pit_default_igual_baseline`),
 que existe para provar que produção nunca usa a var. O cabeçalho dela já nomeia a saída honesta —
