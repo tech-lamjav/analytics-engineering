@@ -17,12 +17,20 @@
 -- analyses/taskf_congela_baseline.sql) a partir da célula `ambos` com AET/PEN no histórico (#71),
 -- e a guarda segue comparando linha a linha contra ele.
 --
--- ⚠️ E ISSO É FUTURO, NÃO PASSADO — o recongelamento é PASSO DE DEPLOY da #91, a partir de
--- PRODUÇÃO, e em 25/08 ele ainda não tinha acontecido: `futebol_taskF.baseline_pit_meta` diz
--- 12/08 12:22:46, commit `a3b954e`, que é a célula `base`. Enquanto ele não rodar, esta guarda
--- fica VERMELHA em qualquer build do PIT no default, e é por isso que a receita da âncora da #82
--- a exclui por escrito. Recongelar a partir do `futebol_taskF` seria pior que não recongelar:
--- carimbaria o baseline de produção com os fatos de 12/08 do dataset de medição. Deixou de ser guarda de
+-- ✅ O RECONGELAMENTO ACONTECEU: 2026-08-25 17:59 UTC, de PRODUÇÃO, carimbado com `887a1f9` —
+-- o `PROCEDENCIA_SHA` da imagem que produziu a tabela, que é o merge da #91/#71. 21.078 linhas
+-- e 37 partições, contra 21.054 do congelamento de 12/08 (commit `a3b954e`, célula `base`), que
+-- ficou preservado nas cópias `baseline_*_pre91`. Rodada a guarda logo depois, `--target prod`:
+-- verde.
+--
+-- ⚠️ Ele tinha de sair de PRODUÇÃO, não do `futebol_taskF`: congelar do dataset de medição
+-- carimbaria o baseline de produção com os fatos parados de 12/08, que é pior que não
+-- recongelar. A receita do `taskf_congela_baseline.sql` dizia `--target taskF` e foi corrigida
+-- no mesmo commit — ela é anterior a esta virada de sentido e mandava fazer exatamente o que
+-- este parágrafo proíbe.
+--
+-- Entre a #91 e esse recongelamento a guarda ficou VERMELHA em qualquer build do PIT no default,
+-- e é por isso que a receita da âncora da #82 a exclui por escrito. Deixou de ser guarda de
 -- vazamento-de-andaime e virou guarda de DERIVA: falha = a saída de produção mudou sem que o
 -- insumo tenha mudado, que é o mesmo modo de falha que ela sempre pegou, só que agora sobre o
 -- caminho que o board de fato serve.

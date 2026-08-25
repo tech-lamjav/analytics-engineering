@@ -3166,6 +3166,13 @@ DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_remed
   --vars '{taskf_remedicao_agora: taskf_teste2_ancora, taskf_remedicao_anterior: taskf_teste2_ancora_p1}'
 ```
 
-⚠️ A Costura A entra na exclusão porque o baseline dela ainda é o de 12/08 (célula `base`, commit
-`a3b954e` — `baseline_pit_meta`). O recongelamento é passo do **deploy** da #91 e sai de PRODUÇÃO;
-recongelar a partir daqui carimbaria o baseline com os fatos de 12/08 do dataset de medição.
+⚠️ A Costura A entrou na exclusão porque, no dia da âncora, o baseline dela ainda era o de 12/08
+(célula `base`, commit `a3b954e` — `baseline_pit_meta`), e recongelar a partir **daqui** carimbaria
+o baseline com os fatos de 12/08 do dataset de medição.
+
+✅ **O recongelamento aconteceu depois, no mesmo dia**: 25/08 17:59 UTC, a partir de PRODUÇÃO,
+carimbado `887a1f9` (o `PROCEDENCIA_SHA` da imagem que produziu a tabela), 21.078 linhas e 37
+partições; a guarda passou verde em `--target prod` logo em seguida, e o baseline de 12/08 ficou
+nas cópias `baseline_*_pre91`. **A exclusão continua necessária na medição** — a guarda é
+default-only por definição, então qualquer célula que não seja o default a deixa vermelha por
+desenho —, mas o motivo mudou: já não é "o baseline está velho", é "esta célula não é o default".
