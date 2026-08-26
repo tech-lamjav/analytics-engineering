@@ -17,6 +17,11 @@
         F        catálogo sem `linha_subindo`/`linha_descendo` (decisão D1 da spec, que
                  tira da nota as duas premissas que leem movimento de odd). Pesa 0 nelas,
                  o que derruba o teto do Gols de 56/52 p/ 50/46.
+                 ⚠ Desde a #103 (ADR 0012) a fonte F é o que PRODUÇÃO faz — as duas premissas
+                 foram removidas do modelo. Esta análise não roda mais como está: o catálogo
+                 do `task01_base` já não as tem e a leitura delas falha no BigQuery. Ela fica
+                 como registro da medição que fundamentou a decisão, e não é reescrita pelo
+                 mesmo motivo da `taskA_linha_de_base.sql`.
         E e F não são ajustadas em metade nenhuma — o catálogo é fixo. Por isso saem
         avaliadas nas duas metades, e é a 2ª que compara com a C.
 

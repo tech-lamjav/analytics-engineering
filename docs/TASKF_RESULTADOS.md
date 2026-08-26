@@ -3176,3 +3176,115 @@ partições; a guarda passou verde em `--target prod` logo em seguida, e o basel
 nas cópias `baseline_*_pre91`. **A exclusão continua necessária na medição** — a guarda é
 default-only por definição, então qualquer célula que não seja o default a deixa vermelha por
 desenho —, mas o motivo mudou: já não é "o baseline está velho", é "esta célula não é o default".
+
+---
+
+## #103 — A âncora re-medida, porque a A1 a invalidou
+
+⚠️ **ESTA SEÇÃO TAMBÉM NÃO É PARTE DO 2×2.** Ela substitui a âncora da seção "#82" acima; o 2×2
+das quatro células continua sendo o de 12–13/08, commit `7fdd1a3`, intocado.
+
+A A1 (issue #103, ADR 0012) removeu `linha_subindo` e `linha_descendo` do
+`int_futebol_premissas_ou` e as tirou do catálogo do `macros/task01_base.sql`. Isso é literalmente
+a lista de *"o que invalida esta âncora"* da seção #82 — um dos cinco modelos de premissas **e** o
+`task01_base`. Pela regra que aquela seção deixou escrita (*quem mexer neles re-roda a âncora no
+mesmo PR*), a âncora foi remedida junto, e a versão de `6f9dcc6` ficou preservada na cópia
+`futebol_taskF.taskf_teste2_ancora_pre_a1` — precedente de nome: as `baseline_*_pre91` da #91.
+
+### Carimbo de execução
+
+| | Execução | Commit | Corte do universo | Linhas da tabela |
+|---|---|---|---|---|
+| **âncora anterior** | 2026-08-25 14:24:22 UTC | `6f9dcc6` | `kickoff` em [16/06, 04/08 12:00 UTC) — 169 jogos, 5.605 linhas | 240 (39 premissas) |
+| **âncora vigente** | 2026-08-26 15:05:09 UTC | `1b9c757` | os **mesmos** 169 jogos, **5.605** linhas | **224** (37 premissas) |
+
+`odds_loaded_at` = **12/08 13:24:15** nas duas — o mesmo das quatro células de 12–13/08. A fase 1
+não foi re-rodada, pelo mesmo motivo da #82.
+
+⚠️ `1b9c757` é o commit do PR que carrega a **mudança de comportamento** (os modelos, os macros e
+as guardas). Os commits seguintes do mesmo PR são documentação e a declaração da nova source — não
+tocam nada que a medição leia. É a mesma convenção da #82.
+
+### O delta é exatamente o previsto, e nada além dele
+
+`analyses/taskf_remedicao.sql` com
+`--vars '{taskf_remedicao_agora: taskf_teste2_ancora, taskf_remedicao_anterior: taskf_teste2_ancora_pre_a1}'`:
+
+| | |
+|---|---|
+| linhas comparadas | 60 |
+| **sem contraparte** | **4** — `Gols · linha_subindo` e `Gols · linha_descendo`, nos dois benchmarks (`sharp` e `consenso`). E **só** elas |
+| campos comparados | 1.680 |
+| **campos divergentes** | **3** (0,18%), todos de **0,1 pp** |
+
+Os três divergentes:
+
+| mercado | premissa | benchmark | campo | antes → agora |
+|---|---|---|---|---|
+| 1X2 | `forca_mismatch` | sharp | `jogos_medios_disp` | 70,3 → 70,4 |
+| Gols | `defesas_vazaveis` | sharp | `aconteceu_p5` | 58,8 → 58,7 |
+| Handicap | `adversario_fragil_fora` | consenso | `aconteceu_p10` | 8,8 → 8,7 |
+
+Os três estão dentro da régua de **0,25 pp** que a #92 fixou, e nenhum deles tem mecanismo pela
+A1: a remoção das duas premissas de Gols não toca `forca_mismatch`, nem o `aconteceu` de
+`defesas_vazaveis`, nem o do Handicap. É o ruído de recomputação que a #55 e a #92 já mediram — a
+mesma classe de 0,1 pp, agora sem a componente de `deriva_de_odds`, que deixou de existir junto
+com as duas premissas.
+
+⚠️ **A leitura que importa é essa**: fora as 4 linhas que sumiram de propósito, a âncora
+**reproduziu a si mesma**. A A1 não moveu a medição — ela encolheu o catálogo.
+
+### O que invalida esta âncora
+
+A mesma lista da seção #82, sem alteração: qualquer mudança de COMPORTAMENTO em
+`macros/task01_base.sql`, no de-vig, no `int_futebol_team_form_pit` ou nos cinco modelos de
+premissas entre esta medição e a remedição. Continua sem guarda automática — o que existe é o
+`git_sha` gravado em cada linha (`1b9c757`) e esta lista.
+
+⚠️ E fica registrado o precedente: **a regra da #82 funcionou**. Ela foi escrita num comentário de
+issue em 25/08 e cobrada 24 horas depois, pela primeira entrega que a acionou. O custo real de
+re-rodar foi os três comandos da receita.
+
+### Reprodução
+
+Idêntica à da seção #82, trocando o commit. E o backup, que é o passo que a receita da #82 não
+tinha:
+
+```bash
+# ANTES de qualquer coisa: preservar a âncora que vai ser substituída
+bq --headless cp -f smartbetting-dados:futebol_taskF.taskf_teste2_ancora \
+                    smartbetting-dados:futebol_taskF.taskf_teste2_ancora_pre_a1
+
+# do dbt_futebol/, com o commit da mudança de comportamento em mãos
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+  --select int_futebol_team_form_pit int_futebol_premissas_1x2 int_futebol_premissas_ou \
+           int_futebol_premissas_ah int_futebol_premissas_btts int_futebol_premissas_dc \
+  --exclude assert_taskf_pit_default_igual_baseline
+
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF \
+  --select taskf_pit_por_celula taskf_teste2 \
+  --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', taskf_destino: ancora}'
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_pit_por_celula.sql
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_teste2.sql
+
+# o delta
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_remedicao \
+  --vars '{taskf_remedicao_agora: taskf_teste2_ancora, taskf_remedicao_anterior: taskf_teste2_ancora_pre_a1}'
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=200 \
+  < target/compiled/dbt_futebol/analyses/taskf_remedicao.sql
+```
+
+⚠️ `bq --headless` e não `bq`: sem a flag, a primeira invocação da sessão pode ficar pendurada
+num prompt interativo e o comando trava sem dizer o porquê — aconteceu nesta execução, e o
+sintoma é o `bq mk` que nunca volta. É primo do gotcha já registrado sobre passar SQL como
+argumento em vez de `< arquivo`.
+
+### O que esta re-medição NÃO faz
+
+Ela **não toca** a `taskf_teste2` acumulativa (as quatro células de 12–13/08), nem a
+`taskf_teste2_ancora_p1`, nem as `taskf_teste2_54/_55`. Todas continuam com as 39 premissas — são
+registro do que foi medido na época, e as 39 linhas publicadas neste documento continuam
+publicadas. O entregável da [F] rodado **daqui em diante** tem 37 linhas, e o
+`macros/taskf_fontes_de_historico.sql` já diz isso de si mesmo.

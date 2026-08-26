@@ -375,10 +375,16 @@ models:
     description: >
       S2 — premissas de contexto do mercado Gols Over/Under (market_id 5). 2 linhas por
       (fixture, line_value): Over e Under, por linha L (canônicas 1.5/2.5/3.5 + linhas das
-      odds). 7 premissas Over (§12.2, Σ56) + 6 Under (espelhadas, Σ52), com clamp ao teto 55
-      (só o Over encosta); penalidade linha_extrema (L<=0,5 ou L>=4,5). Movimento de linha =
-      consenso do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de todas as casas, não de
-      odds cruas), distinto da corroboração sharp da Pinnacle. last5 (historico_over/under) na
+      odds). 6 premissas Over (Σ50) + 5 Under (espelhadas, Σ46), SEM clamp; penalidade
+      linha_extrema (L<=0,5 ou L>=4,5).
+
+      ⚠️ O PREÇO SAIU DA NOTA (#103, ADR 0012): `linha_subindo` e `linha_descendo` (6 pontos
+      cada) foram REMOVIDAS — liam movimento de odd, e eram as duas premissas que faziam a nota
+      do Gols não ser reproduzível entre builds. O clamp em 55 caiu junto (existia para
+      aproximar dois lados de teto diferente, que é o que a A6 resolve, e o Under nunca o
+      alcançava), e os tetos foram de 56/52 para 50/46. Com isso este modelo deixa de ler PREÇO:
+      `fact_odds_snapshot` continua sendo lido, mas só para decidir QUAIS LINHAS existem.
+      last5 (historico_over/under) na
       MESMA season/competição anteriores ao jogo. evidencias[]/avisos[] = bullets pro front.
       ⚠️ MEDIÇÃO (task [F], ADR 0007, #52 e #54): o spine de xG/ritmo e o last5 de gols são
       fontes de histórico competição-scoped PRÓPRIAS deste modelo e aceitam as DUAS vars da

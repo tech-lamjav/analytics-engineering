@@ -32,6 +32,14 @@
       idêntico entre `base` e `escopo` no piso 0, e quem está declarado `sim` tem de se mexer. É
       o que pega declaração ERRADA — o caso que nenhuma checagem de nome alcança.
 
+    ⚠️ DUAS LINHAS SAÍRAM NA #103 (ADR 0012). `Gols · linha_subindo` e `Gols · linha_descendo`
+    eram as duas únicas famílias das 39 cujo insumo não era jogo anterior — elas liam PREÇO —, e
+    a A1 as removeu do `int_futebol_premissas_ou`. A validação de compilação acima é o que cobrou
+    esta edição: sem ela o `dbt parse` sai com código 2, que é a defesa funcionando.
+
+    Daqui em diante o entregável tem 37 linhas, não 39. As 39 PUBLICADAS continuam publicadas —
+    docs/TASKF_RESULTADOS.md é registro do que foi medido em 12–13/08, e nada aqui o reescreve.
+
     ⚠️ CHAVE É (mercado, premissa), NUNCA premissa sozinha. `defesas_vazaveis` existe no BTTS e
     no Gols, com vereditos opostos na [0.1], e chavear por nome ou funde as duas ou multiplica a
     tabela — as 39 linhas viram 38 ou 40 sem ninguém notar.
@@ -256,12 +264,6 @@
          'predicado': 'premissas_ou.last5',
          'escopo_hoje': 'competicao_e_temporada', 'juntavel': 'sim',
          'impedimento': '', 'ressalva': ''},
-        {'mercado': 'Gols', 'premissa': 'linha_subindo',
-         'fonte': 'fact_odds_snapshot · consenso das casas de t24h para t15m',
-         'predicado': 'nenhum',
-         'escopo_hoje': 'sem_historico', 'juntavel': 'nao_se_aplica',
-         'impedimento': '',
-         'ressalva': 'lê preço, não passado: é a única família das 39 cujo insumo não é jogo anterior'},
         {'mercado': 'Gols', 'premissa': 'defesas_firmes',
          'fonte': 'int_futebol_team_form_pit · gols sofridos por venue dos dois times',
          'predicado': 'team_form_pit',
@@ -287,13 +289,7 @@
          'fonte': 'int_futebol_premissas_ou · total de gols dos últimos 5 jogos',
          'predicado': 'premissas_ou.last5',
          'escopo_hoje': 'competicao_e_temporada', 'juntavel': 'sim',
-         'impedimento': '', 'ressalva': ''},
-        {'mercado': 'Gols', 'premissa': 'linha_descendo',
-         'fonte': 'fact_odds_snapshot · consenso das casas de t24h para t15m',
-         'predicado': 'nenhum',
-         'escopo_hoje': 'sem_historico', 'juntavel': 'nao_se_aplica',
-         'impedimento': '',
-         'ressalva': 'lê preço, não passado: é a única família das 39 cujo insumo não é jogo anterior'}
+         'impedimento': '', 'ressalva': ''}
     ] -%}
 
     {#- ── A validação, nos DOIS sentidos ──────────────────────────────────────────────

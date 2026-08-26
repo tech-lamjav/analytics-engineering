@@ -48,14 +48,25 @@
 #}
 
 
-{#- Catálogo das 39 premissas por mercado. É também a FONTE ÚNICA do escopo de mercado
+{#- Catálogo das premissas por mercado — 39 até a #103, 37 depois dela (ver o bloco do Gols). É também a FONTE ÚNICA do escopo de mercado
     do Motor — o filtro `market_id IN (...)` abaixo é derivado daqui, não digitado de
     novo.
 
     NÃO derivar de "todas as colunas BOOL do modelo": os modelos carregam flags que não
     são premissa (`pick_empate`, `desfalque_proprio`, `is_favorito`, `is_azarao`,
     `handicap_alto`, `linha_extrema`) e a contagem infla. Esta lista é a que produziu os
-    números publicados. -#}
+    números publicados.
+
+    ⚠️ O GOLS PERDEU DUAS desde a #103 (ADR 0012): `linha_subindo` e `linha_descendo` saíram
+    do `int_futebol_premissas_ou` porque liam PREÇO, e saíram daqui junto. Catálogo que nomeia
+    coluna inexistente não quebra a compilação do dbt — quebra a QUERY, no BigQuery, e só
+    quando alguém roda uma análise que ninguém agenda. Foi assim entre a #37 e a #55, e está
+    registrado no ⚠️ de 2026-08-05 mais acima.
+
+    Consequência declarada: as 39 premissas viram 37, e toda medição rodada a partir daqui
+    mede o catálogo pós-A1. É por isso que a âncora da remedição (#82) foi re-rodada no MESMO
+    PR da A1 — ver as seções "#82" e "#103" do docs/TASKF_RESULTADOS.md. As tabelas JÁ
+    MATERIALIZADAS de 12–13/08 não são tocadas por esta edição e continuam com as 39. -#}
 {% macro task01_markets() %}
     {{ return({
         1: {
@@ -72,9 +83,9 @@
             'nome': 'Gols',
             'has_line': true,
             'cols': ['ataque_combinado', 'defesas_vazaveis', 'xg_combinado_alto', 'ritmo_alto',
-                     'ambos_vazam', 'historico_over', 'linha_subindo', 'defesas_firmes',
+                     'ambos_vazam', 'historico_over', 'defesas_firmes',
                      'clean_sheets_altos', 'xg_baixo_combinado', 'ataques_fracos',
-                     'historico_under', 'linha_descendo']
+                     'historico_under']
         },
         4: {
             'model': 'int_futebol_premissas_ah',

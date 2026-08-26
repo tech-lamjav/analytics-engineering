@@ -458,3 +458,94 @@ unit_tests:
       rows:
         - {fixture_id: 30, janela: 't15m', origem: 'corrente'}
         - {fixture_id: 32, janela: 't15m', origem: 'corrente'}
+
+  # ---------------------------------------------------------------------------
+  # 6. A NOTA DE CONTEXTO NÃO TEM PREÇO DENTRO (#103, ADR 0012).
+  #
+  # É o teste que a guarda de reconstrução não alcança: ela prova que a coluna
+  # gravada bate com a recomposição, mas as duas leem a MESMA aritmética — se o
+  # preço entrasse na composição, entraria nos dois lados e as duas fechariam.
+  # Só linha construída separa "a nota ignora o preço" de "a nota e a sua cópia
+  # concordam sobre o preço".
+  #
+  # O par 1/2 é o coração: DOIS candidatos com o MESMO contexto (pts_premissas 20,
+  # nenhuma penalidade de contexto) e preços opostos — um com 30 de valor, 15 de
+  # corroboração e 30 de penalidade de odd; o outro com zero dos três. O `score`
+  # deles difere em 15 pontos, e a `nota_contexto` tem de ser IDÊNTICA.
+  # ---------------------------------------------------------------------------
+  - name: funil_nota_de_contexto_ignora_o_preco
+    model: fact_value_funnel
+    overrides:
+      macros:
+        is_incremental: false
+    description: >
+      Cinco candidatos: o par preço-rico/preço-zero com o mesmo contexto, o empate do
+      1X2 (que prova o piso em zero — 0 − 10 é 0, nunca −10), a "12" da Dupla Chance
+      (sem premissa a avaliar: NULL, e não zero, pela ADR 0003) e uma linha de Gols
+      com penalidade de contexto (12 − 10 = 2).
+    given:
+      - input: ref('int_futebol_odds_devig')
+        rows:
+          # -- 1: PREÇO RICO. Valor máximo, corroboração cheia e a penalidade de odd
+          # mais cara do catálogo (outlier, −30). score = 30+20+15−30 = 35.
+          - {fixture_id: 1, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.40, pts_valor: 30, best_odd: 2.80, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 30, pen_odd_outlier: true, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 2: PREÇO ZERO, mesmo contexto do 1. score = 0+20+0−0 = 20.
+          - {fixture_id: 2, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.00, pts_valor: 0, best_odd: 2.00, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 3: O EMPATE. Nenhuma premissa dispara (0 pontos) e o `pick_empate` cobra
+          # −10: o piso da nota de contexto é 0, nunca −10.
+          - {fixture_id: 3, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Draw', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 3.50, best_book: 'Bet365', avg_odd: 3.30, n_casas: 5, prob_justa_fechamento: 0.30, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 4: A "12" da Dupla Chance. Não há premissa a avaliar -> `pts_premissas`
+          # NULL -> nota de contexto NULL. Zero seria "foi avaliada e tirou zero".
+          - {fixture_id: 4, competition: 'brasileirao', season: 2026, market_id: 12, outcome_side: '12', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 1.50, best_book: 'Bet365', avg_odd: 1.45, n_casas: 5, prob_justa_fechamento: 0.60, pin_n_outcomes: , n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 5: Gols numa linha extrema. 12 de premissa − 10 de `linha_extrema` = 2.
+          - {fixture_id: 5, competition: 'brasileirao', season: 2026, market_id: 5, outcome_side: 'Over', line_value: 0.5, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 1.20, best_book: 'Bet365', avg_odd: 1.18, n_casas: 5, prob_justa_fechamento: 0.85, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT 1 AS fixture_id, 'Home' AS outcome, 20 AS pts_premissas,
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
+          UNION ALL SELECT 2, 'Home', 20, 0, 0
+          -- o empate: zero de premissa e os −10 do `pick_empate`.
+          UNION ALL SELECT 3, 'Draw', 0, 0, 10
+
+      - input: ref('int_futebol_premissas_ou')
+        format: sql
+        rows: |
+          SELECT 5 AS fixture_id, 'Over' AS outcome, 0.5 AS line_value,
+                 12 AS pts_premissas, 0 AS premissas_sem_dado, 10 AS penalidades_ou_pts
+
+      # A "12" (fixture 4) NÃO tem linha aqui, de propósito.
+      - input: ref('int_futebol_premissas_dc')
+        rows: []
+      - input: ref('int_futebol_premissas_ah')
+        rows: []
+      - input: ref('int_futebol_premissas_btts')
+        rows: []
+
+      # Só o fixture 1 tem corroboração, e cheia (7 + 8 = 15). É metade do par: o
+      # gêmeo dele (2) não tem nenhuma, e a nota de contexto dos dois é a mesma.
+      - input: ref('int_futebol_corroboracao')
+        format: sql
+        rows: |
+          SELECT 1 AS fixture_id, 1 AS market_id, 'Home' AS outcome_side,
+                 CAST(NULL AS FLOAT64) AS line_value, 15 AS pts_corroboracao,
+                 TRUE AS modelo_api_concorda, TRUE AS linha_sharp_confirma
+
+      - input: ref('fact_fixtures')
+        format: sql
+        rows: |
+          SELECT id AS fixture_id, TIMESTAMP '2099-01-01 00:00:00+00' AS kickoff_utc
+          FROM UNNEST([1,2,3,4,5]) AS id
+
+    expect:
+      rows:
+        - {fixture_id: 1, market: 'match_winner',     outcome: 'Home', score: 35, nota_contexto: 20}
+        - {fixture_id: 2, market: 'match_winner',     outcome: 'Home', score: 20, nota_contexto: 20}
+        - {fixture_id: 3, market: 'match_winner',     outcome: 'Draw', score: 20, nota_contexto: 0}
+        - {fixture_id: 4, market: 'double_chance',    outcome: '12',   score: ,   nota_contexto: }
+        - {fixture_id: 5, market: 'goals_over_under', outcome: 'Over', score: 32, nota_contexto: 2}

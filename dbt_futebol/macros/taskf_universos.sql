@@ -52,9 +52,11 @@
     ⚠️ E O ESTENDIDO NÃO É COMPARÁVEL COM O CONGELADO COMO SE FOSSE OUTRA CÉLULA. Ele contém os
     169 mais o que veio depois; as duas linhas do Teste 2 não são um A/B de um eixo, são dois
     recortes encaixados. O que se compara DENTRO dele é o par com/sem Champions. A tolerância
-    `taskf_tolerancia_pp` para `linha_subindo`/`linha_descendo` volta a ter mordida aqui: no
+    `taskf_tolerancia_pp` para `linha_subindo`/`linha_descendo` voltava a ter mordida aqui: no
     congelado a coleta de odds já tinha parado (zero capturas após 04/08, medido), no estendido
-    não.
+    não. ⚠️ Desde a #103 (ADR 0012) as duas premissas NÃO EXISTEM MAIS — a componente de deriva de
+    odds da régua morreu com elas, e o parágrafo abaixo sobre "medir essa componente antes de
+    reusar o número" vale hoje para o resíduo, não para elas.
 
     ⚠️ MAS O VALOR DELA NÃO SERVE AQUI SEM MEDIÇÃO NOVA (#92, 19/08/2026). Ela era 0,5 pp e passou
     a ser **0,25 pp**, e o 0,25 foi calibrado sobre o universo `completo`: nele o ruído de

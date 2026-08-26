@@ -16,7 +16,9 @@ Score = clamp( PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES , 0 
 - **PTS_VALOR (0–30)** — tamanho do valor (edge). `edge = melhor_odd × prob_justa_fechamento − 1`,
   onde `prob_justa_fechamento` = de-vig da **odd de fechamento da Pinnacle** (janela t15m; cai p/ t1h/t24h).
   `PTS_VALOR = round( min(edge%, 6) / 6 × 30 )` → 6%+ = 30 pts; 3% = 15; 1% = 5; ≤0 = não é oportunidade (ver Gate).
-- **PTS_PREMISSAS (0–55)** — soma dos pesos das **premissas de contexto** do mercado que dispararam (teto 55).
+- **PTS_PREMISSAS** — soma dos pesos das **premissas de contexto** do mercado que dispararam. Sem teto
+  global: o clamp em 55 existia só no Gols e caiu na A1 (#103, ADR 0012). O teto de cada lado é a soma
+  dos pesos dele — o mais alto hoje é o Over do Gols, com Σ50.
 - **PTS_CORROBORACAO (0–15)** — confirmação externa (igual p/ todos):
   - `modelo_api_concorda` (+7): o modelo da API aponta o mesmo lado/tendência da aposta.
   - `linha_sharp_confirma` (+8): a odd da Pinnacle do lado apostado **caiu** de t24h→t15m (mercado migrou pro nosso lado).
@@ -74,7 +76,8 @@ clean sheet, failed-to-score, forma), `fact_fixtures` (resultados/últimos 5, di
 | `ritmo_alto` | jogo de muita chance | média de finalizações/escanteios dos dois ≥ mediana da liga | **8** |
 | `ambos_vazam` | poucos jogos zerados | clean sheet% dos dois < 35% | **6** |
 | `historico_over` | recente goleador | ≥ 60% dos últimos 5 de cada foram Over L | **6** |
-| `linha_subindo` | mercado puxando Over | odd do Over caiu de t24h→t15m | **6** |
+
+_(Σ50. `linha_subindo` — 6 pontos, mercado puxando Over — foi **removida** na A1: lia preço. Ver ADR 0012.)_
 
 **Under L (espelho):**
 | Premissa | O que mede | Regra | Peso |
@@ -84,7 +87,8 @@ clean sheet, failed-to-score, forma), `fact_fixtures` (resultados/últimos 5, di
 | `xg_baixo_combinado` | poucas chances criadas | soma do xG médio dos dois ≤ L−0,3 | **10** |
 | `ataques_fracos` | failed-to-score alto | algum dos dois passa em branco ≥ 35% dos jogos | **8** |
 | `historico_under` | recente travado | ≥ 60% dos últimos 5 de cada foram Under L | **6** |
-| `linha_descendo` | mercado puxando Under | odd do Under caiu de t24h→t15m | **6** |
+
+_(Σ46. `linha_descendo` — 6 pontos, mercado puxando Under — foi **removida** na A1, pelo mesmo motivo. Ver ADR 0012.)_
 
 **Penalidade específica:** `linha_extrema` (−10, quando L ≤ 0,5 ou L ≥ 4,5 — odd vira juice/longshot).
 

@@ -51,8 +51,9 @@
 
       (a) COALESCE para ZERO na própria `metrics`. Era o caso de n_wins_last5 e h2h_total
           (removidos na #41) e de s_missing/o_missing (removido na #42, que dependia do vazio
-          registrado de data-engineering#33 para ter de onde tirar o NULL). Nenhuma das 39
-          está fora do alcance do contador hoje. ⚠️ O zero de desfalque agora é MERECIDO —
+          registrado de data-engineering#33 para ter de onde tirar o NULL). Nenhuma das 37
+          está fora do alcance do contador hoje (eram 39 até a #103 tirar as duas premissas
+          de movimento de linha do Gols — ADR 0012). ⚠️ O zero de desfalque agora é MERECIDO —
           contagem real do time OU registro de coleta pré-apito (stg_futebol_injuries_coleta).
           Repor um COALESCE ali não deixa nada vermelho por si: devolve a cegueira ao estado
           de "premissa avaliada", que é o disfarce que esta classe descreve.
@@ -118,13 +119,11 @@
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'ritmo_alto',         'tipo': 'premissa',   'aplicavel': "outcome = 'Over'",  'insumos': ['pace_both', 'pace_median']},
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'ambos_vazam',        'tipo': 'premissa',   'aplicavel': "outcome = 'Over'",  'insumos': ['home_cs_pct', 'away_cs_pct']},
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'historico_over',     'tipo': 'premissa',   'aplicavel': "outcome = 'Over'",  'insumos': ['home_over_cnt', 'away_over_cnt']},
-        {'modelo': 'int_futebol_premissas_ou', 'nome': 'linha_subindo',      'tipo': 'premissa',   'aplicavel': "outcome = 'Over'",  'insumos': ['prob_t24h', 'prob_t15m']},
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'defesas_firmes',     'tipo': 'premissa',   'aplicavel': "outcome = 'Under'", 'insumos': ['ga_comb']},
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'clean_sheets_altos', 'tipo': 'premissa',   'aplicavel': "outcome = 'Under'", 'insumos': ['home_cs_pct', 'away_cs_pct']},
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'xg_baixo_combinado', 'tipo': 'premissa',   'aplicavel': "outcome = 'Under'", 'insumos': ['xg_comb']},
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'ataques_fracos',     'tipo': 'premissa',   'aplicavel': "outcome = 'Under'", 'insumos': ['home_fts_pct', 'away_fts_pct']},
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'historico_under',    'tipo': 'premissa',   'aplicavel': "outcome = 'Under'", 'insumos': ['home_under_cnt', 'away_under_cnt']},
-        {'modelo': 'int_futebol_premissas_ou', 'nome': 'linha_descendo',     'tipo': 'premissa',   'aplicavel': "outcome = 'Under'", 'insumos': ['prob_t24h', 'prob_t15m']},
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'linha_extrema',      'tipo': 'penalidade', 'aplicavel': 'TRUE',              'insumos': []}
     ]) }}
 {% endmacro %}
