@@ -615,6 +615,18 @@ sources:
           analyses/taskf_remedicao.sql com `--vars '{taskf_remedicao_agora: taskf_teste2_ancora,
           taskf_remedicao_anterior: taskf_teste2_ancora_p1}'`.
 
+      - name: taskf_teste2_ancora_pre_a1
+        description: >
+          A ÂNCORA DE ANTES DA A1 (#103), preservada por `bq cp` no instante em que a #103 a
+          re-rodou. A A1 mexeu no `int_futebol_premissas_ou` e no `task01_base`, que é
+          exatamente a lista do "o que a invalida" da taskf_teste2_ancora acima — então a
+          âncora foi remedida no mesmo PR, e a versão de commit `6f9dcc6` virou esta cópia.
+
+          ⚠️ Registro histórico, como as taskf_teste2_54/_55 e a _p1: não se escreve nela. Ela
+          é o lado ANTERIOR do delta que dimensiona a re-medição — `analyses/taskf_remedicao.sql`
+          com `--vars '{taskf_remedicao_agora: taskf_teste2_ancora, taskf_remedicao_anterior:
+          taskf_teste2_ancora_pre_a1}'`. Precedente do nome: as cópias `baseline_*_pre91` da #91.
+
       - name: taskf_pit_por_celula_ancora
         description: >
           O carimbo do PIT da âncora — mesma relação com o taskf_pit_por_celula que a

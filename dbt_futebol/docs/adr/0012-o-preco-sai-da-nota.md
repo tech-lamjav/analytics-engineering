@@ -81,9 +81,39 @@ hoje, como coluna do funil, e o `fact_value_opportunities` continua com o `score
 de sempre. É o desenho da [A] inteira: cada passo é medível no funil enquanto o produto
 segue no gate antigo, e existe **uma virada só**, no fim.
 
-A única diferença visível é consequência da remoção das duas premissas: **a nota do Gols no
-board de hoje cai até 12 pontos**, e algumas linhas somem por não alcançarem mais o corte de
-40. É para menos, nunca para mais.
+A diferença visível é consequência da remoção das duas premissas, e ela foi **medida em
+26/08 15:00 UTC**, não estimada — comparando o modelo de Gols de produção com o pós-A1
+compilado e materializado no mesmo instante, sobre os mesmos fatos:
+
+| | |
+|---|---|
+| linhas de Gols no modelo | 80.130 |
+| linhas que **caem** | 6.342 (**7,91%**) |
+| linhas que sobem | 0 |
+| **maior queda** | **6 pontos** |
+| queda média | 0,47 ponto |
+| linhas no `clamp` de 55 hoje | 95 — caem 5, e não 6, porque o clamp já lhes tirava 1 |
+| teto observado | 55 → **50** |
+| **linhas de jogo AINDA NÃO INICIADO que mudam** | **0** |
+
+E no que o produto publica, no mesmo instante: **6 linhas** de Gols no board, **nenhuma** se
+move; **3.471** candidatos de Gols no funil da janela corrente, **nenhum** se move, 90 passam
+na porta de nota antes e depois, 6 publicam antes e depois.
+
+⚠️ **A spec da issue previa "até 12 pontos", e a aritmética não permite 12.** `linha_subindo`
+só pode acender no Over e `linha_descendo` só no Under: uma linha é de um lado só, então
+perde **uma** das duas, nunca as duas. O número é 6.
+
+⚠️ **E a queda não alcança o board, por construção.** As duas premissas comparam a janela
+`t24h` com a `t15m`, e a `t15m` só existe depois que a coleta de quinze-minutos-antes
+aconteceu — ou seja, nos últimos minutos antes do apito. Até lá `prob_t15m` é NULL e as duas
+estão estruturalmente apagadas. Elas acendem em 7,91% das linhas do histórico e em **zero**
+das 16.782 de jogo por começar. A faixa em que elas pontuavam é justamente a que o board
+expurga (ADR 0009) e o funil congela (ADR 0011).
+
+Isso é achado, não conveniência: **as duas premissas cobravam preço numa janela em que a
+aposta já quase não existe**, e é mais um argumento para tirá-las do que qualquer coisa
+escrita na issue.
 
 O funil não vai para o Supabase, então nada aqui toca migração, RPC ou
 `check_schema_parity`.
@@ -153,7 +183,15 @@ impedir. As linhas antigas ficam como estão, com `nota_contexto` NULL — ver a
 `macros/task01_base.sql` — o catálogo que define o universo dos Testes 2, 3 e 4 — listava as
 duas premissas removidas, e o `int_futebol_premissas_ou` é um dos cinco modelos que a
 **âncora da remedição (#82)** exige imóveis. As 39 premissas do catálogo viram **37**, e a
-âncora foi **re-rodada no mesmo PR**, com o carimbo novo em `docs/TASKF_RESULTADOS.md`.
+âncora foi **re-rodada no mesmo PR** — a versão anterior preservada em
+`futebol_taskF.taskf_teste2_ancora_pre_a1`, o carimbo novo em `docs/TASKF_RESULTADOS.md`,
+seção "#103".
+
+O delta é exatamente o previsto e nada além dele: mesmo universo (169 jogos, 5.605 linhas,
+mesmo `odds_loaded_at`), **4 linhas sem contraparte** — `Gols · linha_subindo` e
+`Gols · linha_descendo` nos dois benchmarks, e só elas — e **3 campos divergentes em 1.680**,
+todos de 0,1 pp, dentro da régua de 0,25 pp da #92 e sem mecanismo pela A1. Fora as quatro que
+sumiram de propósito, a âncora reproduziu a si mesma.
 
 `penalidades_globais_pts` **permanece** no `int_futebol_odds_devig`. A regra do aceite é "o
 que sai do de-vig é só o que ninguém mais soma", e o `task01_base` soma — então nada sai.
