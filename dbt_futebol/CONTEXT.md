@@ -29,6 +29,19 @@ how much evidence fired — and never a rank within its peer group. So a régua 
 different rates, and that is a consequence, not a defect.
 _Avoid_: reading a score as a percentile or a quota
 
+**Nota de contexto**:
+The Score with the price taken out (#103, ADR 0012): pontos de premissa minus the
+**penalidades de contexto** (`pick_empate`, `desfalque_proprio`, `linha_extrema`,
+`handicap_alto`), floored at zero — no `pts_valor`, no corroboração, none of the four odd
+penalties. It is a column of `fact_value_funnel`, written **alongside** the Score, which the
+board keeps reading unchanged until the flip at the end of the [A]. Composed in one place
+only (`macros/futebol_nota_contexto.sql`, no arguments) and defended by three things that
+each cover what the others cannot — the sentinel over the composition's text, the
+reconstruction guard over the written column, and a unit test that scores two candidates of
+identical context and opposite prices.
+_Avoid_: "a nota" bare, while both live side by side; "nota sem preço" (the price still
+decides — at the portas, not in the nota)
+
 **Teto alcançável**:
 The denominator the pontos de premissa are normalised against, per (mercado, lado): the
 observed p95, measured once over a **declared window** and **frozen**. Its job is to make
@@ -435,7 +448,8 @@ sibling reason (it is a sketch); the exact form is `taskf_mediana`. A premissa c
 such a mean against a threshold changes its own row count between builds of identical
 code over frozen input — measured at ±1 row for `superioridade_xg`, ±15 for `ritmo_alto`,
 and as 71 outright false positives for `linha_subindo`/`linha_descendo`, which were
-reading tied windows as movement. Guarded by `assert_premissas_sem_agregado_instavel`.
+reading tied windows as movement (those two are gone since #103 — they read price, and the
+irreproducibility measured here is half of why). Guarded by `assert_premissas_sem_agregado_instavel`.
 _Avoid_: "a média" unqualified, when the question is whether two builds can be compared
 
 **Escopo do PIT**:

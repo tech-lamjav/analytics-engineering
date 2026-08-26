@@ -25,6 +25,12 @@
     (`historico_over`/`historico_under`). Se só as duas primeiras se mexerem, a
     instabilidade tem endereço e causa, e não é hipótese.
 
+    ⚠️ ESTA ANÁLISE NÃO RODA MAIS DEPOIS DA A1 (#103, ADR 0012). Ela foi quem endereçou a
+    instabilidade às duas premissas de movimento de linha — e a A1 as REMOVEU, exatamente por
+    isso. As duas colunas já não existem no `int_futebol_premissas_ou` e a query falha no
+    BigQuery (o `dbt compile` continua verde: Jinja não confere coluna). Fica como registro
+    da medição executada, e não é reescrita — reescrevê-la mudaria o que ela mediu.
+
     → RESULTADOS DAS EXECUÇÕES: `docs/TASK01_RESULTADOS.md`.
 
     Rodar com:

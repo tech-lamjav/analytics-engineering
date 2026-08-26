@@ -72,6 +72,16 @@
     que leem movimento de odd. É a decisão D1 da spec, ainda pendente de confirmação —
     por isso as duas notas saem lado a lado em vez de uma escolhida.
 
+    ⚠⚠ ESTA ANÁLISE NÃO RODA MAIS DEPOIS DA A1 (#103, ADR 0012), e é de propósito que ela não
+    foi reescrita. A decisão D1 foi CONFIRMADA e executada: `linha_subindo` e `linha_descendo`
+    não existem mais no `int_futebol_premissas_ou`, então as duas colunas que a CTE de Gols
+    seleciona já não estão lá e a query falha no BigQuery — nunca no `dbt compile`. Foi ela
+    que MEDIU a decisão (0,112 sem as duas contra 0,119 com, dentro do ruído e neutra em
+    volume) e é esse número que a ADR 0012 cita; reescrevê-la para "consertar" a compilação
+    mudaria o que ela mediu, e o registro de uma medição executada não se reescreve. Quem
+    precisar do equivalente pós-A1 lê o funil: a coluna `nota_contexto` é a nota nova, gravada
+    linha a linha, sem teto por lado (que é a A6, e ainda não chegou).
+
     ⚠ `passa_meia_linha` MUDOU na #101 e os números da entrega original não se reproduzem.
     Ela tinha uma cópia da expressão do board, que classificava linha de QUARTO (.25) como
     meia; hoje chama `futebol_e_linha_meia()`, o mesmo predicado que os dois marts. Esta

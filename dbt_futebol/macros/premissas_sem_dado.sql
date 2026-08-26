@@ -33,8 +33,8 @@
     sabemos. Marcador também não — ele nem soma nem subtrai.
 
     ⚠️ SÓ ENXERGA A AUSÊNCIA QUE CHEGA COMO NULL. Insumo COALESCEado antes daqui é
-    indistinguível de valor real e o contador o dá por presente. Depois da #42 as 39 premissas
-    têm insumo capaz de expressar ausência — `desfalque_adversario` era a última, e o NULL dela
+    indistinguível de valor real e o contador o dá por presente. Depois da #42 as premissas (39
+    até a #103, 37 depois dela) têm insumo capaz de expressar ausência — `desfalque_adversario` era a última, e o NULL dela
     só existe porque a coleta passou a registrar o vazio (data-engineering#33). As três classes
     de disfarce estão no cabeçalho do macros/premissas_insumos.sql, e nenhuma delas fica
     vermelha sozinha: quem repuser um COALESCE cala o contador em silêncio. -#}

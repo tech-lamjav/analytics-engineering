@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). ⚠️ Task 0 (look-ahead): ataque_combinado/defesas_firmes/defesas_vazaveis/clean_sheets_altos/ataques_fracos/ambos_vazam leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; xg_combinado_alto/xg_baixo_combinado/ritmo_alto passaram a usar o spine ancorado no kickoff (item C) em vez da média da season inteira — era o caso que fazia o MESMO xG medir −2,4 no 1X2 (point-in-time) e +0,5 aqui. historico_over/under e linha_subindo/descendo já eram limpos. 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (espelha §12.2; Over Σ56 / Under Σ52, com clamp ao teto 55 — Over é o único lado que encosta no teto). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). Movimento de linha (linha_subindo/descendo) = CONSENSO do mercado (média das PROBABILIDADES IMPLÍCITAS 1/odd de TODAS as casas t24h->t15m; odd crua super-ponderaria o leg de odd alta), DISTINTO da corroboração linha_sharp_confirma (só Pinnacle) p/ não contar o mesmo sinal 2x (§10.8). Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG/ritmo e o last5 de gols aceitam as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10). ⚠️ Desde a #91 (ADR 0010) os DEFAULTS são `todas` + `ultimos_10` — a célula `ambos` — e NÃO reproduzem mais o comportamento descrito acima; ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Sob ultimos_10 o spine e a mediana de ritmo trocam o filtro de season por um teto de 10 partidas, e o last5 só perde o filtro de season (5 já é subconjunto de 10). Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no dataset futebol_taskF. O POOL de times da mediana de ritmo segue sendo o da competição do jogo em qualquer célula (é o benchmark "a liga em que estou jogando"); o que segue o eixo é o histórico de cada time do pool, medido igual ao do time avaliado. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, as contagens de last5 viram NULL sem histórico nenhum e linha_caiu deixou de ser COALESCEado na metrics (as duas probabilidades t24h/t15m ficam expostas: numa janela distante o t15m não existe, e é lá que linha_subindo/descendo ficam cegas).'
+    description='S2 do Motor de Score — premissas de contexto do mercado GOLS Over/Under (market_id 5). ⚠️ Task 0 (look-ahead): ataque_combinado/defesas_firmes/defesas_vazaveis/clean_sheets_altos/ataques_fracos/ambos_vazam leem int_futebol_team_form_pit (point-in-time por fixture) no lugar de fact_team_season_stats; xg_combinado_alto/xg_baixo_combinado/ritmo_alto passaram a usar o spine ancorado no kickoff (item C) em vez da média da season inteira — era o caso que fazia o MESMO xG medir −2,4 no 1X2 (point-in-time) e +0,5 aqui. historico_over/under já eram limpos. 2 linhas por (fixture, line_value): Over e Under, por linha L. Universo de linhas = canônicas {1.5,2.5,3.5} de toda fixture UNION as linhas presentes nas odds (market_id=5) — assim valida no Brasileirão mesmo sem odds (pausa FIFA) e ainda deixa a penalidade linha_extrema disparar em linhas extremas do mercado. Cada premissa é 1 booleano que soma seu peso ao PTS_PREMISSAS (Over Σ50 / Under Σ46, SEM clamp). Penalidade específica: linha_extrema (-10, L<=0,5 ou L>=4,5). ⚠️ O PREÇO SAIU DA NOTA (#103, ADR 0012): linha_subindo e linha_descendo (6 pontos cada) foram REMOVIDAS. Elas liam movimento de odd — consenso das probabilidades implícitas de todas as casas, t24h->t15m — e portanto liam preço; eram também as duas premissas que faziam a nota do Gols não ser reproduzível entre builds, porque o valor virava sozinho quando as odds andavam. A variante sem elas mede 0,112 contra 0,119 (analyses/taskA_linha_de_base.sql) — dentro do ruído, e neutra em volume. O clamp em 55 caiu junto: ele existia para aproximar dois lados de teto diferente, que é o que a normalização por lado (A6) resolve, e o lado Under nunca o alcançava. Com isso os tetos vão de 56/52 para 50/46, e este modelo deixa de ler PREÇO: fact_odds_snapshot continua sendo lido só para decidir QUAIS LINHAS existem. Degradação graciosa: dado ausente -> premissa FALSE (Copa sem xG/ritmo). evidencias[]/avisos[] = bullets legíveis pro front. O gate/edge/Score são aplicados no mart fact_value_opportunities. ⚠️ MEDIÇÃO (task [F], ADR 0007): o spine de xG/ritmo e o last5 de gols aceitam as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10). ⚠️ Desde a #91 (ADR 0010) os DEFAULTS são `todas` + `ultimos_10` — a célula `ambos` — e NÃO reproduzem mais o comportamento descrito acima; ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Sob ultimos_10 o spine e a mediana de ritmo trocam o filtro de season por um teto de 10 partidas, e o last5 só perde o filtro de season (5 já é subconjunto de 10). Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no dataset futebol_taskF. O POOL de times da mediana de ritmo segue sendo o da competição do jogo em qualquer célula (é o benchmark "a liga em que estou jogando"); o que segue o eixo é o histórico de cada time do pool, medido igual ao do time avaliado. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. Para isso, as contagens de last5 viram NULL sem histórico nenhum. ⚠️ Desde a #103 o contador não tem mais insumo de odds para ler: prob_t24h/prob_t15m saíram do modelo com as duas premissas que eram os únicos consumidores delas.'
 ) }}
 {#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — desde a #91 o DEFAULT destas vars é o que produção usa.
 
@@ -275,29 +275,17 @@ last5 AS (
     GROUP BY ft.fixture_id, ft.team_id
 ),
 
--- Movimento de linha = CONSENSO do mercado t24h -> t15m, por (fixture, linha, lado). Média de
--- PROBABILIDADES IMPLÍCITAS (1/odd) das casas, NÃO de odds cruas: a média de odds cruas
--- super-pondera o leg de odd alta (o Over em linhas altas) e enviesa o sinal pra um lado.
--- Distinto do sinal sharp (só Pinnacle) usado na corroboração.
-line_move AS (
-    SELECT
-        fixture_id, line_value, outcome_side AS outcome,
-        -- Mesma regra do resto do modelo (#78): sem `AVG`, e a soma em NUMERIC. Aqui a soma
-        -- PRECISA ser em ponto fixo — `1.0 / odd_decimal` é fracionário, então somá-lo em FLOAT64
-        -- voltaria a depender da ordem mesmo com SUM/COUNT no lugar de AVG (é por isso que o
-        -- `pace_avg` pôde ficar em FLOAT64 e este não: lá a soma é de INTEIROS, e essa é exata).
-        -- O CAST arredonda cada probabilidade implícita em 9 casas, folga de sobra p/ um número
-        -- que vive perto de 0,5 e é comparado contra outro igual.
-        SAFE_DIVIDE(
-            SUM(  IF(collection_window = 't24h', CAST(1.0 / odd_decimal AS NUMERIC), NULL)),
-            COUNT(IF(collection_window = 't24h', odd_decimal, NULL))) AS prob_t24h,
-        SAFE_DIVIDE(
-            SUM(  IF(collection_window = 't15m', CAST(1.0 / odd_decimal AS NUMERIC), NULL)),
-            COUNT(IF(collection_window = 't15m', odd_decimal, NULL))) AS prob_t15m
-    FROM {{ ref('fact_odds_snapshot') }}
-    WHERE market_id = 5 AND outcome_side IN ('Over', 'Under') AND odd_decimal > 0
-    GROUP BY fixture_id, line_value, outcome_side
-),
+-- ⚠️ AQUI MORAVA A CTE `line_move` (#103, ADR 0012). Ela calculava o movimento de linha —
+-- consenso das probabilidades implícitas de TODAS as casas, t24h -> t15m — e era o único
+-- insumo de `linha_subindo`/`linha_descendo`, as duas premissas que a A1 removeu. Saiu
+-- inteira junto com elas: CTE sem consumidor é peso morto que a próxima leitura confunde
+-- com sinal desligado.
+--
+-- Com ela vai a ÚNICA leitura de PREÇO que este modelo fazia. `fact_odds_snapshot`
+-- continua sendo lido logo acima, na CTE `market_lines`, e lá ele responde outra
+-- pergunta: QUAIS LINHAS existem para avaliar. Decidir o universo de linhas não é
+-- pontuar preço — é a distinção que a ADR 0006 já tinha antecipado, e é ela que faz a
+-- nota do Gols passar a ser função pura do contexto do jogo.
 
 -- Métricas brutas derivadas (por outcome×linha).
 metrics AS (
@@ -329,18 +317,9 @@ metrics AS (
         IF(hl.last5_totals IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(hl.last5_totals) g WHERE g > o.line_value)) AS home_over_cnt,
         IF(al.last5_totals IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(al.last5_totals) g WHERE g > o.line_value)) AS away_over_cnt,
         IF(hl.last5_totals IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(hl.last5_totals) g WHERE g < o.line_value)) AS home_under_cnt,
-        IF(al.last5_totals IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(al.last5_totals) g WHERE g < o.line_value)) AS away_under_cnt,
-
-        -- movimento de consenso do lado deste outcome (Over ou Under): "linha caiu" = prob
-        -- implícita média SUBIU (t15m > t24h) = odd caiu (dinheiro entrando neste lado).
-        -- As duas probabilidades ficam expostas porque SÃO o insumo (#41, classe (c)): o
-        -- COALESCE(..., FALSE) que ficava aqui colapsava "o mercado não se moveu" e "ainda não
-        -- há t15m" num FALSE só — e numa janela distante o t15m não existe por construção, que
-        -- é justamente o horizonte em que o contador precisa falar. O colapso continua, mas
-        -- uma CTE adiante, onde a premissa é formada.
-        lm.prob_t24h                                         AS prob_t24h,
-        lm.prob_t15m                                         AS prob_t15m,
-        (lm.prob_t15m > lm.prob_t24h)                        AS linha_caiu
+        IF(al.last5_totals IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(al.last5_totals) g WHERE g < o.line_value)) AS away_under_cnt
+        -- ⚠️ `prob_t24h`, `prob_t15m` e `linha_caiu` saíram daqui com a `line_move` (#103,
+        -- ADR 0012): eram o insumo exclusivo das duas premissas de movimento de linha.
     FROM outcomes o
     LEFT JOIN pit h  ON h.fixture_id  = o.fixture_id AND h.team_id  = o.home_team_id
     LEFT JOIN pit a  ON a.fixture_id  = o.fixture_id AND a.team_id  = o.away_team_id
@@ -351,52 +330,52 @@ metrics AS (
     LEFT JOIN league_pace_median lpm ON lpm.fixture_id = o.fixture_id
     LEFT JOIN last5 hl ON hl.fixture_id = o.fixture_id AND hl.team_id = o.home_team_id
     LEFT JOIN last5 al ON al.fixture_id = o.fixture_id AND al.team_id = o.away_team_id
-    LEFT JOIN line_move lm ON lm.fixture_id = o.fixture_id AND lm.line_value = o.line_value AND lm.outcome = o.outcome
 ),
 
 -- Premissas (booleanos). Cada uma só pode ser TRUE no lado a que pertence (gated por outcome),
--- então a soma dos 13 pesos é <=56 (Over) ou <=52 (Under) por linha.
+-- então a soma dos 11 pesos é <=50 (Over) ou <=46 (Under) por linha.
 flags AS (
     SELECT
         m.*,
-        -- Over (Σ56)
+        -- Over (Σ50)
         (m.outcome = 'Over') AND COALESCE(m.gf_comb  >= m.line_value + 0.5, FALSE) AS ataque_combinado,
         (m.outcome = 'Over') AND COALESCE(m.ga_comb  >= m.line_value,       FALSE) AS defesas_vazaveis,
         (m.outcome = 'Over') AND COALESCE(m.xg_comb  >= CAST(m.line_value AS NUMERIC) + NUMERIC '0.3', FALSE) AS xg_combinado_alto,
         (m.outcome = 'Over') AND COALESCE(m.pace_both >= m.pace_median,     FALSE) AS ritmo_alto,
         (m.outcome = 'Over') AND COALESCE(m.home_cs_pct < 35 AND m.away_cs_pct < 35, FALSE) AS ambos_vazam,
         (m.outcome = 'Over') AND COALESCE(m.home_over_cnt >= 3 AND m.away_over_cnt >= 3, FALSE) AS historico_over,
-        (m.outcome = 'Over') AND COALESCE(m.linha_caiu, FALSE)                     AS linha_subindo,
-        -- Under (Σ52)
+        -- Under (Σ46)
         (m.outcome = 'Under') AND COALESCE(m.ga_comb <= m.line_value - 0.3, FALSE) AS defesas_firmes,
         (m.outcome = 'Under') AND COALESCE(m.home_cs_pct >= 40 AND m.away_cs_pct >= 40, FALSE) AS clean_sheets_altos,
         (m.outcome = 'Under') AND COALESCE(m.xg_comb <= CAST(m.line_value AS NUMERIC) - NUMERIC '0.3', FALSE) AS xg_baixo_combinado,
         (m.outcome = 'Under') AND COALESCE(m.home_fts_pct >= 35 OR m.away_fts_pct >= 35, FALSE) AS ataques_fracos,
         (m.outcome = 'Under') AND COALESCE(m.home_under_cnt >= 3 AND m.away_under_cnt >= 3, FALSE) AS historico_under,
-        (m.outcome = 'Under') AND COALESCE(m.linha_caiu, FALSE)                    AS linha_descendo,
         -- penalidade específica (independe do lado)
         (m.line_value <= 0.5 OR m.line_value >= 4.5)                               AS linha_extrema
     FROM metrics m
 ),
 
+-- ⚠️ SEM CLAMP (#103, ADR 0012). Até a A1 esta soma passava por um `LEAST(..., 55)`, e o
+-- clamp existia para aproximar dois lados de teto diferente (Over Σ56, Under Σ52) — que é
+-- exatamente o que a normalização por lado da A6 resolve, e melhor. O lado Under nunca o
+-- alcançava, então ele nem chegava a aproximar: só cortava o topo do Over. Com as duas
+-- premissas de movimento fora, os tetos passam a ser Σ50 (Over) e Σ46 (Under), e a soma
+-- fica livre para chegar até eles.
 scored AS (
     SELECT
         f.*,
-        LEAST(
             12 * CAST(f.ataque_combinado   AS INT64)
           + 10 * CAST(f.defesas_vazaveis   AS INT64)
           +  8 * CAST(f.xg_combinado_alto  AS INT64)
           +  8 * CAST(f.ritmo_alto         AS INT64)
           +  6 * CAST(f.ambos_vazam        AS INT64)
           +  6 * CAST(f.historico_over     AS INT64)
-          +  6 * CAST(f.linha_subindo      AS INT64)
           + 12 * CAST(f.defesas_firmes     AS INT64)
           + 10 * CAST(f.clean_sheets_altos AS INT64)
           + 10 * CAST(f.xg_baixo_combinado AS INT64)
           +  8 * CAST(f.ataques_fracos     AS INT64)
           +  6 * CAST(f.historico_under    AS INT64)
-          +  6 * CAST(f.linha_descendo     AS INT64)
-        , 55) AS pts_premissas,
+        AS pts_premissas,
         10 * CAST(f.linha_extrema AS INT64) AS penalidades_ou_pts
     FROM flags f
 ),
@@ -425,13 +404,11 @@ SELECT
     ritmo_alto,
     ambos_vazam,
     historico_over,
-    linha_subindo,
     defesas_firmes,
     clean_sheets_altos,
     xg_baixo_combinado,
     ataques_fracos,
     historico_under,
-    linha_descendo,
     linha_extrema,
     -- agregados
     pts_premissas,
@@ -463,9 +440,8 @@ SELECT
         IF(historico_over,
            FORMAT('%d e %d dos últimos 5 de cada bateram o Over %.1f', home_over_cnt, away_over_cnt, line_value), NULL),
         IF(historico_under,
-           FORMAT('%d e %d dos últimos 5 de cada ficaram no Under %.1f', home_under_cnt, away_under_cnt, line_value), NULL),
-        IF(linha_subindo, 'mercado baixou a odd do Over (dinheiro entrando no Over)', NULL),
-        IF(linha_descendo, 'mercado baixou a odd do Under (dinheiro entrando no Under)', NULL)
+           FORMAT('%d e %d dos últimos 5 de cada ficaram no Under %.1f', home_under_cnt, away_under_cnt, line_value), NULL)
+        -- ⚠️ Os dois bullets de movimento de linha saíram com as premissas (#103, ADR 0012).
     ]) AS e WHERE e IS NOT NULL) AS evidencias,
 
     -- avisos: penalidade específica do O/U.

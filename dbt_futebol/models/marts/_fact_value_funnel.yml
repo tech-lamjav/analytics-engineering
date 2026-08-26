@@ -165,6 +165,40 @@ models:
           silenciosa que a tabela existe para impedir.
       - name: score
         description: "A MESMA nota do board: clamp(pts_valor + pts_premissas + pts_corroboracao − penalidades, 0, 100). NULL onde não houve premissa a avaliar (a \"12\" da DC) — e o NULL morre na `porta_nota`, que é NULL-safe."
+      - name: nota_contexto
+        description: >
+          A NOTA DEPOIS QUE O PREÇO SAIU DELA (#103, ADR 0012):
+          `GREATEST(pts_premissas − penalidades_especificas_pts, 0)`, e nada mais. Sem
+          `pts_valor`, sem corroboração e sem as quatro penalidades de odd. As quatro
+          penalidades que continuam dentro são de CONTEXTO — `pick_empate` (−10),
+          `desfalque_proprio` (−15), `linha_extrema` (−10, Gols) e `handicap_alto` (−12,
+          Handicap): `linha_extrema` e `handicap_alto` leem a LINHA, que é característica
+          do mercado apostado e não do preço dele.
+
+          ⚠️ NASCE AO LADO DO `score`, não no lugar dele. Nesta entrega o board não muda
+          de gate nem de número — cada passo da [A] é medível no funil enquanto o produto
+          segue no gate antigo, e existe UMA virada só, no fim. Quem lê esta coluna hoje é
+          a medição.
+
+          ⚠️ A composição mora em `macros/futebol_nota_contexto.sql`, num lugar só, e é
+          consumida pelo funil e pela guarda de reconstrução — nunca copiada. Duas guardas
+          a protegem: `assert_nota_contexto_sem_preco` (sentinela da decisão, varre o
+          TEXTO da composição) e `assert_funil_nota_contexto_reconstroi` (a coluna gravada
+          bate com a recomposta, em toda linha ainda gravável).
+
+          ⚠️ NULL, e não zero, onde não houve premissa a avaliar (a "12" da Dupla Chance):
+          `GREATEST(NULL, 0)` é NULL no BigQuery, que é a ADR 0003 acontecendo sozinha.
+
+          ⚠️ NULL TAMBÉM, e para sempre, nas linhas de jogo que já tinham apitado quando a
+          A1 subiu. A coluna chega por `append_new_columns` e o funil só escreve linha de
+          jogo futuro (ADR 0011): a história congelada não recebe a nota nova. É o
+          append-only funcionando — o dia da virada fica legível na série sem ninguém
+          precisar lembrar a data —, e é por isso que a guarda de reconstrução é escopada
+          ao que ainda é gravável.
+
+          ⚠️ FICA FORA do payload da `assert_funil_paridade_com_board` de propósito: é
+          coluna do funil e o board não a tem. Comparar o que só existe de um lado
+          deixaria a guarda vermelha por desenho.
       - name: pts_premissas
         description: "NULL, e não zero, onde não houve premissa a avaliar. Zero seria \"foi avaliada e tirou zero\", que é outra coisa (ADR 0003)."
       - name: premissas_sem_dado
