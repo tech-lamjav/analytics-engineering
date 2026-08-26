@@ -486,6 +486,19 @@ meia-linha, so the published edge there describes a bet nobody can place. The te
 wrong (#101, #113).
 _Avoid_: "linha inteira" for .25/.75 — a linha cheia is .0, and it pushes differently
 
+**Fecho de uma linha** (closure):
+Everything a single output row is a function of. It is the only honest partition for an
+**impressão digital de insumo** — the fingerprint a guard uses to decide which rows are still
+comparable against a frozen baseline. A partition coarser than the closure is not merely loose,
+it is **false**: it declares rows comparable whose input moved outside the cut, so the guard
+reports a defect where there is behaviour. Measured case (#91 → 26/08): `pit_escopo: todas` made
+a PIT row a function of the team's history in *every* competition, while the Costura A kept
+fingerprinting by `(competition_id, season)` — Brasileirão 2026 matched byte for byte and still
+diverged in 60 rows, because all 20 of its teams also play Libertadores and Copa do Brasil. The
+rule that follows: **any change of axis is a candidate to change the closure**, and "what does
+this row now depend on?" belongs in the checklist of whoever changes it. Emenda to ADR 0007.
+_Avoid_: partição (bare — ambiguous with the BigQuery partition of a table)
+
 **Célula de medição**:
 One combination of escopo and recorte under which the whole premissa layer is rematerialised
 and remeasured. Two cells are comparable only if computed in the same run over the same frozen
