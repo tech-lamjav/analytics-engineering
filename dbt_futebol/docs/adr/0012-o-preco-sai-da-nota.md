@@ -115,6 +115,36 @@ Isso é achado, não conveniência: **as duas premissas cobravam preço numa jan
 aposta já quase não existe**, e é mais um argumento para tirá-las do que qualquer coisa
 escrita na issue.
 
+### A diferença visível de verdade é OUTRA, e o code review a pegou
+
+A issue diz *"a única diferença visível é a queda da nota do Gols"*. Não é: o board publica
+também o **contador de cegueira** `premissas_sem_dado` (#41, ADR 0003), e o renderiza em
+`avisos[]` como *"a nota não levou N premissas em conta"*. Removida uma premissa, some junto
+a cegueira dela.
+
+Medido no mesmo instante:
+
+| | |
+|---|---|
+| linhas de Gols cujo contador **cai** | 65.545 de 80.130 (**81,8%**) |
+| queda | sempre exatamente **1** |
+| linhas com alguma cegueira | 69.234 → **13.006** |
+| cegueira média por linha | 1,22 → **0,41** |
+| linhas de jogo por começar cujo contador cai | **16.782 de 16.782 — todas** |
+
+E no board de hoje, nas 6 linhas de Gols: **todas** carregam `premissas_sem_dado = 1`, e em
+**todas** a única premissa cega listada em `premissas_cegas[]` é a que está sendo removida
+(`linha_subindo` em cinco, `linha_descendo` numa). Depois da A1 as seis vão a **zero**.
+
+⚠️ **E a diferença vai no sentido OPOSTO ao que a issue previu.** A nota não se move; o que
+muda é o board **parar de avisar** que não pôde avaliar uma premissa. O aviso era honesto e
+virou desnecessário: ele reportava cegueira sobre a premissa que só enxerga na janela `t15m`,
+que é a mesma razão pela qual ela nunca acendia no que o board publica. O contador não entra
+na nota (ADR 0003), então **nenhum número do produto muda** — muda um texto, para menos.
+
+Isso não estava na issue e é o segundo efeito visível. Fica registrado aqui para que o
+próximo leitor não o descubra como surpresa num board que "não devia ter mudado".
+
 O funil não vai para o Supabase, então nada aqui toca migração, RPC ou
 `check_schema_parity`.
 

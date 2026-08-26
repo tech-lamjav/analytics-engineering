@@ -130,8 +130,10 @@
 
     ⚠️ `medido_em` e `odds_loaded_at` existem porque a spec exige que as quatro células rodem na
     MESMA EXECUÇÃO — o baseline não é reaproveitado justamente porque `linha_subindo`/
-    `linha_descendo` leem odds ao vivo e viram sozinhas entre builds. Com os dois carimbos, "mesma
-    execução" é conferível na tabela; sem eles, é confiança. A forma verificável que a #51 definiu
+    `linha_descendo` LIAM odds ao vivo e viravam sozinhas entre builds (as duas foram REMOVIDAS na
+    #103, ADR 0012; as células já materializadas foram medidas quando elas existiam, e o carimbo
+    continua valendo — a #55 e a #92 mediram deriva de recomputação que não vinha daquelas duas).
+    Com os dois carimbos, "mesma execução" é conferível na tabela; sem eles, é confiança. A forma verificável que a #51 definiu
     é `fact_odds_snapshot.dbt_loaded_at` ANTERIOR aos quatro `medido_em` — porque o que de fato
     importa é que as quatro tenham lido a MESMA construção dos fatos, o que é mais forte do que os
     quatro carimbos serem próximos entre si.
