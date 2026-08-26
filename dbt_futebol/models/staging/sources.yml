@@ -666,8 +666,14 @@ sources:
           - name: medido_em
             description: >
               Quando a célula foi materializada. Existe porque a spec exige que as quatro rodem na
-              MESMA execução — `linha_subindo`/`linha_descendo` leem odds ao vivo e viram sozinhas
+              MESMA execução — `linha_subindo`/`linha_descendo` liam odds ao vivo e viravam sozinhas
               entre builds. Com o carimbo, "mesma execução" é conferível; sem ele, é confiança.
+
+              ⚠️ O TEMPO VERBAL É PASSADO desde a #103 (ADR 0012): as duas premissas foram
+              REMOVIDAS, e essa instabilidade é metade do motivo. O carimbo continua valendo — as
+              quatro células têm de rodar na mesma execução de qualquer forma, porque a #55 e a
+              #92 mediram deriva de recomputação que não vem daquelas duas —, e as células JÁ
+              MATERIALIZADAS foram medidas quando elas existiam.
           - name: git_sha
             description: "Commit de onde a célula foi medida (var taskf_git_sha)"
           - name: odds_loaded_at

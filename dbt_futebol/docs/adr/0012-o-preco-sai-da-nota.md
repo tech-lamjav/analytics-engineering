@@ -166,13 +166,30 @@ já roda inteira (`dbt ls --select tag:guarda --resource-type test` passa de **4
 3. disparar o `workflow-futebol-odds` à mão e conferir: `nota_contexto` preenchida nas
    linhas de jogo futuro, e as duas guardas novas verdes.
 
-⚠️ **Entre (1) e (3) a `assert_funil_nota_contexto_reconstroi` dá ERRO, e é esperado.** A
-coluna só existe na tabela depois que o primeiro build pós-deploy roda o
-`append_new_columns`; antes disso a guarda não acha `nota_contexto` e o BigQuery devolve
-*Unrecognized name*. É erro de compilação, não guarda vermelha, e passa sozinho no (3) —
-mesmo padrão que a #96 registrou entre a imagem e o `bq rm`. Está escrito aqui porque a
-alternativa é alguém gastar um dia rediagnosticando um alarme que a própria ordem do deploy
-produziu.
+⚠️ **Entre (1) e (3), DUAS guardas ficam vermelhas, e as duas são esperadas.** As duas são o
+mesmo fenômeno — código novo lendo tabela velha —, e as duas passam sozinhas no (3):
+
+- `assert_funil_nota_contexto_reconstroi` dá **erro de compilação**: a coluna só existe na
+  tabela depois que o primeiro build pós-deploy roda o `append_new_columns`, e até lá o
+  BigQuery devolve *Unrecognized name: nota_contexto*;
+- `assert_premissas_insumo_declarado` **falha com 2 linhas**: o mapa já não declara
+  `linha_subindo`/`linha_descendo`, e a tabela de produção ainda tem as duas colunas. É a
+  direção "mapa envelhecido" da guarda acendendo ao contrário — o mapa está novo e a tabela
+  velha —, e ela é literalmente a guarda funcionando. Conferido em 26/08: verde no
+  `--target taskF`, onde o modelo já tinha sido reconstruído com o código novo.
+
+Está escrito aqui porque a alternativa é alguém gastar um dia rediagnosticando um alarme que
+a própria ordem do deploy produziu — mesmo padrão que a #96 registrou entre a imagem e o
+`bq rm`.
+
+⚠️ **O SELO NÃO SE MOVE, e isto foi conferido, não suposto.** O `fact_value_funnel_selo` e a
+`assert_funil_imutavel_por_dia_de_kickoff` guardam `COUNT(*)` e `SUM(score)` por
+(fixture, dia de kickoff) — nenhum dos dois lê `nota_contexto`, e coluna nula nova não move
+contagem nem soma. Fosse o selo uma impressão digital da linha inteira
+(`TO_JSON_STRING`, um hash), o `append_new_columns` teria mudado todo hash congelado e a
+guarda de imutabilidade nasceria **permanentemente vermelha sobre a história inteira** — que
+é o modo de falha que este repositório documenta em todo lugar. Não é o caso, e é por isso
+que **não há passo de derrubar funil e selo juntos neste deploy**.
 
 ⚠️ **Não há `bq rm` neste deploy, e não pode haver.** Derrubar o funil recalcularia a
 história inteira com o código pós-A1, que é exatamente a coisa que a #96 existe para

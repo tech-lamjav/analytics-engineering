@@ -51,6 +51,12 @@ PTS_VALOR = round( min(edge%, 6) / 6 × 30 )      # 6%+ = 30; 3% = 15; 1% = 5
 
 ### PTS_PREMISSAS (0–55) — contexto do mercado
 
+> ⚠️ **DESATUALIZADO desde 2026-08-26 (#103, `dbt_futebol/docs/adr/0012-o-preco-sai-da-nota.md`).**
+> O clamp em 55 **caiu**, e com ele as premissas `linha_subindo`/`linha_descendo` do Gols (§12.2),
+> que liam preço. Os tetos do Gols vão de 56/52 para **50/46** e não há mais teto global — o teto
+> de cada lado é a soma dos pesos dele. Este parágrafo e a §12.2 abaixo ficam como estavam por
+> serem registro do épico; a especificação viva é a ADR 0012 e o `docs/futebol-metodologia-premissas.md`.
+
 Soma dos pesos das premissas de contexto **que dispararam** (teto 55). Cada premissa = 1 booleano calculável dos marts (seção 5). **Especificadas por mercado na §12** (transcrição do playbook): 1X2, O/U (Over/Under espelhados), Handicap (Favorito/Azarão), BTTS (Sim/Não), Dupla chance. A soma bruta dos pesos por lado vai de ~28 (BTTS Não) a 56 (Over — o único que encosta no teto 55; os demais ficam abaixo, então o clamp raramente morde). O clamp `LEAST(soma, 55)` está implementado no `int_futebol_premissas_ou` (S2) — primeiro modelo de premissas que pode atingir 56 (o 1X2 maxa em 51 e não precisa). Cada premissa que dispara vira um **bullet de evidência** no front (ordenado por peso).
 
 ### PTS_CORROBORACAO (0–15) — confirmação externa (igual p/ todos)
@@ -302,7 +308,7 @@ Preencher a coluna **Status/Notas** in-place quando cada uma for implementada �
 | `ritmo_alto` | média de finalizações/escanteios dos dois ≥ mediana da liga | **8** |
 | `ambos_vazam` | clean sheet% dos dois < 35% | **6** |
 | `historico_over` | ≥ 60% dos últimos 5 de cada foram Over L | **6** |
-| `linha_subindo` | odd do Over caiu de t24h→t15m | **6** |
+| ~~`linha_subindo`~~ | ~~odd do Over caiu de t24h→t15m~~ | ~~**6**~~ — **REMOVIDA na A1** (#103, ADR 0012) |
 
 **Under L (espelho):**
 | Premissa | Regra | Peso |
@@ -312,7 +318,7 @@ Preencher a coluna **Status/Notas** in-place quando cada uma for implementada �
 | `xg_baixo_combinado` | soma do xG médio dos dois ≤ L−0,3 | **10** |
 | `ataques_fracos` | algum dos dois passa em branco ≥ 35% dos jogos | **8** |
 | `historico_under` | ≥ 60% dos últimos 5 de cada foram Under L | **6** |
-| `linha_descendo` | odd do Under caiu de t24h→t15m | **6** |
+| ~~`linha_descendo`~~ | ~~odd do Under caiu de t24h→t15m~~ | ~~**6**~~ — **REMOVIDA na A1** (#103, ADR 0012) |
 
 **Penalidade específica:** `linha_extrema` (−10, quando L ≤ 0,5 ou L ≥ 4,5 — odd vira juice/longshot).
 
