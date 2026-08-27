@@ -53,7 +53,8 @@ seeds:
         tests:
           - not_null
           - accepted_values:
-              values: ['match_winner', 'asian_handicap', 'goals_over_under', 'btts', 'double_chance']
+              arguments:
+                values: ['match_winner', 'asian_handicap', 'goals_over_under', 'btts', 'double_chance']
       - name: lado
         description: >
           o lado apostado, como `futebol_lado()` o deriva. No Handicap ele NÃO é o
@@ -63,7 +64,8 @@ seeds:
         tests:
           - not_null
           - accepted_values:
-              values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Favorito', 'Azarao', 'Pick', 'Yes', 'No', 'unico']
+              arguments:
+                values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Favorito', 'Azarao', 'Pick', 'Yes', 'No', 'unico']
       - name: p95
         description: >
           o percentil 95 OBSERVADO da nota de contexto neste lado, em pontos. É
@@ -73,7 +75,8 @@ seeds:
         tests:
           - not_null
           - dbt_utils.expression_is_true:
-              expression: ">= 0"
+              arguments:
+                expression: ">= 0"
       - name: janela_inicio
         description: primeiro dia de kickoff da janela sobre a qual o p95 foi medido.
         tests:
@@ -99,7 +102,8 @@ seeds:
         tests:
           - not_null
           - accepted_values:
-              values: ['recomputacao', 'registro']
+              arguments:
+                values: ['recomputacao', 'registro']
       - name: n_candidatos
         description: >
           quantos candidatos entraram no percentil (uma janela por candidato). É o que
@@ -109,4 +113,5 @@ seeds:
           - not_null
     tests:
       - dbt_utils.unique_combination_of_columns:
-          combination_of_columns: ['market', 'lado']
+          arguments:
+            combination_of_columns: ['market', 'lado']

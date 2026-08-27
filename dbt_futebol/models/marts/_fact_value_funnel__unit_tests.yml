@@ -26,6 +26,21 @@ version: 2
 # ⚠️ As linhas do de-vig são MOCKS, não amostras: algumas combinações não ocorrem em
 # produção de propósito, porque isolar uma porta às vezes exige quebrar a implicação
 # que a liga a outra. Onde isso acontece está dito na linha.
+#
+# ⚠️ O DENOMINADOR CONGELADO (#105) entra em TODO teste daqui, pelo mesmo motivo que o
+# `is_incremental`: o funil passou a `ref()` o seed `futebol_p95_nota_contexto`, e o dbt
+# exige fixture para todo `ref` do modelo. Os sete usam o MESMO arquivo sintético,
+# `tests/fixtures/p95_nota_contexto_sintetico.csv` — p95 40 nos lados com lado apostado, 20
+# no azarão do Handicap e os dois zeros estruturais (o empate do 1X2 e o `Pick` do
+# Handicap).
+#
+# O 20 do azarão não é decoração: é ele que torna o eixo do LADO falsificável. Com 40 em
+# todos, dois candidatos de mesmos pontos e lados diferentes sairiam iguais e o teste ficaria
+# verde mesmo se a normalização fosse por MERCADO.
+#
+# ⚠️ O fixture NÃO acompanha o seed de produção, e é o ponto de ser sintético: recongelar o
+# denominador — que é uma remedição, e vai acontecer — não pode mudar o resultado esperado
+# de teste nenhum. Números redondos porque a aritmética tem de ser legível a olho.
 # ==============================================================================
 unit_tests:
 
@@ -122,14 +137,7 @@ unit_tests:
 
       # O funil junta `fact_fixtures` SÓ pelo kickoff (ADR 0011, D10 — o status muda
       # depois do apito e uma linha congelada com o status de antes mentiria).
-      # O DENOMINADOR CONGELADO (#105). Fixture SINTÉTICO, compartilhado por todos os
-      # testes deste arquivo: p95 40 nos lados com lado apostado, 20 no azarão do
-      # Handicap (para que o eixo do LADO seja falsificável — dois candidatos de mesmos
-      # pontos e lados diferentes têm de sair com notas diferentes) e os dois zeros
-      # estruturais, o empate do 1X2 e o Pick do Handicap. Números redondos de propósito:
-      # a aritmética da nota normalizada tem de ser legível a olho no teste que a mede.
-      # O fixture NÃO acompanha o seed de produção — recongelar o denominador não pode
-      # mudar o resultado esperado de teste nenhum.
+      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
       - input: ref('futebol_p95_nota_contexto')
         format: csv
         fixture: p95_nota_contexto_sintetico
@@ -216,14 +224,7 @@ unit_tests:
         rows: []
       - input: ref('int_futebol_corroboracao')
         rows: []
-      # O DENOMINADOR CONGELADO (#105). Fixture SINTÉTICO, compartilhado por todos os
-      # testes deste arquivo: p95 40 nos lados com lado apostado, 20 no azarão do
-      # Handicap (para que o eixo do LADO seja falsificável — dois candidatos de mesmos
-      # pontos e lados diferentes têm de sair com notas diferentes) e os dois zeros
-      # estruturais, o empate do 1X2 e o Pick do Handicap. Números redondos de propósito:
-      # a aritmética da nota normalizada tem de ser legível a olho no teste que a mede.
-      # O fixture NÃO acompanha o seed de produção — recongelar o denominador não pode
-      # mudar o resultado esperado de teste nenhum.
+      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
       - input: ref('futebol_p95_nota_contexto')
         format: csv
         fixture: p95_nota_contexto_sintetico
@@ -291,14 +292,7 @@ unit_tests:
         rows: []
       - input: ref('int_futebol_corroboracao')
         rows: []
-      # O DENOMINADOR CONGELADO (#105). Fixture SINTÉTICO, compartilhado por todos os
-      # testes deste arquivo: p95 40 nos lados com lado apostado, 20 no azarão do
-      # Handicap (para que o eixo do LADO seja falsificável — dois candidatos de mesmos
-      # pontos e lados diferentes têm de sair com notas diferentes) e os dois zeros
-      # estruturais, o empate do 1X2 e o Pick do Handicap. Números redondos de propósito:
-      # a aritmética da nota normalizada tem de ser legível a olho no teste que a mede.
-      # O fixture NÃO acompanha o seed de produção — recongelar o denominador não pode
-      # mudar o resultado esperado de teste nenhum.
+      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
       - input: ref('futebol_p95_nota_contexto')
         format: csv
         fixture: p95_nota_contexto_sintetico
@@ -393,14 +387,7 @@ unit_tests:
         rows: []
       - input: ref('int_futebol_corroboracao')
         rows: []
-      # O DENOMINADOR CONGELADO (#105). Fixture SINTÉTICO, compartilhado por todos os
-      # testes deste arquivo: p95 40 nos lados com lado apostado, 20 no azarão do
-      # Handicap (para que o eixo do LADO seja falsificável — dois candidatos de mesmos
-      # pontos e lados diferentes têm de sair com notas diferentes) e os dois zeros
-      # estruturais, o empate do 1X2 e o Pick do Handicap. Números redondos de propósito:
-      # a aritmética da nota normalizada tem de ser legível a olho no teste que a mede.
-      # O fixture NÃO acompanha o seed de produção — recongelar o denominador não pode
-      # mudar o resultado esperado de teste nenhum.
+      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
       - input: ref('futebol_p95_nota_contexto')
         format: csv
         fixture: p95_nota_contexto_sintetico
@@ -491,14 +478,7 @@ unit_tests:
       - input: this
         rows: []
 
-      # O DENOMINADOR CONGELADO (#105). Fixture SINTÉTICO, compartilhado por todos os
-      # testes deste arquivo: p95 40 nos lados com lado apostado, 20 no azarão do
-      # Handicap (para que o eixo do LADO seja falsificável — dois candidatos de mesmos
-      # pontos e lados diferentes têm de sair com notas diferentes) e os dois zeros
-      # estruturais, o empate do 1X2 e o Pick do Handicap. Números redondos de propósito:
-      # a aritmética da nota normalizada tem de ser legível a olho no teste que a mede.
-      # O fixture NÃO acompanha o seed de produção — recongelar o denominador não pode
-      # mudar o resultado esperado de teste nenhum.
+      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
       - input: ref('futebol_p95_nota_contexto')
         format: csv
         fixture: p95_nota_contexto_sintetico
@@ -592,14 +572,7 @@ unit_tests:
                  CAST(NULL AS FLOAT64) AS line_value, 15 AS pts_corroboracao,
                  TRUE AS modelo_api_concorda, TRUE AS linha_sharp_confirma
 
-      # O DENOMINADOR CONGELADO (#105). Fixture SINTÉTICO, compartilhado por todos os
-      # testes deste arquivo: p95 40 nos lados com lado apostado, 20 no azarão do
-      # Handicap (para que o eixo do LADO seja falsificável — dois candidatos de mesmos
-      # pontos e lados diferentes têm de sair com notas diferentes) e os dois zeros
-      # estruturais, o empate do 1X2 e o Pick do Handicap. Números redondos de propósito:
-      # a aritmética da nota normalizada tem de ser legível a olho no teste que a mede.
-      # O fixture NÃO acompanha o seed de produção — recongelar o denominador não pode
-      # mudar o resultado esperado de teste nenhum.
+      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
       - input: ref('futebol_p95_nota_contexto')
         format: csv
         fixture: p95_nota_contexto_sintetico

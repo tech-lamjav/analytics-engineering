@@ -57,17 +57,49 @@
 --   `kickoff_utc >= hoje − p95_deriva_janela_dias` — a janela rolante propriamente dita.
 --
 -- ⚠️ DENOMINADOR ZERO TEM REGRA PRÓPRIA, e não é `SAFE_DIVIDE`. O empate do 1X2 e o `Pick`
--- do Handicap estão congelados em zero porque nenhuma premissa se aplica a eles. A
--- distância relativa dividiria por zero e um `SAFE_DIVIDE` devolveria NULL — a guarda
--- ficaria CEGA exatamente nos dois lados onde a mudança é mais barata de detectar. A regra
--- é binária: com zero congelado, acende se o p95 vivo for MAIOR que zero. Premissa que
--- passa a acender no empate é mudança de catálogo, e é o sinal que esta guarda existe para
--- dar.
+-- do Handicap estão congelados em zero porque nenhuma premissa se APLICA a eles — no 1X2 o
+-- empate não tem lado apostado, e no Handicap todas as premissas são `is_favorito AND ...`
+-- ou `is_azarao AND ...`, e as duas flags são FALSE na linha 0. A distância relativa
+-- dividiria por zero e um `SAFE_DIVIDE` devolveria NULL — a guarda ficaria CEGA exatamente
+-- nos dois lados onde a mudança é mais barata de detectar.
+--
+-- A regra é de PRESENÇA: com zero congelado, acende se o MÁXIMO vivo for maior que zero.
+-- Uma premissa que passa a acender no empate é mudança de catálogo, e é o sinal que esta
+-- guarda existe para dar.
+--
+-- ⚠️ MÁXIMO, e não o p95 — a distinção não é cosmética. `PERCENTILE_DISC(..., 0.95)` só sai
+-- de zero depois que MAIS DE 5% das linhas do lado acendem; até lá uma mudança de catálogo
+-- que fizesse premissa disparar em 3% dos empates passaria calada. Como ali nenhuma
+-- premissa PODE acender, o máximo não tem falso positivo a temer: uma linha basta, e uma
+-- linha é o que se quer ver.
+--
+-- ⚠️ E este ramo NÃO passa pelas condições de cobrança abaixo. Presença não é percentil:
+-- não precisa de piso de amostra para ser estável nem de janela cheia para ser comparável.
+-- Gatear ambos os ramos junto adiaria em trinta dias o único sinal que a guarda dá de
+-- graça — e, no `Pick`, o piso de 200 sobre 648 linhas por janela chegaria a calá-lo numa
+-- parada de calendário.
 --
 -- ⚠️ O PISO DE AMOSTRA É ABSTENÇÃO, e está declarado. Abaixo de `p95_deriva_min_linhas` o
 -- lado não é cobrado: um p95 de trinta linhas anda de degrau sozinho e produziria vermelho
 -- sem defeito. O preço é lado de baixo volume ficar sem vigilância numa janela magra —
 -- dito aqui, e não escondido num `HAVING`.
+--
+-- A MARGEM ESTÁ MEDIDA, e é o que impede o piso de virar cegueira permanente. Numa janela
+-- rolante de 30 dias (medida em 26/08), o lado mais magro é o do Resultado e o do Ambos
+-- Marcam, com 325 candidatos cada — um por fixture, contra ~5.800 do Handicap e ~6.400 do
+-- Gols, que têm um por LINHA. Com o piso em 200 a margem é de 1,6×, e os onze lados são
+-- cobráveis.
+--
+-- ⚠️ Não confundir a margem com o `n_candidatos` do seed: lá são 476, sobre a janela INTEIRA
+-- de 2,5 meses, e ela não é uniforme — o começo é backfill esparso. Dividir 476 por 76 dias
+-- daria ~188 e concluiria que o Resultado e o BTTS nunca são cobrados; o número que vale é
+-- o da janela rolante, que é 325.
+--
+-- ⚠️ O QUE ISSO AINDA DEIXA PASSAR: quinze dias de parada (data FIFA, virada de temporada)
+-- levam esses dois mercados abaixo de 200 e a deriva deles fica sem vigilância enquanto
+-- durar. É abstenção temporária e se cura sozinha quando o calendário volta — mas ela é
+-- MUDA, e é a razão de estar escrita aqui: quem estranhar a guarda quieta num mercado
+-- confere `n_vivo` na saída dela antes de concluir que o denominador está certo.
 --
 -- ⚠️ A JANELA PRECISA ESTAR CHEIA ATÉ O FUNDO, e esta é a terceira condição de cobrança —
 -- a que a medição desta entrega descobriu, e não é teórica. No dia do deploy as ÚNICAS
@@ -114,6 +146,10 @@ vivo AS (
         market,
         lado,
         {{ futebol_p95('nota_contexto') }} OVER (PARTITION BY market, lado) AS p95_vivo,
+        -- o MÁXIMO, e não o p95, é o que o ramo do denominador ZERO cobra: ali a pergunta
+        -- é "acendeu ALGUMA premissa?", e o p95 só enxergaria isso depois de 5% das linhas
+        -- do lado acenderem. Ver o ⚠️ do cabeçalho.
+        MAX(nota_contexto)                 OVER (PARTITION BY market, lado) AS max_vivo,
         COUNT(*)                           OVER (PARTITION BY market, lado) AS n_vivo,
         -- a idade da linha mais VELHA da amostra viva. É o que diz se a janela está cheia
         -- até o fundo — ver o ⚠️ do cabeçalho sobre janela rasa.
@@ -136,6 +172,7 @@ confronto AS (
         c.medido_em,
         c.janela_congelada_ate,
         v.p95_vivo,
+        v.max_vivo,
         COALESCE(v.n_vivo, 0)             AS n_vivo,
         COALESCE(v.profundidade_dias, 0)  AS profundidade_dias
     FROM congelado c
@@ -166,6 +203,7 @@ SELECT
     lado,
     p95_congelado,
     p95_vivo,
+    max_vivo,
     n_vivo,
     profundidade_dias,
     ROUND(distancia_rel, 4) AS distancia_rel,
@@ -181,7 +219,9 @@ SELECT
     END AS diagnostico
 FROM veredito
 WHERE sem_denominador
-   OR (cobravel AND p95_congelado = 0 AND p95_vivo > 0)
+   -- o ramo do ZERO não passa pelo `cobravel`: ele não é percentil, é presença, e não tem
+   -- de esperar amostra nem janela cheia para cobrar. Ver o ⚠️ do cabeçalho.
+   OR (p95_congelado = 0 AND max_vivo > 0)
    OR (cobravel AND p95_congelado > 0
        AND distancia_rel > {{ var('p95_deriva_tolerancia_rel') }})
 ORDER BY market, lado

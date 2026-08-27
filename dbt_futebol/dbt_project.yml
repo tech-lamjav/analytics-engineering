@@ -50,9 +50,11 @@ vars:
   # acender. 20% é o ponto de partida: abaixo disso a nota publicada se move menos do que
   # a granularidade grossa do catálogo já a move sozinha (o azarão do Handicap tem 3
   # premissas e 8 notas possíveis no total, então o p95 dele anda em degraus largos).
-  # Quando o denominador congelado é ZERO — o empate do 1X2 e o Pick do Handicap, que não
-  # têm lado apostado — a fração não existe e a regra é outra, escrita na guarda: acende
-  # se QUALQUER premissa acender ali.
+  # ⚠️ Esta var governa SÓ o ramo da deriva relativa. Quando o denominador congelado é ZERO
+  # — o empate do 1X2 e o Pick do Handicap, que não têm lado apostado — a fração não existe
+  # e a regra é outra, escrita na guarda: ali a cobrança é de PRESENÇA (o MÁXIMO vivo maior
+  # que zero), não passa por esta tolerância nem pelas duas condições abaixo, e acende com
+  # uma linha só.
   p95_deriva_tolerancia_rel: 0.20
 
   # Sobre quantos dias de kickoff o p95 vivo é recalculado. Janela ROLANTE de propósito:
@@ -60,10 +62,13 @@ vars:
   p95_deriva_janela_dias: 30
 
   # Piso de amostra por lado. Abaixo dele a guarda SE ABSTÉM daquele lado em vez de acender
-  # — um p95 de 30 linhas salta de degrau sozinho e produziria vermelho sem defeito. O
-  # ponto cego é declarado: lado de baixo volume (o BTTS tem ~476 candidatos em dois meses
-  # e meio) pode ficar sem vigilância numa janela magra, e a deriva dele só aparece quando
-  # o volume voltar.
+  # — um p95 de 30 linhas salta de degrau sozinho e produziria vermelho sem defeito.
+  #
+  # O 200 tem margem medida: numa janela rolante de 30 dias (26/08) o lado mais magro é o do
+  # Resultado e o do Ambos Marcam, com 325 candidatos cada — um por fixture, contra ~5.800 do
+  # Handicap e ~6.400 do Gols, que têm um por LINHA. Margem de 1,6×, e os onze lados são
+  # cobráveis. O ponto cego que sobra está declarado no cabeçalho da guarda: uma parada de
+  # duas semanas leva esses dois mercados abaixo do piso e a abstenção é MUDA enquanto durar.
   p95_deriva_min_linhas: 200
 
 
