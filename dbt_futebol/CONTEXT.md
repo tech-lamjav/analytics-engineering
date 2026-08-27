@@ -48,8 +48,30 @@ observed p95, measured once over a **declared window** and **frozen**. Its job i
 100 mean the same thing on every lado — the top of the scale anchored at a common
 quantile. It is deliberately not the sum of the weights, which never occurs, and not
 recomputed at runtime: a denominator that moves makes the régua mean a different thing
-each day and kills every historical comparison.
+each day and kills every historical comparison. Since #105 it is a concrete artefact: the
+seed `futebol_p95_nota_contexto`, eleven rows carrying the p95, the window it was measured
+over, the date of the measurement and where each number came from.
 _Avoid_: teto (bare — ambiguous with the sum of the pesos)
+
+**Lado**:
+The side actually backed, and the axis the denominator is keyed on — eleven (mercado, lado)
+pairs, derived in one place (`macros/futebol_lado.sql`). It is **not** the `outcome`: on the
+Handicap the outcome is Home/Away while the lado is Favorito/Azarao/Pick, read off the sign
+of the handicap from the backed side's point of view, and the two have disjoint premissa
+sets (Σ40 against Σ30). On the Dupla Chance 1X and X2 collapse into `unico`, because the
+four premissas apply to both saídas.
+_Avoid_: outcome/saída as a synonym (they coincide on three markets out of five, which is
+exactly what makes the confusion survive)
+
+**Nota normalizada**:
+The nota de contexto divided by its lado's frozen p95, 0–100 (#105, ADR 0005):
+`score_normalizado` in `fact_value_funnel`. It exists so that 100 means the same thing on
+every lado. Absolute, never a percentile within the lado. ~5% of each lado's lines land on
+100 **by construction** — that is the quantile, not an error — and a zero denominator (the
+1X2 draw, the Handicap pick) resolves to an explicit zero, never a `SAFE_DIVIDE` NULL that
+would let the line leave without passing and without being marked.
+_Avoid_: calling it the Score — the board still reads `score` and the régua of 40 until the
+flip at the end of the [A]
 
 **Premissa**:
 A boolean context signal computed from the data, carrying a point weight. Fired

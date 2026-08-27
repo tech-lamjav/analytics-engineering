@@ -1,0 +1,12 @@
+market,lado,p95,janela_inicio,janela_fim,medido_em,origem,n_candidatos
+asian_handicap,Azarao,30,2026-06-16,2026-08-31,2026-08-26,recomputacao,8608
+asian_handicap,Favorito,24,2026-06-16,2026-08-31,2026-08-26,recomputacao,8744
+asian_handicap,Pick,0,2026-06-16,2026-08-31,2026-08-26,recomputacao,952
+btts,No,28,2026-06-16,2026-08-31,2026-08-26,recomputacao,476
+btts,Yes,28,2026-06-16,2026-08-31,2026-08-26,recomputacao,476
+double_chance,unico,28,2026-06-16,2026-08-31,2026-08-26,recomputacao,952
+goals_over_under,Over,44,2026-06-16,2026-08-31,2026-08-26,recomputacao,9854
+goals_over_under,Under,36,2026-06-16,2026-08-31,2026-08-26,recomputacao,9405
+match_winner,Away,22,2026-06-16,2026-08-31,2026-08-26,recomputacao,476
+match_winner,Draw,0,2026-06-16,2026-08-31,2026-08-26,recomputacao,476
+match_winner,Home,33,2026-06-16,2026-08-31,2026-08-26,recomputacao,476
