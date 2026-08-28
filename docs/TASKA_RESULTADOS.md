@@ -539,3 +539,115 @@ bq query --use_legacy_sql=false --format=csv \
 
 Para remedir mais tarde, mover `corte_fim` no cabeçalho da análise. Para replayar um congelamento,
 mover os dois cortes. Nada em produção muda: é `compile` + `bq query`, nunca `dbt run`.
+
+---
+
+# Issues #120 / #121 — Quando o Valencia × Betis foi publicado
+
+**Análise:** `dbt_futebol/analyses/board_reconstrucao_de_publicacao.sql`
+**Fontes:** `fact_value_funnel` (veredito por janela) e `fact_value_opportunities_hist` (o painel)
+**Rodada publicada:** **2026-08-28 14:41 UTC**
+**Caso:** fixture `1570342`, Valencia × Real Betis, `goals_over_under` / `Over` / linha `3.5`,
+apito em **25/08/2026 16:00 BRT**
+
+## A resposta
+
+**Publicada às 15:03:09 BRT de 25/08 — 56 minutos ANTES do apito.** Comportamento **válido**, e
+disponibilidade **contínua**: não houve sumiço nem reativação.
+
+| versão no painel | de (BRT) | até (BRT) | antes do apito | transição |
+|---|---|---|---|---|
+| `t1h` (detecção `t1h`) | **15:03:09** | 15:48:00 | **+56 min** | **primeira publicação** |
+| `t15m` (detecção `t1h`) | 15:48:00 | 20:48:39 | +11 min | atualização (contígua) |
+| `t15m` | 20:48:39 | 21:04:35 | −288 min | atualização (contígua) |
+| `t15m` | 21:04:35 | 21:32:54 | −304 min | atualização (contígua) |
+| `t15m` | 21:32:54 | 26/08 09:14:45 | −332 min | atualização (contígua) |
+
+Odd, edge e nota **não se moveram** em nenhuma das cinco versões: 4,00 / +6,94% / 44 / faixa
+`Média`, com 11 casas e `valor_fonte = pinnacle`.
+
+## Por que parecia t15m — e por que isso é uma armadilha de leitura, não um defeito
+
+O PIT devolve a versão **viva no apito**, que é a de 15:48:00, cujo `janela_usada` é `t15m`. Mas
+`janela_usada` é a **janela de odds da versão**, não o horário de nascimento: às 15:48 houve uma
+*atualização contígua* (o `dbt_valid_to` de uma versão é o `dbt_valid_from` da seguinte, sem
+buraco), não uma republicação.
+
+Quem responde a pergunta certa já existe: **`janela_deteccao` = `t1h`** nas cinco versões — a
+coluna que a **#40** criou. A leitura de "apareceu em t15m" vinha de olhar `janela_usada`.
+
+## O Motor de fato não passou antes — e o que mudou foi o preço
+
+Não é caso de publicação atrasada. Nas janelas anteriores a candidata **reprovava de verdade**:
+
+| janela | odd | edge | nota | passou? | porta que barrou |
+|---|---|---|---|---|---|
+| `daily` | 3,60 | +1,34% | 21 | não | `nota_abaixo_da_regua` |
+| `t24h` | 3,52 | **−4,00%** | 14 | não | `sem_edge` |
+| **`t1h`** | **4,00** | **+6,94%** | **44** | **sim** | — |
+| `t15m` | 4,00 | +6,94% | 44 | sim | — |
+
+A Pinnacle abriu a odd de 3,52 para 4,00 entre `t24h` e `t1h`. O edge virou de −4,0% para +6,9% e
+a nota saltou de 14 para 44. **O sinal nasceu tarde porque o preço nasceu tarde**, e o pipeline o
+publicou 56 minutos depois — não é atraso de serving.
+
+## ⚠️ A lacuna de telemetria, medida: o funil não data janela
+
+A spec #120 propõe reconstruir as transições "usando o funil append-only". **O funil não sustenta
+essa reconstrução**, e isto foi medido, não suposto:
+
+> Dos **7.660** candidatos com mais de uma janela na semana de 20–26/08, **7.660** — todos, sem
+> uma exceção — têm um `gravado_em` **único**, compartilhado por todas as suas janelas.
+
+No caso do Valencia × Betis, as **oito** linhas do funil (4 janelas × 2 lados) carimbam
+`2026-08-25 15:46:34`, treze minutos antes do apito. O `gravado_em` data a **execução que
+escreveu**, não a janela que a linha descreve.
+
+O funil, portanto, responde **o que o Motor disse em cada janela** — e é insubstituível nisso,
+como a tabela acima mostra. **Não** responde *quando* ele disse, nem quando o assinante viu. Quem
+data a tela é o `dbt_valid_from` do `hist`, e só ele.
+
+Que a ausência antes das 15:03 é ausência de verdade, e não falta de execução, o próprio `hist`
+prova: o snapshot rodou às 13:32:54 e abriu uma versão de outra chave, **sem** nenhuma deste
+fixture.
+
+## "Disponível desde": o campo que falta, e o que ele não pode ser
+
+O contrato de dados pedido pela #120 é: **`disponivel_desde` = o início do período contínuo
+ATUAL**, com reativação reiniciando o relógio. Ele se calcula do `hist` — o `dbt_valid_from` da
+versão que abre a corrida contígua corrente, exatamente como o bloco B da análise faz.
+
+Três avisos que precisam ir junto do campo, senão ele mente:
+
+1. **Não é `MIN(dbt_valid_from)` da chave.** Isso data o *primeiro* nascimento e ignora
+   reativação, que é justamente a distinção que a spec pede.
+2. **Não é `janela_usada`.** É o erro que originou esta investigação.
+3. ⚠️ **O `hist` estreou em 27/07/2026.** Para chave anterior, `MIN(dbt_valid_from)` data a
+   estreia do snapshot, não a oportunidade — é o pico falso já registrado no `CONTEXT.md`. A
+   análise emite `anterior_a_estreia_do_hist` para que isso não passe em silêncio, e o campo no
+   app precisa do mesmo cuidado: **melhor vazio do que um horário inventado**.
+
+## Um achado colateral: três versões nasceram DEPOIS do apito
+
+As versões de 20:48:39, 21:04:35 e 21:32:54 nasceram **4h48, 5h04 e 5h32 após o apito** — o jogo já
+tinha acabado. É o resíduo que a **#86** mediu e nomeou: a faixa **0–10 h**, que não é do mart e sim
+da latência de coleta de placar, e que virou **`data-engineering#60`**. Este fixture é um caso dela,
+com número. O expurgo fechou a chave às 09:14:45 de 26/08, quando o `FT` finalmente entrou.
+
+Nada a fazer aqui: já está rastreado, e no repositório certo.
+
+## Como rerodar
+
+```bash
+cd dbt_futebol
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target prod \
+  --select board_reconstrucao_de_publicacao \
+  --vars '{pub_fixture_id: 1570342, pub_market: goals_over_under, pub_outcome: Over, pub_line: 3.5}'
+bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/board_reconstrucao_de_publicacao.sql
+```
+
+A análise é **parametrizada** — serve para qualquer candidato, não só para este. `pub_line` aceita
+`NULL` nos mercados sem linha (1X2, BTTS, Dupla Chance): a comparação é NULL-safe. Nada em produção
+muda: é `compile` + `bq query`, nunca `dbt run`. E como o `hist` fecha versões em vez de apagá-las,
+rerodar para este jogo passado devolve as mesmas transições — hoje e daqui a um ano.
