@@ -207,6 +207,27 @@ current row of a past fixture" is a different and dishonest thing)
 The product surface that shows, on a played fixture, what the Motor was saying about it.
 Its content is the **histórico no apito** — the promise the name already makes.
 
+**Versão pós-apito**:
+A row in `fact_value_opportunities_hist` whose `dbt_valid_from` is **later than the
+fixture's kickoff** — the Motor emitted a new take on an opportunity that had already
+expired. It is the unit the expurgo is measured in, and the only replayable one:
+`dbt_valid_from` is immutable, while `dbt_valid_to` is rewritten every time a newer
+version is born, so any "chave morta" count has to be taken on the day and cannot be
+reconstructed later.
+_Avoid_: counting them in one lump — see **as três faixas**
+
+**As três faixas** (of a versão pós-apito):
+The band the delay falls in decides who owns it, and only one of them is a defect.
+**0–10 h**, the status has not landed yet: `fact_fixtures` rebuilds once a day while the
+board rebuilds every odds cycle, so no carência can reach it — that is the task **[C]**
+dependency the ADR 0009 pre-declared. **10–24 h**, the price of
+`var expurgo_carencia_horas`, a product decision. **Above 24 h**, a defect: the carência
+lapsed and the expurgo did not fire. `PST`/`SUSP`/`INT` are excluded from the defect band
+for the same reason the expurgo spares them — a postponed fixture stays postponed for
+weeks and would otherwise indict the expurgo where it is obeying.
+_Avoid_: "zero versão pós-apito" as an acceptance target — only the above-24 h band has
+zero as an honest target, and #86 measured it
+
 **Evidência**:
 A fired premissa surfaced to the user as a "why" bullet, ordered by weight.
 

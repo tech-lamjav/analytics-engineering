@@ -398,6 +398,15 @@ de folga** até a fronteira da carência —, e **nenhuma** das 45 passa de 20 h
 resultado colado na fronteira mudaria de lado com uma remarcação de jogo ou um arredondamento;
 este não muda.
 
+⚠️ **`PST`/`SUSP`/`INT` não entram na faixa de defeito**, pelo mesmo motivo que não entram no
+expurgo: a ADR 0009 os preserva **inclusive além da carência**. Jogo adiado fica adiado por
+semanas e nasceria versão nova o tempo todo — contá-lo como defeito faria esta medição acusar o
+expurgo justamente onde ele está obedecendo. Eles saem **contados à parte**, nunca apagados
+(coluna `acima_24h_sobrevivente`), e a lista vem de `futebol_status_sobrevivem()`, o mesmo macro
+do mart e da guarda 1. **Deu zero nos três cortes** — janela, 17/08 e 20/08 —, então a ressalva é
+de instrumento e não muda nenhum número desta seção: os 14.674 do baseline são todos defeito de
+verdade.
+
 ### Quem são as 45
 
 Oito fixtures, todos `FT`, todos com o atraso dentro das primeiras 16,3 h:
@@ -491,15 +500,19 @@ O aceite manda registrar o resíduo na **#78**. **Nada vai para lá, e o motivo 
 de 24 h — deu **zero**. Registrar lá as 45 seria mandar para a task errada um número que já tem
 dono declarado.
 
-- as **43** de 0–10 h são a **task [C]** (frequência da coleta de placar). Não há hoje ticket
-  aberto da [C] para recebê-las; o número fica aqui e na #86, e entra na [C] quando ela for
-  escrita — é insumo dela, não pendência da [A];
+- as **43** de 0–10 h são a **task [C]** (frequência da coleta de placar), e a #85 já as atribuiu
+  a ela **antes** do deploy: *"Quem move isso é a task [C], não este ticket nem a #78."* Elas não
+  ficam penduradas na [A] — são **insumo declarado da [C]**, com número e mecanismo, e este
+  documento é a fonte que ela lê. A [C] ainda não tem ticket aberto; abrir um para carregá-las é
+  ato da [C], não desta medição;
 - as **2** de 10–24 h são o preço de `expurgo_carencia_horas = 24`, fixada pela ADR 0009. Mexer
   nela é decisão de produto;
 - as **0** acima de 24 h são o que a #78 receberia. Não há o que registrar.
 
-*(A #78 foi, aliás, **fechada em 26/08** pela A1/#103 — as duas premissas de odd que instabilizavam
-a nota saíram do Score. Mesmo que houvesse resíduo de churn, ele precisaria de casa nova.)*
+*(A #78 foi, aliás, **fechada em 2026-08-17 20:59 UTC**, quando a causa raiz saiu do adjetivo: o
+`AVG()` do BigQuery não é bit-reproduzível entre execuções — a fusão das médias parciais de cada
+shard leva o último bit junto —, e são 6 premissas, não 1. Mesmo que houvesse resíduo de churn
+acima de 24 h, ele precisaria de casa nova.)*
 
 ## Estado do produto no instante da medição
 
