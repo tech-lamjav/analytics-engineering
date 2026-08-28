@@ -329,3 +329,194 @@ bq query --use_legacy_sql=false --format=csv \
 ```
 
 Nada em produção muda: é `compile` + `bq query`, nunca `dbt run`.
+
+---
+
+# Ticket #86 — A remedição de churn D+7
+
+**Análise:** `dbt_futebol/analyses/taskA_churn_pos_apito.sql`
+**Fonte:** `fact_value_opportunities_hist` × `fact_fixtures` (ADR 0009)
+**Deploy do expurgo (#85) em produção:** **2026-08-20 16:41:25 UTC**
+**Medição:** **2026-08-28 12:40:53 UTC** — **7,83 dias corridos** depois (a trava de relógio
+expirava em 27/08 16:41 UTC)
+
+## Veredito
+
+**O alvo literal do aceite — *zero versão nova pós-apito* — não foi atingido: sobraram 45, sobre
+9 chaves. O alvo que decide foi: das 45, ZERO nasceu depois da carência de 24 h.**
+
+A distinção não é conveniência retroativa. Ela foi pré-declarada na #85 **antes** do deploy,
+justamente para esta medição atribuir em vez de investigar: a versão que nasce nas primeiras 24 h
+depois do apito não está ao alcance do expurgo (o status ainda não chegou, ou a carência ainda não
+venceu). A que nasce **depois** das 24 h está, e é a única que seria defeito.
+
+| | Baseline (17/08) | Janela pós-deploy |
+|---|---|---|
+| Versões pós-apito **> 24 h** — *o número do aceite* | **14.674** | **0** |
+| Versões pós-apito, total | 14.946 | **45** |
+| …sobre quantas chaves | 172 | **9** (8 fixtures) |
+| % das versões da janela que são pós-apito | 96,7% | **9,0%** |
+| Versões pós-apito por dia | 709 | **5,8** |
+| Versões pós-apito por lote de snapshot | 53,4 | **0,28** |
+| Maior atraso observado | 1.409 h (59 dias) | **16,3 h** |
+
+## A janela, e o que ela contém
+
+| | |
+|---|---|
+| Piso | `dbt_valid_from > 2026-08-20 16:41:25 UTC` (o deploy) |
+| Teto | `dbt_valid_from <= 2026-08-28 12:40:53 UTC` (esta medição) |
+| Versões nascidas na janela | **498** |
+| Chaves | **48** |
+| Lotes de snapshot | **162** |
+| Versões sem `kickoff` (fixture ausente) | **0** |
+
+⚠️ **162 lotes em 7,8 dias não é o relógio, é o calendário de jogos.** A fase de `dbt run` do
+`workflow_futebol_odds.yml` tem gate `saved_count > 0`: o cron dispara a *coleta*, e o board só é
+reconstruído quando a coleta traz arquivo novo de odds. Dia sem jogo tem menos reconstruções — e
+menos oportunidades de nascer versão nova. "Uma semana" aqui vale 162 chances, não 672.
+
+## As três faixas — a atribuição, com número
+
+| Faixa após o apito | Baseline (17/08) | 20/08 (deploy) | **Janela pós-deploy** | Dono |
+|---|---|---|---|---|
+| 0–10 h — o status ainda não chegou | 83 | 121 | **43** | task **[C]** (coleta de placar) |
+| 10–24 h — resíduo da carência | 189 | 208 | **2** | decisão de produto (`expurgo_carencia_horas`) |
+| **> 24 h — defeito** | **14.674** | **17.390** | **0** | — |
+
+- As **43** de 0–10 h são a latência de `fact_fixtures`, que é reconstruída uma vez por dia
+  (`workflow-futebol-daily`, `0 9 * * *`) enquanto o board é reconstruído a cada ciclo de odds.
+  Entre o apito e as 09:00 UTC seguintes o status ainda não é `FT` e a linha continua no board.
+  **Nenhuma carência resolve** — a linha não passou de 24 h, então a rede de segurança não a
+  alcança por construção. É a dependência **[A]→[C]** que a ADR 0009 pré-declarou.
+- As **2** de 10–24 h são o preço corrente de `expurgo_carencia_horas = 24`. Baixar a var derruba
+  esse número; é decisão de produto, não defeito.
+- **Zero acima de 24 h.** O expurgo faz exatamente o que a ADR 0009 desenhou.
+
+### Quem são as 45
+
+Oito fixtures, todos `FT`, todos com o atraso dentro das primeiras 16,3 h:
+
+| Fixture | Competição | Kickoff (UTC) | Versões pós-apito | Chaves | Maior atraso |
+|---|---|---|---|---|---|
+| 1570348 | la_liga | 2026-08-23 17:30 | 26 | 2 | 6,5 h |
+| 1520835 | serie_b | 2026-08-25 22:30 | 5 | 1 | 2,0 h |
+| 1570345 | la_liga | 2026-08-21 19:00 | 4 | 1 | **16,3 h** |
+| 1570342 | la_liga | 2026-08-25 19:00 | 3 | 1 | 5,5 h |
+| 1623070 | copa_do_brasil | 2026-08-27 23:00 | 3 | 1 | 12,6 h |
+| 1520836 | serie_b | 2026-08-23 21:00 | 2 | 1 | 1,3 h |
+| 1547769 | libertadores | 2026-08-26 00:30 | 1 | 1 | 0,0 h |
+| 1570340 | la_liga | 2026-08-26 19:00 | 1 | 1 | 4,0 h |
+
+Um fixture responde por 26 das 45. O padrão é o esperado: jogo de fim de tarde/noite, cujo status
+só vira `FT` na varredura das 09:00 UTC do dia seguinte, continua recebendo preço enquanto a
+coleta de odds ainda o enxerga.
+
+## A descontinuidade do `.25` (#101), 2026-08-21 19:05:23 UTC
+
+O aceite exige as contagens absolutas dos dois lados do corte. Elas estão abaixo — **com os lotes
+e os dias de cada lado**, sem os quais a comparação seria entre 26 horas e uma semana:
+
+| | **A · antes do `.25`** | **B · depois do `.25`** |
+|---|---|---|
+| Intervalo | 20/08 16:41 → 21/08 19:05 | 21/08 19:05 → 28/08 12:40 |
+| Dias observados | 1,04 | 6,70 |
+| Lotes de snapshot | 24 | 138 |
+| Versões | **44** | **454** |
+| Chaves | **8** | **43** |
+| Versões pós-apito | **0** | **45** |
+| Chaves pós-apito | 0 | 9 |
+| 0–10 h / 10–24 h / **> 24 h** | 0 / 0 / **0** | 43 / 2 / **0** |
+| Apitos dentro do intervalo | **2** | **14** |
+
+⚠️ **O zero do lado A não é evidência sobre o `.25`, e não deve ser lido como tal.** O lado A tem
+26 horas, 24 lotes e **2 apitos**; o lado B tem quase sete dias, 138 lotes e 14. Com 2 jogos
+encerrando dentro do intervalo, "nenhuma versão pós-apito" é o que se esperaria de qualquer
+regime. O que os dois lados dizem juntos, e isso sim é o aceite: **`> 24 h` é zero dos dois
+lados**.
+
+O conserto do `.25` é monotônico — nenhum candidato anda de quarto para meia, então nada passou a
+ser publicado que não era. Ele muda **volume para baixo** (o board perde 37,7% das oportunidades
+de Handicap e Gols), não taxa de nascimento de versão pós-apito. É por isso que as contagens
+absolutas caem a partir de 21/08 19:05 e o veredito não se move.
+
+## O critério, e como ele foi provado ser o mesmo do congelamento
+
+```sql
+-- versão pós-apito ⇔
+h.dbt_valid_from > f.kickoff_utc
+FROM fact_value_opportunities_hist h
+LEFT JOIN fact_fixtures f USING (fixture_id)   -- LEFT, nunca INNER (fail-open, ADR 0003)
+```
+
+**O congelamento de 17/08 publicou os números sem guardar a query.** O critério acima foi
+reconstruído e depois **calibrado contra os dois checkpoints congelados**, que ele reproduz ao
+número — rodando o próprio arquivo de análise, só movendo o teto:
+
+| Teto | Reproduz | Publicado em |
+|---|---|---|
+| 2026-08-17 16:32:17.191019 UTC | 15.452 versões / 210 chaves / 14.946 pós-apito / média **668,2 h** | ADR 0009 e #80 |
+| 2026-08-20 16:41:25 UTC | 17.719 pós-apito, faixas **121 / 208 / 17.390** | #85, no dia do deploy |
+
+O teto de 17/08 não foi escolhido a dedo: é a última versão do lote das 16:32 daquele dia, o único
+instante em que o `hist` tem exatamente 15.452 linhas. Reproduzir **dois** pontos, faixas
+inclusive, é o que torna esta remedição comparável ao baseline em vez de uma métrica nova — e é o
+aceite "mesma query do congelamento", satisfeito por reprodução em vez de por afirmação.
+
+O SQL agora mora em `dbt_futebol/analyses/taskA_churn_pos_apito.sql`, para que a próxima remedição
+não pague a reconstrução de novo.
+
+## Três ressalvas do instrumento, declaradas
+
+1. **`dbt_valid_to` não é imutável.** Ele é reescrito quando a versão seguinte nasce. A linha do
+   baseline *"89 chaves mortas, 54 depois do apito, em média 464 h"* **não é replayável**: relendo
+   o `hist` hoje com o teto de 17/08, as 210 chaves aparecem fechadas, porque elas fecharam
+   depois. Quem quiser essa métrica tem de medi-la no dia. Só `dbt_valid_from` sustenta replay —
+   e é só com ele que a janela desta medição foi escrita.
+2. **`kickoff_utc` é lido no instante da medição, não no da versão.** Jogo remarcado move o próprio
+   apito e uma versão pode trocar de lado da fronteira retroativamente. O `hist` não carrega
+   kickoff, e carimbá-lo seria coluna nova em tabela sincronizada — o que a ADR 0009 recusou de
+   propósito.
+3. **A janela vale 162 lotes, não 672.** Ver o gate `saved_count > 0` acima.
+
+## Resíduo: o que vai para onde
+
+O aceite manda registrar o resíduo na **#78**. **Nada vai para lá, e o motivo é o resultado:** a
+#78 é a task de churn, e o único resíduo que seria churn — versão nascida **depois** da carência
+de 24 h — deu **zero**. Registrar lá as 45 seria mandar para a task errada um número que já tem
+dono declarado.
+
+- as **43** de 0–10 h são a **task [C]** (frequência da coleta de placar). Não há hoje ticket
+  aberto da [C] para recebê-las; o número fica aqui e na #86, e entra na [C] quando ela for
+  escrita — é insumo dela, não pendência da [A];
+- as **2** de 10–24 h são o preço de `expurgo_carencia_horas = 24`, fixada pela ADR 0009. Mexer
+  nela é decisão de produto;
+- as **0** acima de 24 h são o que a #78 receberia. Não há o que registrar.
+
+*(A #78 foi, aliás, **fechada em 26/08** pela A1/#103 — as duas premissas de odd que instabilizavam
+a nota saíram do Score. Mesmo que houvesse resíduo de churn, ele precisaria de casa nova.)*
+
+## Estado do produto no instante da medição
+
+| | |
+|---|---|
+| Linhas no board | **8** |
+| Chaves abertas no `hist` | **8** |
+| `hist` — total de versões | **18.819** (era 15.452 em 17/08: cresceu, não encolheu) |
+| Guarda 1 (`assert_board_sem_jogo_encerrado`) | **PASS** |
+| Guarda 2 (`assert_hist_aberto_existe_no_board`) | **PASS** |
+
+O `hist` maior é a outra metade da ADR 0009 funcionando: **expurgar não é apagar**. As 45 versões
+pós-apito desta janela estão todas lá, fechadas e datadas — é por isso que esta medição existe.
+
+## Como rerodar
+
+```bash
+cd dbt_futebol
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --select taskA_churn_pos_apito
+bq query --use_legacy_sql=false --format=csv \
+  < target/compiled/dbt_futebol/analyses/taskA_churn_pos_apito.sql
+```
+
+Para remedir mais tarde, mover `corte_fim` no cabeçalho da análise. Para replayar um congelamento,
+mover os dois cortes. Nada em produção muda: é `compile` + `bq query`, nunca `dbt run`.
