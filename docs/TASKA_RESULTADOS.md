@@ -501,10 +501,11 @@ de 24 h — deu **zero**. Registrar lá as 45 seria mandar para a task errada um
 dono declarado.
 
 - as **43** de 0–10 h são a **task [C]** (frequência da coleta de placar), e a #85 já as atribuiu
-  a ela **antes** do deploy: *"Quem move isso é a task [C], não este ticket nem a #78."* Elas não
-  ficam penduradas na [A] — são **insumo declarado da [C]**, com número e mecanismo, e este
-  documento é a fonte que ela lê. A [C] ainda não tem ticket aberto; abrir um para carregá-las é
-  ato da [C], não desta medição;
+  a ela **antes** do deploy: *"Quem move isso é a task [C], não este ticket nem a #78."* Elas
+  **não ficam penduradas aqui**: viraram **`data-engineering#60`**, com o número, a distribuição
+  por atraso e o custo da cadência medido (`/fixtures` não é paginado — 1 chamada por alvo, e
+  `FIXTURES_CURRENT` tem 14). Foi aberto lá porque a alavanca inteira é de ingestão: cron do
+  Scheduler, `FIXTURES_CURRENT` e workflows. Nada no `dbt_futebol` move este número;
 - as **2** de 10–24 h são o preço de `expurgo_carencia_horas = 24`, fixada pela ADR 0009. Mexer
   nela é decisão de produto;
 - as **0** acima de 24 h são o que a #78 receberia. Não há o que registrar.
