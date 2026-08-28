@@ -1,0 +1,117 @@
+version: 2
+
+# ==============================================================================
+# O DENOMINADOR CONGELADO DA NOTA NORMALIZADA (#105, ADR 0005).
+#
+# Uma linha por (mercado, lado) — os ONZE pares que `futebol_lado()` enumera —, com o
+# p95 observado da nota de contexto, a JANELA em que ele foi medido, a DATA da medição
+# e a PROCEDÊNCIA de cada número.
+#
+# ⚠️ ESTE ARQUIVO É A FONTE, e é assim de propósito. Recalcular o p95 em runtime é falha
+# de aceite da issue: um denominador que se move faz a régua significar coisa diferente a
+# cada dia e mata toda comparação histórica. Quem quiser um número novo REMEDE (roda a
+# `analyses/taskA_a6_p95.sql`), edita este CSV e o número entra por commit — com data,
+# com autor e com revisão, que é o que "congelado em seed versionado" quer dizer.
+#
+# ⚠️ ELE ENVELHECE EM SILÊNCIO. Toda mexida no catálogo de premissas, toda liga nova e
+# toda remoção como a das premissas de movimento de linha desloca a distribuição, e o
+# número continua aqui — certo no dia em que foi medido e cada vez menos certo depois.
+# Quem avisa é a `assert_p95_nota_contexto_nao_derivou`, que recalcula o p95 VIVO e fica
+# vermelha quando ele se afasta daqui além da tolerância declarada em `dbt_project.yml`.
+#
+# ⚠️ OS DOIS ZEROS SÃO EXPLÍCITOS, e não linhas faltando. O empate do 1X2 e o `Pick` do
+# Handicap (linha 0) não têm lado apostado: nenhuma premissa dispara, o teto é zero e o
+# p95 é zero. Linha ausente e linha com zero resolvem para a MESMA nota (o modelo trata
+# denominador ausente e denominador zero como nota zero, nunca como NULL), mas só a linha
+# presente diz que alguém mediu e o zero é o resultado. É a mesma razão de a "12" da
+# Dupla Chance ser linha carimbada no funil em vez de sumiço (ADR 0006).
+# ==============================================================================
+seeds:
+  - name: futebol_p95_nota_contexto
+    description: >
+      O p95 observado da nota de contexto por (mercado, lado) — o denominador da
+      `score_normalizado` do `fact_value_funnel`. Medido UMA VEZ sobre uma janela
+      declarada e congelado aqui (#105, ADR 0005). Onze linhas, uma por par de mercado e
+      lado, incluindo os dois lados sem lado apostado (empate do 1X2 e Pick do Handicap)
+      com zero explícito. A medição que o produziu está em `analyses/taskA_a6_p95.sql`.
+    config:
+      # os tipos vão declarados, e não inferidos: um `p95` que chegasse STRING faria a
+      # divisão do funil falhar no build, e um `janela_inicio` STRING faria toda leitura
+      # de janela comparar texto.
+      column_types:
+        market: STRING
+        lado: STRING
+        p95: INT64
+        janela_inicio: DATE
+        janela_fim: DATE
+        medido_em: DATE
+        origem: STRING
+        n_candidatos: INT64
+    columns:
+      - name: market
+        description: o nome público do mercado, o mesmo que `futebol_mercados_pontuados()` emite.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['match_winner', 'asian_handicap', 'goals_over_under', 'btts', 'double_chance']
+      - name: lado
+        description: >
+          o lado apostado, como `futebol_lado()` o deriva. No Handicap ele NÃO é o
+          `outcome` (Home/Away) e sim o sinal do handicap na ótica do lado —
+          Favorito/Azarao/Pick; na Dupla Chance 1X e X2 colapsam em `unico`, porque as
+          quatro premissas se aplicam às duas saídas.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Favorito', 'Azarao', 'Pick', 'Yes', 'No', 'unico']
+      - name: p95
+        description: >
+          o percentil 95 OBSERVADO da nota de contexto neste lado, em pontos. É
+          `PERCENTILE_DISC` — um valor que linhas reais alcançam —, e por construção ~5%
+          das linhas do lado ficam ACIMA dele: é o quantil, não erro, e é o `LEAST(100,
+          ...)` do funil que as trava em 100.
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+      - name: janela_inicio
+        description: primeiro dia de kickoff da janela sobre a qual o p95 foi medido.
+        tests:
+          - not_null
+      - name: janela_fim
+        description: >
+          último dia de kickoff da janela. Pode estar no FUTURO: o universo do funil são
+          CANDIDATOS, e candidato de jogo que ainda não aconteceu é candidato igual.
+        tests:
+          - not_null
+      - name: medido_em
+        description: o dia em que a medição rodou. Não é a janela — é a idade do número.
+        tests:
+          - not_null
+      - name: origem
+        description: >
+          de onde veio o número. `recomputacao` = as premissas foram recalculadas sobre o
+          histórico com o código de hoje (padrão da `taskA_a40_transporte.sql`);
+          `registro` = lidas como o Motor as gravou no funil. Recomputação NÃO é registro
+          do que o Motor disse, e a distinção existe pelo mesmo motivo que o carimbo
+          `origem` do próprio funil. Premissa recomputada está sujeita à
+          irreprodutibilidade da #78.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['recomputacao', 'registro']
+      - name: n_candidatos
+        description: >
+          quantos candidatos entraram no percentil (uma janela por candidato). É o que
+          diz se o número tem lastro: 476 no 1X2 e no BTTS (um por fixture), ~9 mil no
+          Gols e no Handicap (um por linha).
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['market', 'lado']

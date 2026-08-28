@@ -66,6 +66,31 @@ models:
           - accepted_values:
               arguments:
                 values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Yes', 'No', '1X', '12', 'X2']
+      - name: lado
+        description: >
+          O LADO APOSTADO (#105, ADR 0005) — o eixo do denominador congelado, e o que o
+          `outcome` sozinho não diz. São ONZE pares de (mercado, lado), derivados num lugar
+          só por `macros/futebol_lado.sql`, lido também pela medição que produziu o seed e
+          pela guarda que o vigia.
+
+          ⚠️ No Handicap ele NÃO é o `outcome`. `line_value` vem na ótica do MANDANTE e é o
+          mesmo para Home e Away (par complementar), então o handicap na ótica do lado
+          apostado é `IF(side = 'Home', line, -line)` e o SINAL dele separa `Favorito` de
+          `Azarao` — conjuntos de premissa disjuntos, Σ40 contra Σ30. Handicap zero é
+          `Pick`: nenhuma premissa se aplica.
+
+          ⚠️ Na Dupla Chance 1X e X2 colapsam em `unico`, porque as quatro premissas se
+          aplicam às duas saídas — dois denominadores ali seriam duas medições do mesmo
+          número, cada uma com metade da amostra.
+
+          ⚠️ NULL na saída não catalogada (a "12"), pelo mesmo fail-closed do
+          `futebol_market_slug`. É o NULL que a mantém fora da cobrança de cobertura da
+          guarda — a decisão de não pontuá-la já está carimbada na `porta_saida_catalogada`.
+
+          ⚠️ NULL TAMBÉM, e para sempre, nas linhas de jogo que já tinham apitado quando
+          esta entrega subiu: a coluna chega por `append_new_columns` e o funil não
+          reescreve o passado (ADR 0011). Por isso a guarda DERIVA o lado do macro em vez
+          de ler esta coluna.
       - name: line_value
         description: "NULL no 1X2, BTTS e Dupla Chance; a linha L (1.5/2.5/...) no Gols O/U; o handicap na ótica do mandante (o mesmo p/ Home e Away) no Handicap asiático."
       - name: line_key
@@ -199,6 +224,46 @@ models:
           ⚠️ FICA FORA do payload da `assert_funil_paridade_com_board` de propósito: é
           coluna do funil e o board não a tem. Comparar o que só existe de um lado
           deixaria a guarda vermelha por desenho.
+      - name: score_normalizado
+        description: >
+          A NOTA NORMALIZADA (#105, ADR 0005): a `nota_contexto` dividida pelo p95
+          OBSERVADO do `lado`, em 0–100 —
+          `LEAST(100, ROUND(nota_contexto / p95 × 100))`. O serviço dela é fazer o 100
+          significar a MESMA COISA nos onze lados: sem ela, a nota é dividida por uma soma
+          de pesos que nunca ocorre, e quanto mais premissa um mercado tem, mais baixa é a
+          nota dele — o mercado onde se investiu mais modelagem é o mais punido.
+
+          O denominador vem do seed versionado `futebol_p95_nota_contexto`, medido UMA VEZ
+          sobre uma janela declarada e congelado. Recalcular em runtime faria a régua
+          significar coisa diferente a cada dia e mataria toda comparação histórica.
+
+          ⚠️ A nota é ABSOLUTA — quanta evidência acendeu —, nunca percentil dentro do
+          lado. A alternativa relativa foi rejeitada porque garante volume de publicação
+          independente de qualidade, contradiz a degradação graciosa e envenena o funil (a
+          rejeição passaria a ser X% por construção). O preço, declarado em voz alta: **os
+          mercados publicam em taxas diferentes, e isso é consequência, não defeito.**
+
+          ⚠️ ~5% das linhas de cada lado batem em 100 POR CONSTRUÇÃO. O denominador é o
+          quantil 95; o `LEAST(100, ...)` as trava ali, e isso não é erro.
+
+          ⚠️ DENOMINADOR ZERO ⇒ ZERO EXPLÍCITO, nunca `SAFE_DIVIDE`. São os dois lados sem
+          lado apostado — o empate do 1X2 e o `Pick` do Handicap. O `SAFE_DIVIDE`
+          devolveria NULL, a comparação com a régua também viraria NULL, e a linha sairia
+          sem passar e sem ser marcada: descarte silencioso é o que a ADR 0006 proíbe. O
+          mesmo ramo cobre o denominador AUSENTE (lado fora do seed) — a linha vira zero e
+          reprova visivelmente, e quem acende é a guarda de cobertura.
+
+          ⚠️ NULL, e não zero, onde não houve premissa a avaliar (a "12" da DC), pelo mesmo
+          motivo que o `score` e a `nota_contexto` (ADR 0003). E NULL para sempre nas
+          linhas já congeladas antes desta entrega, como a `nota_contexto`.
+
+          ⚠️ NÃO é o número do board, e não é o gate. O board segue no `score` e na régua
+          de 40 até a virada, no fim da [A]. Fica FORA do payload da
+          `assert_funil_paridade_com_board` pelo mesmo motivo que a `nota_contexto`.
+
+          A aritmética mora em `macros/futebol_score_normalizado.sql`, sem argumento, pela
+          mesma razão do macro da nota de contexto; o unit test
+          `funil_nota_normalizada_pelo_p95_congelado` a percorre inteira.
       - name: pts_premissas
         description: "NULL, e não zero, onde não houve premissa a avaliar. Zero seria \"foi avaliada e tirou zero\", que é outra coisa (ADR 0003)."
       - name: premissas_sem_dado

@@ -93,3 +93,63 @@ decisão uma dependência da [A] na [C] que não estava registrada em lugar nenh
 E o denominador é medido **depois** da A1, não antes. A A1 tira as premissas de movimento de
 linha do Gols: o teto vai de 56/52 para 50/46 e o p95 anda junto. Qualquer p95 medido antes
 disso descreve uma escala que não vai existir.
+
+## Emenda (2026-08-26, #105): o denominador medido
+
+A decisão acima foi tomada com números de ILUSTRAÇÃO, medidos antes da A1 e sobre a soma de
+pesos. A medição que congelou o seed rodou depois — `analyses/taskA_a6_p95.sql`, sobre os
+candidatos do funil (uma janela por candidato), com as premissas **recomputadas** nos cinco
+mercados e a nota de contexto pós-A1 como quantidade medida. Janela de kickoff 16/06 a 31/08
+de 2026, medida em 26/08.
+
+| mercado | lado | p95 | teto do catálogo | candidatos |
+| --- | --- | ---: | ---: | ---: |
+| Resultado | Home | 33 | 51 | 476 |
+| Resultado | Away | 22 | 47 | 476 |
+| Resultado | Draw | **0** | 0 | 476 |
+| Gols | Over | 44 | 50 | 9.854 |
+| Gols | Under | 36 | 46 | 9.405 |
+| Handicap | Favorito | 24 | 40 | 8.744 |
+| Handicap | Azarão | **30** | 30 | 8.608 |
+| Handicap | Pick | **0** | 0 | 952 |
+| Ambos Marcam | Sim | 28 | 34 | 476 |
+| Ambos Marcam | Não | **28** | 28 | 476 |
+| Dupla Chance | único | 28 | 34 | 952 |
+
+O que a medição confirmou e o que ela corrigiu:
+
+**Os dois lados que saturam são os previstos.** O azarão do Handicap e o "Não" do Ambos
+Marcam têm p95 igual ao próprio teto — os dois com três premissas cada. É o mesmo fato que
+a decisão nomeia como "não cria resolução", agora medido.
+
+**O `Pick` do Handicap entrou junto com o empate.** A decisão só nomeia o empate do 1X2
+porque foi o caso que apareceu na medição de origem. O handicap de linha zero tem a mesma
+estrutura — nenhuma premissa se aplica, porque todas são `is_favorito AND ...` ou
+`is_azarao AND ...` — e são 952 candidatos reais, não um caso de canto. Entra no seed com o
+mesmo zero explícito, e o `CASE` do modelo não distingue os dois.
+
+**A amplitude cai mais do que a decisão previa, e o topo se move.** Sobre os nove lados com
+lado apostado, a média em fração do próprio teto ia de 16,5% (Resultado fora) a 49,7%
+(azarão do Handicap) — **3,0×**. Depois da normalização pelo p95, de 33,2 a 49,7 — **1,5×**,
+e não os 2,1× projetados. O azarão do Handicap continua em primeiro, mas cravado em 49,7 e
+quatro pontos acima do segundo (a Dupla Chance, 45,6), não vinte. A conclusão qualitativa da
+decisão não muda — uma régua única continua sendo réguas diferentes —, mas o número dela sim,
+e o certo é o medido.
+
+**A recomputação é fiel ao registro.** Sobre exatamente as mesmas linhas do funil escritas
+depois da A1, a nota recomputada e a nota registrada divergem em **zero** de 6.713 linhas de
+Handicap e Gols. É o que autoriza a rota da recomputação sem que ela vire uma escala
+paralela — e não elimina o limite conhecido da #78, que é sobre builds diferentes.
+
+**A tolerância de 20% da guarda não é frouxa.** Recalculando o p95 sobre uma janela rolante
+de 30 dias de verdade, os onze lados batem com o congelado; o maior desvio é o "Sim" do
+Ambos Marcam, com 26 contra 28 — 7%.
+
+⚠️ E uma cegueira nova, que a medição descobriu e a guarda declara: no dia do deploy as
+únicas linhas com nota de contexto preenchida são as de jogo ainda por vir, porque o
+append-only não reescreve o passado. A amostra viva nasce com seis dias de rodada, não com
+trinta, e nela o favorito do Handicap dava p95 30 contra os 24 da janela inteira — 25% de
+distância, guarda vermelha, e nada de errado com o denominador. Por isso a metade da DERIVA
+só passa a cobrar quando a janela está cheia até o fundo: **ela fica dormente por ~30 dias
+depois do deploy**. A metade da COBERTURA — o lado que existe e não tem denominador — morde
+desde o primeiro build.

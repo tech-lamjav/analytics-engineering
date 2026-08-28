@@ -5,7 +5,7 @@
     on_schema_change='append_new_columns',
     full_refresh=false,
     cluster_by=['competition', 'fixture_id'],
-    description='O FUNIL DE AVALIAÇÃO (#95/#96, ADR 0011 + ADR 0006). 1 linha por (fixture_id, market, outcome, line_value, janela) que TEVE PREÇO naquela janela, nos CINCO mercados pontuados (1X2, Handicap asiático, Gols O/U, Ambos Marcam, Dupla Chance) — e NADA filtrado. Cada porta do Motor é uma COLUNA BOOLEANA (TRUE = passou), nunca um WHERE: porta_saida_catalogada, porta_conjunto_completo, porta_valor_estimavel, porta_liquidez, porta_edge, porta_nota, porta_linha_meia, porta_odd_dc. `passou_no_gate` é a CONJUNÇÃO derivada das oito, jamais escrita à mão; `motivo_primario` é derivado por cima dos booleanos e é conveniência de leitura, não fonte (uma linha reprova em várias portas ao mesmo tempo, e é a leitura marginal — quantas linhas a porta ainda remove DEPOIS das anteriores — que dá valor à tabela). Cada porta é NULL-safe INDIVIDUALMENTE (COALESCE(..., FALSE)): insumo ausente reprova a porta em vez de propagar NULL para dentro da conjunção. UNIVERSO: os candidatos do int_futebol_odds_devig nos cinco mercados, quatro janelas (daily<t24h<t1h<t15m). Gols do 1º tempo (mercado 6) fica FORA — não existe modelo de premissa para ele e a sua ausência não é decisão nossa (ADR 0011). A saída "12" da Dupla Chance fica DENTRO, com porta_saida_catalogada=FALSE: ela é precificada e a decisão de não pontuá-la é nossa. As duas rejeições que hoje são SUMIÇO no fact_value_opportunities — conjunto de saídas incompleto (a maior do sistema) e a "12" da DC — passam a ser linha com carimbo: os WHERE de completude de cada ramo viram coluna e o INNER JOIN com as premissas vira LEFT JOIN. `janela_e_corrente` é COLUNA e fica FORA da conjunção: é redução (qual janela publica), não veredito de qualidade (ADR 0011, D8). O EXPURGO NÃO É PORTA (ADR 0011): o funil guarda jogo encerrado de propósito — é ele que responde quanto rendeu a faixa descartada — e o expurgo continua no board, sobre o status vindo de fact_fixtures. Por isso `kickoff_utc` sai daqui e o STATUS não: status muda depois do apito e uma coluna congelada com o status de antes mentiria (ADR 0011, D10). Sem evidencias[]/avisos[]: são derivados e reconstruíveis. O EMPATE DO 1X2 carrega marca própria (`sem_lado_apostado`): sem lado apostado nenhuma premissa dispara, e um terço do universo do 1X2 está em zero POR CONSTRUÇÃO — sob o motivo genérico ele seria lido como severidade da régua (ADR 0005/0006). APPEND-ONLY, CONGELADO NO APITO (#96, ADR 0011): materialização INCREMENTAL por merge no grão (fixture_id, market, outcome, line_key, janela). A linha é escrita e atualizada enquanto o kickoff do fixture está no FUTURO e nenhuma escrita acontece depois dele — o funil deixa de ser uma foto do que o código de hoje diria e passa a ser registro do que o Motor disse. `full_refresh=false` no config porque a fase de RECOVERY do workflow_futebol_odds roda o mesmo --select com --full-refresh: sem isso, a primeira recuperação de deriva apagaria o histórico inteiro. Toda linha carrega `gravado_em` e `origem`: `backfill` no build que cria a tabela (recalculado com o código de hoje, e é a única parte que NÃO é registro de época) e `corrente` em toda escrita incremental. Jogo adiado (PST/SUSP) cujo kickoff volta para o futuro VOLTA a ser gravável — o filtro lê o kickoff corrente, não o da escrita anterior. Fixture ausente em fact_fixtures (kickoff NULL) é FAIL-OPEN: continua gravável para sempre, porque perdê-lo quebraria a reconciliação (ADR 0003). NÃO HÁ EXPURGO DO FUNIL (~45 mil linhas/mês; a política se revisita se a tabela passar de 10 milhões de linhas). NÃO VAI PARA O SUPABASE: o app não lê funil — sem migração no Postgres, sem RPC, sem tocar check_schema_parity. O board NÃO muda nesta entrega; quem prova que o funil o descreve de verdade é a guarda assert_funil_paridade_com_board, e quem prova que o universo está inteiro é assert_funil_reconcilia_com_devig (que lê a FONTE, nunca o próprio funil). A NOTA DE CONTEXTO (#103, ADR 0012): a coluna `nota_contexto` é a nota depois que o preço sai dela — pts_premissas menos as penalidades de CONTEXTO (pick_empate −10, desfalque_proprio −15, linha_extrema −10, handicap_alto −12), com GREATEST(..., 0) —, e nada mais: sem pts_valor, sem corroboração e sem as quatro penalidades de odd. Ela nasce AO LADO do `score`, que continua sendo o do board: nesta entrega o produto não muda de gate nem de número, e existe UMA virada só, no fim da [A]. A composição mora em macros/futebol_nota_contexto.sql (num lugar só, consumida pelo funil e pela guarda de reconstrução, nunca copiada); duas guardas a protegem — assert_nota_contexto_sem_preco (sentinela da decisão: falha se qualquer componente de preço aparecer no texto da composição) e assert_funil_nota_contexto_reconstroi (a coluna gravada bate com a recomposta). NULL onde não houve premissa a avaliar (a "12" da DC), pelo mesmo motivo que o score (ADR 0003). ⚠️ A coluna chega por append_new_columns e SÓ nas linhas que o congelamento ainda deixa gravar: as linhas de jogo já apitado antes do deploy da A1 ficam com nota_contexto NULL para sempre, e isso é o append-only funcionando (ADR 0011), não defeito — a guarda de reconstrução é escopada a elas de propósito.'
+    description='O FUNIL DE AVALIAÇÃO (#95/#96, ADR 0011 + ADR 0006). 1 linha por (fixture_id, market, outcome, line_value, janela) que TEVE PREÇO naquela janela, nos CINCO mercados pontuados (1X2, Handicap asiático, Gols O/U, Ambos Marcam, Dupla Chance) — e NADA filtrado. Cada porta do Motor é uma COLUNA BOOLEANA (TRUE = passou), nunca um WHERE: porta_saida_catalogada, porta_conjunto_completo, porta_valor_estimavel, porta_liquidez, porta_edge, porta_nota, porta_linha_meia, porta_odd_dc. `passou_no_gate` é a CONJUNÇÃO derivada das oito, jamais escrita à mão; `motivo_primario` é derivado por cima dos booleanos e é conveniência de leitura, não fonte (uma linha reprova em várias portas ao mesmo tempo, e é a leitura marginal — quantas linhas a porta ainda remove DEPOIS das anteriores — que dá valor à tabela). Cada porta é NULL-safe INDIVIDUALMENTE (COALESCE(..., FALSE)): insumo ausente reprova a porta em vez de propagar NULL para dentro da conjunção. UNIVERSO: os candidatos do int_futebol_odds_devig nos cinco mercados, quatro janelas (daily<t24h<t1h<t15m). Gols do 1º tempo (mercado 6) fica FORA — não existe modelo de premissa para ele e a sua ausência não é decisão nossa (ADR 0011). A saída "12" da Dupla Chance fica DENTRO, com porta_saida_catalogada=FALSE: ela é precificada e a decisão de não pontuá-la é nossa. As duas rejeições que hoje são SUMIÇO no fact_value_opportunities — conjunto de saídas incompleto (a maior do sistema) e a "12" da DC — passam a ser linha com carimbo: os WHERE de completude de cada ramo viram coluna e o INNER JOIN com as premissas vira LEFT JOIN. `janela_e_corrente` é COLUNA e fica FORA da conjunção: é redução (qual janela publica), não veredito de qualidade (ADR 0011, D8). O EXPURGO NÃO É PORTA (ADR 0011): o funil guarda jogo encerrado de propósito — é ele que responde quanto rendeu a faixa descartada — e o expurgo continua no board, sobre o status vindo de fact_fixtures. Por isso `kickoff_utc` sai daqui e o STATUS não: status muda depois do apito e uma coluna congelada com o status de antes mentiria (ADR 0011, D10). Sem evidencias[]/avisos[]: são derivados e reconstruíveis. O EMPATE DO 1X2 carrega marca própria (`sem_lado_apostado`): sem lado apostado nenhuma premissa dispara, e um terço do universo do 1X2 está em zero POR CONSTRUÇÃO — sob o motivo genérico ele seria lido como severidade da régua (ADR 0005/0006). APPEND-ONLY, CONGELADO NO APITO (#96, ADR 0011): materialização INCREMENTAL por merge no grão (fixture_id, market, outcome, line_key, janela). A linha é escrita e atualizada enquanto o kickoff do fixture está no FUTURO e nenhuma escrita acontece depois dele — o funil deixa de ser uma foto do que o código de hoje diria e passa a ser registro do que o Motor disse. `full_refresh=false` no config porque a fase de RECOVERY do workflow_futebol_odds roda o mesmo --select com --full-refresh: sem isso, a primeira recuperação de deriva apagaria o histórico inteiro. Toda linha carrega `gravado_em` e `origem`: `backfill` no build que cria a tabela (recalculado com o código de hoje, e é a única parte que NÃO é registro de época) e `corrente` em toda escrita incremental. Jogo adiado (PST/SUSP) cujo kickoff volta para o futuro VOLTA a ser gravável — o filtro lê o kickoff corrente, não o da escrita anterior. Fixture ausente em fact_fixtures (kickoff NULL) é FAIL-OPEN: continua gravável para sempre, porque perdê-lo quebraria a reconciliação (ADR 0003). NÃO HÁ EXPURGO DO FUNIL (~45 mil linhas/mês; a política se revisita se a tabela passar de 10 milhões de linhas). NÃO VAI PARA O SUPABASE: o app não lê funil — sem migração no Postgres, sem RPC, sem tocar check_schema_parity. O board NÃO muda nesta entrega; quem prova que o funil o descreve de verdade é a guarda assert_funil_paridade_com_board, e quem prova que o universo está inteiro é assert_funil_reconcilia_com_devig (que lê a FONTE, nunca o próprio funil). A NOTA DE CONTEXTO (#103, ADR 0012): a coluna `nota_contexto` é a nota depois que o preço sai dela — pts_premissas menos as penalidades de CONTEXTO (pick_empate −10, desfalque_proprio −15, linha_extrema −10, handicap_alto −12), com GREATEST(..., 0) —, e nada mais: sem pts_valor, sem corroboração e sem as quatro penalidades de odd. Ela nasce AO LADO do `score`, que continua sendo o do board: nesta entrega o produto não muda de gate nem de número, e existe UMA virada só, no fim da [A]. A composição mora em macros/futebol_nota_contexto.sql (num lugar só, consumida pelo funil e pela guarda de reconstrução, nunca copiada); duas guardas a protegem — assert_nota_contexto_sem_preco (sentinela da decisão: falha se qualquer componente de preço aparecer no texto da composição) e assert_funil_nota_contexto_reconstroi (a coluna gravada bate com a recomposta). NULL onde não houve premissa a avaliar (a "12" da DC), pelo mesmo motivo que o score (ADR 0003). ⚠️ A coluna chega por append_new_columns e SÓ nas linhas que o congelamento ainda deixa gravar: as linhas de jogo já apitado antes do deploy da A1 ficam com nota_contexto NULL para sempre, e isso é o append-only funcionando (ADR 0011), não defeito — a guarda de reconstrução é escopada a elas de propósito. A NOTA NORMALIZADA (#105, ADR 0005): as colunas `lado` e `score_normalizado`. `lado` é o eixo do denominador — os ONZE pares de (mercado, lado) que `futebol_lado()` enumera, e no Handicap ele NÃO é o outcome (é o sinal do handicap na ótica do lado apostado: Favorito/Azarao/Pick), enquanto na Dupla Chance 1X e X2 colapsam em `unico` porque as quatro premissas se aplicam às duas saídas. `score_normalizado` é a nota de contexto dividida pelo p95 OBSERVADO daquele lado, congelado no seed versionado `futebol_p95_nota_contexto` (medido uma vez, sobre janela declarada — recalcular em runtime faria a régua significar coisa diferente a cada dia). A nota é ABSOLUTA — quanta evidência acendeu —, nunca percentil dentro do lado: o preço declarado é que os mercados publicam em taxas diferentes, e isso é consequência, não defeito. Clamp em 100 EXPLÍCITO, porque com o p95 no denominador ~5% das linhas de cada lado ficam acima de 100 por construção. Denominador zero (o empate do 1X2 e o Pick do Handicap, que não têm lado apostado) resolve para ZERO explícito e nunca por SAFE_DIVIDE: o NULL faria a comparação com a régua virar NULL e a linha sairia sem passar e sem ser marcada. Denominador AUSENTE (lado fora do seed) cai no mesmo ramo — o join é LEFT para que a linha nunca suma — e quem acende é assert_p95_nota_contexto_nao_derivou, que cobra tanto a COBERTURA dos onze lados quanto a DERIVA do p95 vivo contra o congelado. A aritmética mora em macros/futebol_score_normalizado.sql, sem argumento, pela mesma razão do macro da nota de contexto. O BOARD NÃO MUDA: ele segue no `score` e no gate de 40, e a virada é uma só, no fim da [A]. ⚠️ As duas colunas chegam por append_new_columns e SÓ nas linhas que o congelamento ainda deixa gravar — linha de jogo já apitado antes do deploy fica com elas NULL para sempre, e isso é o append-only funcionando.'
 ) }}
 
 -- ============================================================================
@@ -60,6 +60,14 @@ prem_btts AS (
 
 prem_dc AS (
     SELECT * FROM {{ ref('int_futebol_premissas_dc') }}
+),
+
+-- O DENOMINADOR CONGELADO (#105, ADR 0005): o p95 observado da nota de contexto por
+-- (mercado, lado), medido uma vez sobre uma janela declarada e congelado em seed
+-- versionado. É seed e não query de propósito — recalcular em runtime faria a régua
+-- significar coisa diferente a cada dia e mataria toda comparação histórica.
+denominador AS (
+    SELECT market, lado, p95 FROM {{ ref('futebol_p95_nota_contexto') }}
 ),
 
 -- SÓ O KICKOFF, e o status DE PROPÓSITO fora (ADR 0011, D10). O kickoff é o que o
@@ -406,6 +414,36 @@ unioned AS (
 -- No board esta linha nem existia; só aqui ela precisa de um valor, e nenhum número
 -- seria honesto.
 -- ============================================================================
+-- ============================================================================
+-- O LADO APOSTADO e o DENOMINADOR dele (#105, ADR 0005). Precisam vir ANTES da nota,
+-- porque é o `p95` que a normalização divide.
+--
+-- ⚠️ `LEFT`, e não `INNER`. Lado fora do seed — ou saída não catalogada, cujo lado é
+-- NULL por desenho — não pode sumir do funil: sumiço é o que a ADR 0006 proíbe, e é a
+-- coisa inteira que esta tabela existe para impedir. O `p95` chega NULL, a normalização
+-- o trata como denominador ausente (nota zero, explícita), e quem acende é a guarda
+-- `assert_p95_nota_contexto_nao_derivou`, que cobra a cobertura dos onze lados.
+--
+-- O lado sai de `futebol_lado()` — num lugar só, lido também pela medição que produziu o
+-- seed e pela guarda que o vigia. No Handicap ele NÃO é o `outcome`: é o sinal do
+-- handicap na ótica do lado apostado, e os conjuntos de premissa de favorito e azarão são
+-- disjuntos (Σ40 contra Σ30).
+-- ============================================================================
+com_lado AS (
+    SELECT
+        u.*,
+        {{ futebol_lado('u.market', 'u.outcome', 'u.line_value') }} AS lado
+    FROM unioned u
+),
+
+com_denominador AS (
+    SELECT c.*, d.p95
+    FROM com_lado c
+    LEFT JOIN denominador d
+        ON  d.market = c.market
+       AND  d.lado   = c.lado
+),
+
 scored AS (
     SELECT
         *,
@@ -429,7 +467,27 @@ scored AS (
         -- O predicado mora em `futebol_linha_meia.sql`, e não aqui, porque foi copiá-lo
         -- byte a byte do board que trouxe o defeito do `.25` para esta tabela (#101).
         {{ futebol_e_linha_meia('line_value') }} AS is_half_line
-    FROM unioned
+    FROM com_denominador
+),
+
+-- ============================================================================
+-- A NOTA NORMALIZADA (#105, ADR 0005): a de contexto reescalada pelo p95 congelado do
+-- lado, para que o 100 signifique a mesma coisa nos onze lados. Nasce AO LADO das outras
+-- duas — o board segue no `score` e no gate de hoje, e a virada é uma só, no fim da [A].
+--
+-- A aritmética mora em `futebol_score_normalizado.sql`, num lugar só e sem argumento,
+-- pelo mesmo motivo do macro da nota de contexto: argumento é porta de entrada para
+-- reescalar a nota COM preço dentro. As duas colunas de que ele depende chegam com o nome
+-- que ele espera — `nota_contexto`, da CTE acima, e `p95`, do seed.
+--
+-- ⚠️ CTE PRÓPRIA, e não mais uma linha da `scored`: no BigQuery um apelido do SELECT não
+-- é visível para as outras expressões do MESMO SELECT, e `nota_contexto` é apelido de lá.
+-- ============================================================================
+com_nota_normalizada AS (
+    SELECT
+        *,
+        {{ futebol_score_normalizado() }} AS score_normalizado
+    FROM scored
 ),
 
 -- ============================================================================
@@ -468,7 +526,7 @@ com_portas AS (
         COALESCE(
             market <> '{{ futebol_mercados_pontuados()[12] }}' OR best_odd >= 1.25,
             FALSE)                                          AS porta_odd_dc
-    FROM scored
+    FROM com_nota_normalizada
 ),
 
 -- ============================================================================
@@ -502,6 +560,12 @@ SELECT
     fixture_id,
     market,
     outcome,
+    -- O LADO APOSTADO (#105, ADR 0005) — o eixo do denominador congelado, e o que o
+    -- `outcome` sozinho não diz. No Handicap Home/Away não separa quem dá e quem recebe o
+    -- handicap, e os conjuntos de premissa dos dois são disjuntos; na Dupla Chance 1X e X2
+    -- dividem as quatro premissas e colapsam em `unico`. NULL na saída não catalogada (a
+    -- "12"), pelo mesmo fail-closed do `futebol_market_slug`.
+    lado,
     line_value,
     -- A CHAVE DO MERGE, e ela existe por um motivo mecânico: `line_value` é NULL no 1X2,
     -- no BTTS e na Dupla Chance, e num MERGE ... ON, NULL nunca casa com NULL. Com
@@ -574,6 +638,18 @@ SELECT
     -- medição da [A]. NULL — e não zero — onde não houve premissa a avaliar, pelo mesmo
     -- motivo que o `score` (ADR 0003).
     nota_contexto,
+    -- A NOTA NORMALIZADA (#105, ADR 0005). A de contexto dividida pelo p95 CONGELADO do
+    -- lado, em 0–100, para que o 100 signifique a mesma coisa nos onze lados. Absoluta —
+    -- quanta evidência acendeu —, nunca percentil dentro do lado.
+    --
+    -- ⚠️ ~5% das linhas de cada lado batem em 100 POR CONSTRUÇÃO: o denominador é o
+    -- quantil 95, o `LEAST(100, ...)` as trava ali, e isso não é erro.
+    -- ⚠️ Denominador zero (empate do 1X2, Pick do Handicap) ⇒ ZERO explícito, nunca NULL:
+    -- NULL faria a comparação com a régua virar NULL e a linha sairia sem passar e sem ser
+    -- marcada, que é o descarte silencioso que a ADR 0006 proíbe. NULL aqui só onde não
+    -- houve premissa a avaliar, como no `score` e na `nota_contexto` (ADR 0003).
+    -- ⚠️ NÃO é o número do board. O board segue no `score` e no gate de 40 até a virada.
+    score_normalizado,
     -- quantas premissas aplicáveis à linha não puderam ser avaliadas por falta de
     -- insumo (#41). Não entra na nota: é o que a nota NÃO pôde levar em conta.
     premissas_sem_dado,

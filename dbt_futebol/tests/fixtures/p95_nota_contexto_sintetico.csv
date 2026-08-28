@@ -1,0 +1,12 @@
+market,lado,p95,janela_inicio,janela_fim,medido_em,origem,n_candidatos
+match_winner,Home,40,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+match_winner,Away,40,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+match_winner,Draw,0,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+goals_over_under,Over,40,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+goals_over_under,Under,40,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+asian_handicap,Favorito,40,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+asian_handicap,Azarao,20,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+asian_handicap,Pick,0,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+btts,Yes,40,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+btts,No,40,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000
+double_chance,unico,40,2026-01-01,2026-01-31,2026-02-01,recomputacao,1000

@@ -31,6 +31,46 @@ clean-targets:
 vars:
   expurgo_carencia_horas: 24
 
+  # ============================================================================
+  # A GUARDA DE DERIVA DO DENOMINADOR CONGELADO (#105, ADR 0005).
+  #
+  # O p95 por (mercado, lado) é medido uma vez e congelado em seed. Número congelado
+  # ENVELHECE EM SILÊNCIO: toda mexida no catálogo de premissas, toda liga nova e toda
+  # remoção como a das premissas de movimento de linha desloca a distribuição, e o
+  # denominador continua lá — certo no dia em que foi medido e cada vez menos certo depois.
+  # Estes três parâmetros são a distância declarada a partir da qual isso vira vermelho.
+  #
+  # ⚠️ São VAR e não literal na guarda pela mesma razão da carência do expurgo: o número
+  # certo é calibração, e calibração se remede (a tolerância da [F] já saiu de 0,5 para
+  # 0,25 pp uma vez). Mudar aqui é mudar o arquivo e redeployar a imagem, de propósito —
+  # a severidade de uma guarda não é knob de execução.
+  # ============================================================================
+
+  # Quanto o p95 VIVO pode se afastar do congelado, em fração dele, antes de a guarda
+  # acender. 20% é o ponto de partida: abaixo disso a nota publicada se move menos do que
+  # a granularidade grossa do catálogo já a move sozinha (o azarão do Handicap tem 3
+  # premissas e 8 notas possíveis no total, então o p95 dele anda em degraus largos).
+  # ⚠️ Esta var governa SÓ o ramo da deriva relativa. Quando o denominador congelado é ZERO
+  # — o empate do 1X2 e o Pick do Handicap, que não têm lado apostado — a fração não existe
+  # e a regra é outra, escrita na guarda: ali a cobrança é de PRESENÇA (o MÁXIMO vivo maior
+  # que zero), não passa por esta tolerância nem pelas duas condições abaixo, e acende com
+  # uma linha só.
+  p95_deriva_tolerancia_rel: 0.20
+
+  # Sobre quantos dias de kickoff o p95 vivo é recalculado. Janela ROLANTE de propósito:
+  # é ela que faz a guarda descrever a distribuição de HOJE, que é a coisa que envelhece.
+  p95_deriva_janela_dias: 30
+
+  # Piso de amostra por lado. Abaixo dele a guarda SE ABSTÉM daquele lado em vez de acender
+  # — um p95 de 30 linhas salta de degrau sozinho e produziria vermelho sem defeito.
+  #
+  # O 200 tem margem medida: numa janela rolante de 30 dias (26/08) o lado mais magro é o do
+  # Resultado e o do Ambos Marcam, com 325 candidatos cada — um por fixture, contra ~5.800 do
+  # Handicap e ~6.400 do Gols, que têm um por LINHA. Margem de 1,6×, e os onze lados são
+  # cobráveis. O ponto cego que sobra está declarado no cabeçalho da guarda: uma parada de
+  # duas semanas leva esses dois mercados abaixo do piso e a abstenção é MUDA enquanto durar.
+  p95_deriva_min_linhas: 200
+
 
 models:
   dbt_futebol:
