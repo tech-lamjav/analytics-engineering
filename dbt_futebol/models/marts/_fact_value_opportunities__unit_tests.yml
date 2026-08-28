@@ -1,6 +1,31 @@
 version: 2
 
 # ==============================================================================
+# UNIT TESTS DO BOARD, DEPOIS DO FLIP (#97, A7-3).
+#
+# ⚠️ OS TRÊS MUDARAM DE INSUMO, E NENHUM MUDOU DE ASSERÇÃO. Até a #97 o mart
+# reconstruía o Motor a partir de `int_futebol_odds_devig` + os cinco modelos de
+# premissas + a corroboração, e era isso que estes testes mockavam. Depois do flip o
+# mart LÊ `fact_value_funnel` — então o mock passou a ser o funil, e os cinco modelos
+# de premissas sobraram apenas para `evidencias[]`/`avisos[]`, que a ADR 0011 deixou
+# fora do funil de propósito.
+#
+# O que cada teste afirma é o mesmo de antes. Reescrever a asserção junto com o insumo
+# transformaria um refactor num teste novo, e aí nenhum dos dois estaria provando que o
+# board não mudou.
+#
+# ⚠️ E MUDOU O QUE ELES COBREM. Antes, o gate era aritmética DESTE modelo e os testes a
+# exercitavam. Agora o gate é a coluna `passou_no_gate`, GRAVADA pelo funil: quem cobre
+# a aritmética das portas são os unit tests do `fact_value_funnel`. O que sobra para o
+# board — e é o que estes três medem — são as três coisas que só ele faz:
+#
+#   1. a JANELA DE DETECÇÃO sobre as quatro janelas do funil;
+#   2. o EXPURGO, que é dele e não do funil (o funil guarda jogo encerrado de propósito);
+#   3. a OBEDIÊNCIA ao `passou_no_gate` gravado — que o board não republique o que o
+#      funil já reprovou, nem reavalie por conta própria.
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
 # Unit test da JANELA DE DETECÇÃO (#40, ADR 0004).
 #
 # Por que unit test e não data test: as três situações que a coluna existe para
@@ -13,70 +38,63 @@ version: 2
 # Cada fixture isola um caso e muda UMA COISA SÓ em relação ao caso base:
 #
 #   1  passou em t24h e segue passando em t15m -> publica com deteccao=t24h
-#   2  passou em t24h e NÃO passa em t15m (o edge virou negativo) -> fora do board
-#   3  falhou em t24h (poucas casas) e só passou em t15m -> deteccao=t15m
-#   4  passou em t24h e a t15m veio com o conjunto da Pinnacle INCOMPLETO
-#      (pin_n_outcomes=2) -> fora do board
+#   2  passou em t24h e NÃO passa em t15m -> fora do board
+#   3  reprovou em t24h e só passou em t15m -> deteccao=t15m
+#   4  passou em t24h, e a t15m é a janela corrente mas reprovou -> fora do board
 #
-# A fixture 4 é a que não é óbvia, e é a razão de `janela_e_corrente` ser carimbado
-# no macro sobre o de-vig CRU em vez de calculado dentro do mart. A t15m dela é
-# descartada pelo filtro de completude do ramo 1X2; se o "qual é a janela corrente"
-# fosse tirado DEPOIS desse filtro, a t24h passaria a ser a corrente e a linha
-# continuaria no board exibindo o preço de ontem. Com o flag vindo de cima, ela
-# simplesmente não tem janela corrente publicável — que é o que a ADR 0004 decidiu.
+# A fixture 4 é a que não é óbvia. Antes do flip ela testava que `janela_e_corrente`
+# é carimbado sobre o de-vig CRU, e não recalculado depois dos filtros de completude:
+# sem isso a t24h herdaria o posto de corrente e a linha seguiria no board exibindo o
+# preço de ontem. Depois do flip a propriedade continua valendo e continua sendo testada,
+# só que um degrau acima — o carimbo agora chega pronto do funil, e o que este caso
+# prende é que o board NÃO promove a janela anterior quando a corrente reprova.
 #
-# As linhas do de-vig são deliberadamente idênticas fora do que cada caso move:
+# As linhas do funil são deliberadamente idênticas fora do que cada caso move:
 # pts_valor 30 + pts_premissas 15 = score 45 (faixa Média), a folga mínima confortável
 # sobre o gate de 40. Se alguém mexer nesses pesos e o teste ficar vermelho por score,
 # é o número daqui que se ajusta — não é o caso de teste que está errado.
-# ==============================================================================
+# ------------------------------------------------------------------------------
 unit_tests:
   - name: value_opportunities_janela_deteccao_e_a_mais_cedo_que_passou
     model: fact_value_opportunities
     description: >
       A janela de detecção é a janela mais cedo em que a linha passou no gate, e nunca
-      é posterior à janela avaliada. Linha que passou cedo e não passa na janela
-      corrente — por preço ou por conjunto incompleto — não aparece no board.
+      é posterior à janela publicada. Linha que passou cedo e não passa na janela
+      corrente não aparece no board.
     given:
-      # format: sql porque evidencias/avisos são ARRAY<STRING>, e o formato de
-      # dicionário entrega todo valor como escalar (o cast de STRING p/ ARRAY falha).
+      - input: ref('fact_value_funnel')
+        rows:
+          # -- fixture 1: passou nas duas. A t15m é a corrente; a t24h é a detecção. ---
+          - {fixture_id: 1, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't24h', janela_prioridade: 2, janela_e_corrente: false, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 1, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true,  competition: 'brasileirao', season: 2026, edge: 0.08, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.15, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+
+          # -- fixture 2: o mercado corrigiu até o fechamento e a corrente reprovou. ---
+          - {fixture_id: 2, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't24h', janela_prioridade: 2, janela_e_corrente: false, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 2, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true,  competition: 'brasileirao', season: 2026, edge: -0.05, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 1.90, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: false}
+
+          # -- fixture 3: em t24h o mercado ainda não estava líquido. Nasceu na corrente.
+          - {fixture_id: 3, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't24h', janela_prioridade: 2, janela_e_corrente: false, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: false}
+          - {fixture_id: 3, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true,  competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+
+          # -- fixture 4: passou em t24h; a t15m É a corrente e reprovou. A t24h NÃO
+          # herda o posto de corrente, e a linha some do board. Sem essa asserção o
+          # board voltaria a publicar o preço de ontem.
+          - {fixture_id: 4, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't24h', janela_prioridade: 2, janela_e_corrente: false, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 4, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true,  competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 2, is_half_line: , passou_no_gate: false}
+
+      # As arrays de exibição. format: sql porque `evidencias`/`avisos` são
+      # ARRAY<STRING>, e o formato de dicionário entrega todo valor como escalar (o
+      # cast de STRING p/ ARRAY falha).
       - input: ref('int_futebol_premissas_1x2')
         format: sql
         rows: |
-          SELECT 1 AS fixture_id, 'Home' AS outcome, 'brasileirao' AS competition,
-                 2026 AS season, 15 AS pts_premissas, 0 AS premissas_sem_dado,
-                 0 AS penalidades_1x2_pts,
+          SELECT 1 AS fixture_id, 'Home' AS outcome,
                  CAST([] AS ARRAY<STRING>) AS evidencias,
                  CAST([] AS ARRAY<STRING>) AS avisos
-          UNION ALL SELECT 2, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-          UNION ALL SELECT 3, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-          UNION ALL SELECT 4, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 2, 'Home', CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 3, 'Home', CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 4, 'Home', CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
 
-      - input: ref('int_futebol_odds_devig')
-        rows:
-          # -- fixture 1: passou nas duas. A t15m é a corrente; a t24h é a detecção. ---
-          - {fixture_id: 1, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 1, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.08, pts_valor: 30, best_odd: 2.15, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-
-          # -- fixture 2: o mercado corrigiu até o fechamento — edge virou negativo. ---
-          - {fixture_id: 2, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 2, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.05, pts_valor: 30, best_odd: 1.90, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-
-          # -- fixture 3: em t24h o mercado ainda não estava líquido (2 casas). --------
-          - {fixture_id: 3, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 3, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-
-          # -- fixture 4: a t15m existe, mas com o conjunto 1X2 da Pinnacle incompleto.
-          # O ramo 1X2 a descarta (pin_n_outcomes >= 3). A t24h NÃO herda o posto de
-          # janela corrente por isso — é a asserção que protege o carimbo no macro.
-          - {fixture_id: 4, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 4, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-
-      # Os outros quatro mercados e a corroboração ficam vazios de propósito: o que se
-      # mede aqui é só a janela, e o 1X2 é o ramo com o gate de completude mais estrito.
       - input: ref('int_futebol_premissas_ou')
         rows: []
       - input: ref('int_futebol_premissas_ah')
@@ -85,33 +103,36 @@ unit_tests:
         rows: []
       - input: ref('int_futebol_premissas_dc')
         rows: []
-      - input: ref('int_futebol_corroboracao')
-        rows: []
 
-      # #85: o mart ganhou um ref novo (`fact_fixtures`, para o expurgo) e todo ref
-      # precisa de mock — sem este bloco o unit test não roda. Os quatro jogos entram
-      # como futuros e 'NS' de propósito: aqui se mede a JANELA DE DETECÇÃO, e nenhuma
-      # linha pode morrer pela fronteira do board sem que a asserção acima mude de
-      # significado em silêncio. A fronteira tem teste próprio, logo abaixo.
+      # Os quatro entram como futuros e 'NS' de propósito: aqui se mede a JANELA DE
+      # DETECÇÃO, e nenhuma linha pode morrer pela fronteira do board sem que a asserção
+      # acima mude de significado em silêncio. A fronteira tem teste próprio, abaixo.
       - input: ref('fact_fixtures')
         format: sql
         rows: |
-          SELECT 1 AS fixture_id, 'NS' AS status_short,
+          SELECT id AS fixture_id, 'NS' AS status_short,
                  TIMESTAMP '2099-01-01 00:00:00+00' AS kickoff_utc
-          UNION ALL SELECT 2, 'NS', TIMESTAMP '2099-01-01 00:00:00+00'
-          UNION ALL SELECT 3, 'NS', TIMESTAMP '2099-01-01 00:00:00+00'
-          UNION ALL SELECT 4, 'NS', TIMESTAMP '2099-01-01 00:00:00+00'
+          FROM UNNEST([1,2,3,4]) AS id
 
     expect:
       rows:
         # fixture 1: publica a t15m (o preço que dá para pegar) e conta que a
         # oportunidade está no board desde a t24h.
         - {fixture_id: 1, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't24h', score: 45, penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-        # fixture 3: nasceu na janela corrente — detecção e avaliação coincidem.
+        # fixture 3: nasceu na janela corrente — detecção e publicação coincidem.
         - {fixture_id: 3, market: 'match_winner', outcome: 'Home', janela_usada: 't15m', janela_deteccao: 't15m', score: 45, penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-        # As fixtures 2 e 4 não aparecem. São as duas formas de morrer na janela
-        # corrente: a 2 por preço, a 4 por conjunto incompleto.
+        # As fixtures 2 e 4 não aparecem: as duas reprovaram NA JANELA CORRENTE, e ter
+        # valido em t24h não as devolve ao board.
 
+  # ---------------------------------------------------------------------------
+  # ⚠️ O EXPURGO É DO BOARD, E SÓ DELE — e é por isso que este teste é o mais
+  # importante dos três depois do flip. O funil guarda jogo encerrado DE PROPÓSITO
+  # (ADR 0011): é ele que responde quanto rendeu a faixa descartada. Um board filtrado
+  # só por `janela_e_corrente AND passou_no_gate` voltaria a emitir jogo velho para
+  # sempre — o defeito de 121 linhas com 2 jogos futuros que a #85 consertou,
+  # reintroduzido pela porta dos fundos. Este teste é o que prende a terceira condição
+  # do WHERE no lugar.
+  # ---------------------------------------------------------------------------
   - name: value_opportunities_expurgo_a_fronteira_do_board
     model: fact_value_opportunities
     description: >
@@ -120,39 +141,19 @@ unit_tests:
       INCLUSIVE além da carência — sem essa exceção a rede de 24 h expurgaria exatamente
       a linha que a decisão manda preservar.
     given:
-      # Seis jogos idênticos em tudo que não seja a fronteira: mesmos pontos, mesmo
-      # preço, uma janela só. O que os separa é só o par (status, kickoff), então
-      # qualquer diferença no resultado é atribuível ao expurgo e a mais nada.
-      - input: ref('int_futebol_premissas_1x2')
-        format: sql
-        rows: |
-          SELECT 10 AS fixture_id, 'Home' AS outcome, 'brasileirao' AS competition,
-                 2026 AS season, 15 AS pts_premissas, 0 AS premissas_sem_dado,
-                 0 AS penalidades_1x2_pts,
-                 CAST([] AS ARRAY<STRING>) AS evidencias,
-                 CAST([] AS ARRAY<STRING>) AS avisos
-          UNION ALL SELECT 11, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-          UNION ALL SELECT 12, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-          UNION ALL SELECT 13, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-          UNION ALL SELECT 14, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-          UNION ALL SELECT 15, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-          UNION ALL SELECT 16, 'Home', 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-
-      - input: ref('int_futebol_odds_devig')
+      # Sete linhas de funil idênticas em tudo que não seja a fronteira: mesma nota,
+      # mesmo preço, uma janela só, todas aprovadas no gate. O que as separa é só o par
+      # (status, kickoff), então qualquer diferença no resultado é atribuível ao expurgo
+      # e a mais nada.
+      - input: ref('fact_value_funnel')
         rows:
-          - {fixture_id: 10, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 11, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 12, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 13, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 14, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 15, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 16, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 10, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 11, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 12, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 13, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 14, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 15, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
+          - {fixture_id: 16, market: 'match_winner', outcome: 'Home', line_value: , line_key: 'NONE', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 3, is_half_line: , passou_no_gate: true}
 
       # A FIXTURE 15 NÃO ESTÁ AQUI, e é de propósito: é o fail-open do LEFT JOIN
       # (ADR 0003). Fixture ausente não expurga a linha — quem grita nesse caso é a
@@ -181,6 +182,13 @@ unit_tests:
           UNION ALL SELECT 16, CAST(NULL AS STRING),
                  TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 48 HOUR)
 
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT id AS fixture_id, 'Home' AS outcome,
+                 CAST([] AS ARRAY<STRING>) AS evidencias,
+                 CAST([] AS ARRAY<STRING>) AS avisos
+          FROM UNNEST([10,11,12,13,14,15,16]) AS id
       - input: ref('int_futebol_premissas_ou')
         rows: []
       - input: ref('int_futebol_premissas_ah')
@@ -188,8 +196,6 @@ unit_tests:
       - input: ref('int_futebol_premissas_btts')
         rows: []
       - input: ref('int_futebol_premissas_dc')
-        rows: []
-      - input: ref('int_futebol_corroboracao')
         rows: []
 
     expect:
@@ -211,50 +217,49 @@ unit_tests:
         # podem ter o mesmo destino.
 
   # ---------------------------------------------------------------------------
-  # A PORTA DA LINHA MEIA, NO BOARD (#101).
+  # O BOARD OBEDECE AO `passou_no_gate` GRAVADO — a asserção que nasce com o flip (#97).
   #
-  # O gêmeo deste caso vive no funil (`funil_linha_meia_e_por_quarto_de_linha`), e
-  # até aqui era o ÚNICO: os dois unit tests do board são 100% 1X2, com `line_value`
-  # vazio em toda linha mockada, então o modelo que serve o usuário não tinha
-  # nenhuma linha construída exercitando esta porta.
+  # ⚠️ ESTE TESTE MUDOU DE PERGUNTA, e a mudança é a entrega. Até a #97 ele se chamava
+  # `linha_de_quarto_nao_chega_ao_board` e exercitava o `futebol_e_linha_meia()` DENTRO
+  # deste modelo, porque o board tinha um predicado de linha meia próprio (#101). Depois
+  # do flip esse predicado não existe mais aqui: ele é a `porta_linha_meia` do funil, e
+  # quem o cobre com linha construída é `funil_linha_meia_e_por_quarto_de_linha`.
   #
-  # Hoje os dois marts não têm como divergir — chamam o mesmo
-  # `futebol_e_linha_meia()` —, e `assert_funil_paridade_com_board` pegaria a
-  # divergência nas linhas publicadas. Mas a paridade é declaradamente temporária: o
-  # plano é o board passar a LER do funil, e nesse dia a guarda se aposenta e o funil
-  # deixa de ser um segundo cálculo. Este teste é o que sobra quando isso acontecer.
+  # O que sobrou para o board — e é o que este caso agora prende — é mais fundamental:
+  # **o board não reavalia nada.** Ele publica o que o funil aprovou e some com o que o
+  # funil reprovou, sem opinião própria. Se alguém um dia reintroduzir aqui um `WHERE`
+  # de porta "por segurança", este teste fica vermelho, porque a linha de quarto abaixo
+  # chega com todos os componentes de uma linha publicável e só o `passou_no_gate`
+  # dizendo não.
   #
-  # E a asserção aqui é diferente da do funil, de propósito. O funil grava o veredito
-  # de cada porta e responde "por que reprovou"; o board só responde "aparece ou
-  # não". A linha de quarto SUMIR do board é a consequência que o usuário vê, e é ela
-  # que precisa estar presa.
+  # A linha de quarto continua sendo o veículo do caso de propósito: é o defeito real da
+  # #101, é a rejeição mais fácil de reintroduzir por engano, e mantém a continuidade com
+  # o que este teste media antes.
   # ---------------------------------------------------------------------------
-  - name: value_opportunities_linha_de_quarto_nao_chega_ao_board
+  - name: value_opportunities_respeita_o_gate_gravado_no_funil
     model: fact_value_opportunities
     description: >
-      Três candidatos de Gols O/U idênticos fora da linha — cheia (2.0), de quarto
-      (2.25) e meia (2.5). Só a meia é publicada. Antes da #101 a de quarto entrava no
-      board como se não pudesse dar push.
+      Três candidatos de Gols O/U idênticos fora da linha — cheia (2.0), de quarto (2.25)
+      e meia (2.5) —, com o funil já tendo reprovado as duas primeiras. Só a meia é
+      publicada, e o board chega a esse resultado LENDO o veredito, não recalculando-o.
     given:
+      - input: ref('fact_value_funnel')
+        rows:
+          # linha CHEIA: pode dar push, o funil reprovou na porta_linha_meia.
+          - {fixture_id: 20, market: 'goals_over_under', outcome: 'Over', line_value: 2.0, line_key: '2.0', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 2, is_half_line: false, passou_no_gate: false}
+          # linha de QUARTO: meio-push. É a que passava antes da #101.
+          - {fixture_id: 21, market: 'goals_over_under', outcome: 'Over', line_value: 2.25, line_key: '2.25', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 2, is_half_line: false, passou_no_gate: false}
+          # linha MEIA: sem push. Aprovada.
+          - {fixture_id: 22, market: 'goals_over_under', outcome: 'Over', line_value: 2.5, line_key: '2.5', janela: 't15m', janela_prioridade: 4, janela_e_corrente: true, competition: 'brasileirao', season: 2026, edge: 0.10, pts_valor: 30, pts_premissas: 15, premissas_sem_dado: 0, pts_corroboracao: 0, penalidades: 0, score: 45, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, penalidades_especificas_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false, modelo_api_concorda: false, linha_sharp_confirma: false, pin_n_outcomes: 2, is_half_line: true, passou_no_gate: true}
+
       - input: ref('int_futebol_premissas_ou')
         format: sql
         rows: |
           SELECT 20 AS fixture_id, 'Over' AS outcome, 2.0 AS line_value,
-                 'brasileirao' AS competition, 2026 AS season,
-                 15 AS pts_premissas, 0 AS premissas_sem_dado,
-                 0 AS penalidades_ou_pts,
                  CAST([] AS ARRAY<STRING>) AS evidencias,
                  CAST([] AS ARRAY<STRING>) AS avisos
-          UNION ALL SELECT 21, 'Over', 2.25, 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-          UNION ALL SELECT 22, 'Over', 2.5, 'brasileirao', 2026, 15, 0, 0,
-                 CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
-
-      - input: ref('int_futebol_odds_devig')
-        rows:
-          - {fixture_id: 20, market_id: 5, outcome_side: 'Over', line_value: 2.0, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 21, market_id: 5, outcome_side: 'Over', line_value: 2.25, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          - {fixture_id: 22, market_id: 5, outcome_side: 'Over', line_value: 2.5, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          UNION ALL SELECT 21, 'Over', 2.25, CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
+          UNION ALL SELECT 22, 'Over', 2.5,  CAST([] AS ARRAY<STRING>), CAST([] AS ARRAY<STRING>)
 
       - input: ref('int_futebol_premissas_1x2')
         rows: []
@@ -263,8 +268,6 @@ unit_tests:
       - input: ref('int_futebol_premissas_btts')
         rows: []
       - input: ref('int_futebol_premissas_dc')
-        rows: []
-      - input: ref('int_futebol_corroboracao')
         rows: []
 
       # Os três futuros e 'NS': ninguém pode morrer pela fronteira do expurgo sem que
@@ -278,7 +281,7 @@ unit_tests:
 
     expect:
       rows:
-        # Só a linha MEIA. A cheia (20) e a de quarto (21) não aparecem — nas duas
-        # parte da aposta pode voltar como push, e o de-vig 2-way superdimensiona o
-        # edge. A 21 é a que passava antes da #101.
+        # Só a linha MEIA — a única que o funil aprovou. A cheia (20) e a de quarto (21)
+        # chegam ao board com nota, preço e liquidez de linha publicável; o que as barra
+        # é exclusivamente o veredito gravado.
         - {fixture_id: 22, market: 'goals_over_under', outcome: 'Over', line_value: 2.5, is_half_line: true, score: 45}
