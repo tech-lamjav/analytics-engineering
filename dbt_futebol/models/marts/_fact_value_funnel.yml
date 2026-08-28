@@ -132,13 +132,24 @@ models:
         tests: [not_null]
       - name: porta_valor_estimavel
         description: >
-          TRUE = há `prob_justa_fechamento`. ⚠️ ANINHADA com `porta_conjunto_completo`:
-          pela ADR 0002, conjunto incompleto implica prob justa ausente. As duas ficam
-          porque a leitura marginal é o produto da tabela — mas quem as somar como
-          independentes conta a mesma linha duas vezes.
+          TRUE = há `prob_justa_fechamento` — a regra da ADR 0002
+          (`n_outcomes_valor = conjunto_esperado`).
+
+          ⚠️ CORREÇÃO (#118, medida em 28/08): esta descrição afirmava que a porta é
+          ANINHADA com `porta_conjunto_completo` e avisava contra somá-las. É o oposto do
+          medido — elas são quase DISJUNTAS, e quem seguir o aviso antigo SUBESTIMA a
+          leitura marginal: 9.102 linhas de Handicap e 10.644 de Gols, todas de consenso,
+          têm `porta_valor_estimavel = TRUE` e `porta_conjunto_completo = FALSE`. As duas
+          fazem perguntas diferentes apesar do nome; ver a #118 (`ready-for-human`).
         tests: [not_null]
       - name: porta_liquidez
-        description: "TRUE = `n_casas >= 3`. (A A3 vai mexer neste número; é para medir o antes/depois que esta tabela existe.)"
+        description: >
+          TRUE = `n_casas >= 3`. É a porta EM VIGOR, e continua sendo — a A3 não a
+          redefiniu. O mínimo de 4 que a A3 decidiu vive na coluna irmã
+          `porta_liquidez_estrita`, fora da conjunção, e a virada (#109) troca qual das
+          duas está no gate. Redefinir esta aqui faria um nome de coluna valer >= 3 nas
+          linhas já congeladas e >= 4 nas novas, para sempre, dentro de uma tabela
+          append-only.
         tests: [not_null]
       - name: porta_edge
         description: "TRUE = `edge > 0`, ou `> consensus_min_edge` (3%) quando o valor vem do consenso — o edge de consenso é enviesado p/ cima (best_odd é o MÁXIMO das casas contra a prob da MEDIANA). (A A2 tira o edge do gate.)"
@@ -150,15 +161,60 @@ models:
         description: "TRUE = a linha é meia (.5, sem push/meio-push). Só se aplica a Handicap asiático e Gols O/U; nos outros três passa trivialmente, porque a porta não se aplica — não porque a linha foi isentada."
         tests: [not_null]
       - name: porta_odd_dc
-        description: "TRUE = `best_odd >= 1,25`. Gate de odd PRÓPRIO da Dupla Chance (que por isso não aplica a penalidade de juice). Trivialmente TRUE nos outros quatro mercados."
+        description: >
+          TRUE = `best_odd >= 1,25`. Gate de odd PRÓPRIO da Dupla Chance (que por isso não
+          aplica a penalidade de juice). Trivialmente TRUE nos outros quatro mercados.
+          ⚠️ O 1,25 deixou de ser literal na #104 e passou a sair da var `faixa_odd_dc_min`,
+          a MESMA que a `porta_faixa_odd` usa como piso da DC — o número existe num lugar
+          só, e mexer nele não pode mover uma porta e esquecer a outra.
         tests: [not_null]
       - name: passou_no_gate
         description: >
-          A CONJUNÇÃO das oito portas, DERIVADA e nunca escrita à mão (ADR 0006). Não
-          inclui `janela_e_corrente` (redução, não veredito) nem o expurgo do board
+          A CONJUNÇÃO das oito portas EM VIGOR, DERIVADA e nunca escrita à mão (ADR 0006).
+          Não inclui `janela_e_corrente` (redução, não veredito), nem o expurgo do board
           (o funil guarda jogo encerrado de propósito — é ele que responde quanto rendeu a
-          faixa descartada).
+          faixa descartada), nem as três barreiras MEDIDAS da #104, que ainda não estão em
+          vigor. A expressão é byte a byte a de antes da #104: é assim que "o board não muda
+          de volume nem de composição" é verdade por CONSTRUÇÃO, e não por medição.
         tests: [not_null]
+
+      # ------------------------------------- as três barreiras MEDIDAS (#104, A3+A5)
+      # Fora de `passou_no_gate`. Dizem quem PASSARIA; quem as põe em vigor é a virada (#109).
+      # ⚠️ Chegam por append_new_columns e ficam NULL para sempre na linha de jogo já apitado
+      # antes do deploy — append-only funcionando, igual a nota_contexto (A1) e
+      # score_normalizado (A6). Por isso não levam `not_null`.
+      - name: porta_liquidez_estrita
+        description: >
+          TRUE = `n_casas >= 4` (var `liquidez_min_casas`). A barreira de liquidez que a A3
+          decidiu, MEDIDA e fora da conjunção. Convive com `porta_liquidez` (>= 3, em vigor)
+          em vez de substituí-la: o funil é append-only, e redefinir o predicado sob o mesmo
+          nome faria a coluna valer duas coisas em duas eras da mesma tabela. A virada troca
+          qual das duas está no gate, sem renomear nada.
+      - name: porta_outlier
+        description: >
+          TRUE = a odd NÃO está fora da curva — `NOT pen_odd_outlier`, isto é,
+          `best_odd < 1,10 × média das demais casas`. O `pen_odd_outlier` deixa de dar
+          penalidade e vira barreira na virada. ⚠️ A barreira elimina A LINHA, não a casa:
+          descartar a casa fora da curva e publicar a segunda melhor odd mudaria o
+          `best_odd` de todo o board, o edge exibido e o CLV histórico — é feature nova, fora
+          de escopo. ⚠️ COALESCE por FORA do NOT: penalidade ausente (NULL) REPROVA a
+          barreira, em vez de aprovar por acidente de negação.
+      - name: porta_faixa_odd
+        description: >
+          TRUE = `best_odd` está na faixa do mercado, com fronteiras INCLUSIVAS nas duas
+          pontas (odd exatamente igual ao piso ou ao teto PASSA — escrito porque este repo já
+          teve knife-edge de float, na #92):
+
+          | mercado | piso | teto | vars |
+          |---|---|---|---|
+          | Resultado, Handicap, Gols, Ambos marcam | 1,50 | 4,00 | `faixa_odd_min` / `faixa_odd_max` |
+          | Dupla chance | 1,25 | 2,00 | `faixa_odd_dc_min` / `faixa_odd_dc_max` |
+
+          O piso existe porque abaixo dele a margem embutida no mercado come o lucro
+          possível (92% no Handicap e 106% no Gols em odd até 1,30). ⚠️ O teto de 4,00 é
+          DECISÃO DE PRODUTO e o único número da [A] sem medição atrás — registrado como tal
+          para não ser defendido depois como se tivesse. A Dupla Chance tem faixa própria
+          porque é mercado de proteção e as odds vivem em outra faixa.
       - name: motivo_primario
         description: >
           CONVENIÊNCIA DE LEITURA, NÃO FONTE (ADR 0006). A primeira porta reprovada na
