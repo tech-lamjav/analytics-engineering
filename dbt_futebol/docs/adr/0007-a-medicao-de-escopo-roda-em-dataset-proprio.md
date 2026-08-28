@@ -170,10 +170,33 @@ pergunta *"isto muda de que a linha depende?"* passa a ser parte do checklist de
 
 ### O recorte novo: por LINHA
 
-Sob `todas`, a linha em (fixture F de C/S, time T) é função de **(a)** os fixtures de T com
-`kickoff < kickoff(F)`, em toda competição, e **(b)** as standings correntes de (C,S). O fecho é,
-portanto, **a própria linha** — e o baseline ganha uma coluna `fp_insumo_linha` gravada no
-congelamento, que a guarda recomputa e compara.
+Sob `todas`, o fecho da linha (fixture F de C/S, time T) é **a própria linha** — e o baseline ganha
+uma coluna `fp_insumo_linha` gravada no congelamento, que a guarda recomputa e compara.
+
+⚠️ **Correção de 28/08, na implementação (#123): o fecho tem CINCO insumos, não dois.** A primeira
+redação desta emenda enumerava só **(a)** os fixtures de T anteriores a F, em toda competição, e
+**(b)** as standings de (C,S). A leitura do SQL do `int_futebol_team_form_pit`, feita para escrever
+a digital, mostrou que faltavam três — e faltava justamente o que tornaria a digital *mentirosa*
+pelo mesmo mecanismo que esta emenda existe para corrigir, um grão abaixo:
+
+| # | insumo | por que a linha depende dele |
+|---|---|---|
+| 1 | a **âncora** F: `fixture_id`, competição, temporada, kickoff e os dois `team_id` | é o que define a linha. ⚠️ **Sem** status e **sem** placar de F: a linha de F não lê o resultado de F (`kickoff < kickoff(F)`, estrito), e digitalizá-lo faria toda linha quebrar quando o próprio jogo acontecesse — o recorte por linha voltaria a erodir |
+| 2 | os **10** jogos encerrados anteriores de T, em qualquer competição | o `pares` trunca em `tamanho_do_recorte`; correção num 11º jogo não muda saída nenhuma, e digitalizar o histórico inteiro derrubaria linha por insumo que ela não lê |
+| 3 | **quantos** jogos anteriores existem, sem o teto | é o `played_total_disponivel`, coluna de saída — e é ele que o piso de amostra do `task01_base()` lê |
+| 4 | os jogos anteriores de **(C,S) inteiro**, de todos os times | ⚠ **faltava.** O CTE `tabela` (competição-scoped, ADR 0008) dá `points`/`goal_diff`/`ppg`, e o `rank` ranqueia T contra os adversários de grupo. **Um adversário ter o placar corrigido muda o `rank` de T sem tocar em nenhum jogo de T** |
+| 5 | o **elenco** de (C,S) e a tabela de grupos | ⚠ **faltava.** `n_teams` é coluna de saída e sai do conjunto DISTINTO de `team_id` de (C,S) — e é também o conjunto sobre o qual o `rank` ranqueia |
+
+⚠️ O item 5 é **o único insumo do fecho que lê o futuro**, e por isso entra como **conjunto de
+times** e jamais como conjunto de fixtures: time novo em (C,S) muda `n_teams` de verdade e tem de
+quebrar a linha; jogo novo de um time que já estava lá, não. Digitalizá-lo como fixtures
+reproduziria exatamente a armadilha do recorte "por time" que a seção seguinte proíbe.
+
+A digital implementada é, portanto, **mais fina** que a enumeração original — e essa é a direção
+segura: digital mais fina que o fecho só declara não-comparável uma linha que era comparável
+(perde cobertura); digital mais grossa que o fecho declara comparável uma linha cujo insumo mudou,
+que é mentir. O detalhe insumo a insumo está no cabeçalho de
+`macros/taskf_fingerprint_insumo_pit.sql`.
 
 As três alternativas foram medidas sobre o baseline de 21.078 linhas, e não estimadas:
 
@@ -182,6 +205,12 @@ As três alternativas foram medidas sobre o baseline de 21.078 linhas, e não es
 | por `(competition_id, season)` — o de hoje | 88,1% | **mentirosa**: inclui as linhas que não deveriam ser comparáveis |
 | por **time** (digital do histórico global de T) | 57,1% | **erode até zero** |
 | por **linha** (o fecho exato) | **68,2%** — 14.366 linhas, 25 de 37 partições | **não erode; cresce** |
+
+⚠️ Os 68,2% são a **projeção de erosão** medida na grelha de 26/08 sobre a enumeração de dois
+insumos, não um número que a guarda produza. No instante do congelamento a cobertura é **1,0** por
+construção — foi o que a execução da #123 mediu, 21.374 de 21.374 linhas —, e é dela que a série
+parte. Sob a digital de cinco insumos a projeção é, se algo, um pouco menor que 68,2%, porque a
+digital é mais fina; medir a trajetória de verdade exige a série, que ainda não existe.
 
 ⚠️ **Por que "por time" é a armadilha, e não a resposta óbvia.** Ela *parece* o fecho, mas
 digitaliza o histórico inteiro do time — **incluindo jogos posteriores à linha**, que a linha não
