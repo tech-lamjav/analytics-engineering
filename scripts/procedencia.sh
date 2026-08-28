@@ -61,6 +61,15 @@ case "$PROJECT_NAME" in
             dbt_futebol/macros
             dbt_futebol/tests
             dbt_futebol/snapshots
+            # `seeds` entrou na #128, tarde: o ramo do dbt_nba sempre a teve e a do futebol
+            # nunca, e a assimetria era inofensiva só enquanto o futebol não tivesse seed.
+            # Desde a #105 ele tem — e o seed decide número que o assinante vê: o
+            # `futebol_p95_nota_contexto` é o denominador congelado que normaliza a nota no
+            # `fact_value_funnel`. Sem esta linha, trocar um valor daquele CSV mudava a nota
+            # do board inteiro sem o detector piscar, e a fase de guardas dbt não pegava
+            # (roda da mesma imagem). Falsificado em 28/08: com o seed alterado o carimbo
+            # ficava idêntico, byte a byte.
+            dbt_futebol/seeds
             dbt_futebol/dbt_project.yml
             dbt_futebol/packages.yml
             dbt_futebol/package-lock.yml
