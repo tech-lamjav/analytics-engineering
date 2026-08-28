@@ -651,3 +651,173 @@ A análise é **parametrizada** — serve para qualquer candidato, não só para
 `NULL` nos mercados sem linha (1X2, BTTS, Dupla Chance): a comparação é NULL-safe. Nada em produção
 muda: é `compile` + `bq query`, nunca `dbt run`. E como o `hist` fecha versões em vez de apagá-las,
 rerodar para este jogo passado devolve as mesmas transições — hoje e daqui a um ano.
+
+---
+
+# Ticket #107 — As duas fronteiras de faixa, na escala pós-A6
+
+**Análises:** `dbt_futebol/analyses/taskA_a4_fronteiras.sql` (a medição) e
+`dbt_futebol/analyses/taskA_a4_reconciliacao.sql` (a resposta conhecida, que roda antes)
+**Fonte:** `fact_value_funnel` (ADR 0011), nota **recomputada**, denominador do **seed**
+**Rodada publicada:** **2026-08-28**, teto `gravado_em` e `kickoff_utc` em `2026-08-28 21:00:00 UTC`
+
+## As duas fronteiras
+
+**`Baixa` < 25 ≤ `Média` < 55 ≤ `Alta`**, na escala normalizada 0–100. Fronteira pertence à
+faixa **de cima**, nas duas — declarado porque este repositório já teve bug de knife-edge de float.
+
+**E o número que importa mais que as fronteiras: elas NÃO saíram do ROI, porque o ROI não
+discrimina.** Dos oito pares candidatos, os oito passam nas três restrições de forma e **nenhum**
+separa `Alta` de `Baixa` além de um erro-padrão. O ramo E1 da regra fixada de antemão foi o que
+disparou, e ele manda escolher por equilíbrio de distribuição — o par que deixa a maior faixa
+menor. É o 25/55, com a maior faixa em 36,4%.
+
+## A regra, que foi fixada antes de olhar
+
+Está no cabeçalho da `taskA_a4_fronteiras.sql` e no commit `1136f48`, **anterior a qualquer
+execução** — a ordem do histórico é a prova, como o cabeçalho da `taskA_a40_transporte.sql` foi a
+da A4.0. Em resumo: grade de oito pares inteiros; três restrições duras (cada faixa ≥ 10%, nenhuma
+> 65%, e nenhuma faixa vazia em nenhum dos nove lados com p95 > 0); objetivo de maior `ROI(Alta) −
+ROI(Baixa)`; desempate pelo par mais redondo; e três ramos de saída declarados, entre eles o que
+de fato ocorreu.
+
+O ramo **é derivado em SQL, não a olho** (bloco `0. RAMO DA REGRA` da saída): a análise conta
+quantos pares passam e quantos discriminam, e a ordenação da escolha troca de critério sozinha.
+
+## A curva de ROI do par escolhido
+
+Erro-padrão agrupado por fixture, como o aceite pede.
+
+| faixa | linhas | jogos | share | ROI | EP |
+|---|---:|---:|---:|---:|---:|
+| `Alta` (≥ 55) | 1.306 | 350 | 33,2% | **−4,6** | 2,7 |
+| `Média` (25–55) | 1.192 | 361 | 30,3% | **−8,4** | 2,6 |
+| `Baixa` (< 25) | 1.432 | 368 | 36,4% | **−2,6** | 3,3 |
+
+**Três leituras, e as três desagradáveis:**
+
+**1. A ordenação está invertida, e a `Média` é o fundo.** `Baixa` (−2,6) rende melhor que `Alta`
+(−4,6), e a `Média` é pior que as duas pontas. Isso é **reportado e não corrigido**, pelo ramo E3
+da regra: desde a decisão do PM de 20/08 a nota **informa e não barra**, então faixa é rótulo e não
+porta — ela não precisa de ROI monotônico para existir. Mexer na grade para "consertar" a monotonia
+seria escolher depois de olhar, que é o que a regra existe para impedir.
+
+**2. Nenhuma faixa é positiva, em par nenhum da grade.** Os 24 valores de ROI medidos (oito pares ×
+três faixas) vão de −1,6 a −8,8. Isto é o **board pós-virada** — a população que a #109 vai
+publicar, com as três barreiras de preço já em vigor.
+
+**3. Nenhum corte de publicação é proposto**, em ramo nenhum, como o aceite manda. O que a leitura 2
+sugere vai ao PM **como pergunta**, não ao modelo como porta.
+
+## A grade inteira
+
+| par | share Baixa / Média / Alta | ROI Baixa / Média / Alta | gap A−B | EP do gap | discrimina? |
+|---|---|---|---:|---:|---|
+| 20/50 | 30,4 / 31,1 / 38,5 | −1,6 / −8,7 / −4,8 | −3,2 | 4,5 | não |
+| **25/55** | **36,4 / 30,3 / 33,2** | **−2,6 / −8,4 / −4,6** | **−2,0** | **4,3** | **não** |
+| 25/60 | 36,4 / 36,6 / 26,9 | −2,6 / −8,4 / −3,6 | −1,0 | 4,5 | não |
+| 30/60 | 47,2 / 25,9 / 26,9 | −4,1 / −8,1 / −3,6 | +0,5 | 4,0 | não |
+| 33/67 | 48,8 / 28,1 / 23,1 | −3,7 / −8,8 / −3,2 | +0,5 | 4,2 | não |
+| 35/65 | 52,4 / 24,5 / 23,1 | −5,7 / −5,3 / −3,2 | +2,5 | 4,1 | não |
+| 40/70 | 56,3 / 25,7 / 18,0 | −5,5 / −3,1 / −6,3 | −0,8 | 4,7 | não |
+| 50/75 | 61,5 / 24,9 / 13,7 | −5,2 / −4,1 / −6,0 | −0,8 | 5,2 | não |
+
+O 35/65 é o par de **maior gap** (+2,5) e teria sido o escolhido pelo objetivo principal. Ele não
+foi escolhido porque 2,5 está dentro do EP de 4,1 — e porque ele deixa a `Baixa` com 52,4% do
+board, contra 36,4% do 25/55.
+
+⚠️ **O EP do gap ignora a covariância.** Um mesmo fixture pode ter linha na `Alta` e na `Baixa`, e
+a raiz da soma dos quadrados trata os dois clusters como independentes. A aproximação não
+**inventa** discriminação, e a leitura alternativa — comparar o gap contra o maior dos dois EP de
+faixa, sem somar — devolve o mesmo veredito nos oito pares. Medido, não suposto.
+
+## A distribuição por (mercado, lado), que o aceite manda entrar na decisão
+
+A nota é **absoluta** (ADR 0005), então fronteira única não significa volume igual — e isso precisa
+estar dito junto do número.
+
+| mercado / lado | linhas | ROI | nota média | p10 | mediana | p90 |
+|---|---:|---:|---:|---:|---:|---:|
+| asian_handicap / Azarao | 460 | −8,7 | 49,4 | 0 | 67 | 100 |
+| asian_handicap / Favorito | 628 | −1,0 | 37,8 | 0 | 33 | 92 |
+| btts / No | 372 | −1,9 | 45,5 | 0 | 57 | 100 |
+| btts / Yes | 369 | −6,7 | 34,1 | 0 | 29 | 79 |
+| double_chance / unico | 395 | −0,2 | 43,7 | 0 | 29 | 93 |
+| goals_over_under / Over | 625 | −8,9 | 35,2 | 0 | 32 | 73 |
+| goals_over_under / Under | 656 | −5,2 | 32,0 | 0 | 22 | 72 |
+| match_winner / Away | 157 | +1,2 | 39,3 | 0 | 36 | 91 |
+| match_winner / Home | 268 | −11,4 | 32,9 | 0 | 24 | 76 |
+
+**O p10 é ZERO nos NOVE lados.** Pelo menos um décimo de cada lado tem nota de contexto zerada —
+não é peculiaridade de um mercado, é o formato da distribuição inteira. É o que faz a `Baixa`
+existir com folga em qualquer par da grade, e é por isso que a restrição C3 nunca mordeu.
+
+O `Azarao` do Handicap é o lado de nota mais alta (média 49,4, mediana 67) **e** o segundo pior de
+ROI (−8,7). Os dois lados de melhor ROI — `match_winner/Away` (+1,2) e `double_chance/unico` (−0,2)
+— têm nota média no meio da tabela. É a leitura 1 acontecendo lado a lado, e não só no agregado.
+
+## Os dois lados sem lado apostado, à parte
+
+Ficam fora das restrições de propósito: têm p95 = 0 e nota 0 **por construção** — nenhuma premissa
+se aplica —, e contá-los dentro faria a restrição ler severidade de régua onde há ausência de lado
+(ADR 0005/0006).
+
+- **`match_winner/Draw` — 257 linhas, ROI +15,1.** É a **única célula positiva de toda esta
+  medição**, e ela é o empate, cuja nota é sempre zero. Não é recomendação de nada: é o aviso de
+  que a nota, nesta janela, não está capturando o que ordena resultado. Vai ao PM junto da
+  leitura 2.
+- **`asian_handicap/Pick` — ZERO linhas.** Não é amostra pequena, é ausência total, e a causa foi
+  isolada: nesta janela existem **762 linhas de `Pick` liquidadas**, e **nenhuma** passa na porta de
+  linha meia — a linha 0 não é meia (`MOD(ROUND(0×4), 4) = 0`). As outras portas não são o gargalo:
+  **642 das 762** passariam na liquidez de 4 casas e **390** na faixa de odd. É a porta de linha
+  meia sozinha que apaga o lado inteiro, antes de qualquer nota. É o defeito que a B3 chama de "a
+  linha de handicap zero fica invisível", medido aqui pelo outro lado — e é a razão de o `Pick` ter
+  entrado no seed da A6 (952 candidatos na janela dela) sem nunca aparecer no board.
+
+## Ressalvas de validade — o que esta medição herda e o que ela deixa armado
+
+**1. O recorte é congelado, e é reproduzível.** Para reler exatamente esta rodada:
+
+```sql
+FROM fact_value_funnel
+WHERE janela_e_corrente
+  AND gravado_em  < TIMESTAMP '2026-08-28 21:00:00'
+  AND kickoff_utc < TIMESTAMP '2026-08-28 21:00:00'
+```
+
+É o padrão da #106, e é a resposta ao vício que matou o 40 e o 60: a mesma query de backtest, três
+dias depois e sem mudar um byte, moveu a faixa 20–40 de −3,6% para +9,7%. O funil é append-only,
+então esta fatia fica preservada.
+
+**2. A nota vem recomputada, e herda a #78.** Universo do funil, pontos dos cinco modelos como
+estão hoje — a rota da A6. Premissa recomputada acende em número ligeiramente diferente a cada
+build com o insumo congelado. A reconciliação mede o tamanho disso: dez dos onze p95 reproduzem o
+seed **exatamente**, e o `match_winner/Home` fica em **−2** (31 contra 33), dentro do ±2 declarado
+antes de rodar. É o único lado que se moveu, e é o de menor amostra dos que pontuam.
+
+**3. A liquidação é `status_short = 'FT'`, e não o `futebol_jogo_encerrado()`.** O
+`task01_liquidacao()` liquida mercado de 90 minutos; `goals_home`/`goals_away` de jogo decidido na
+prorrogação já trazem o placar depois dela, e liquidar um Over 2.5 de mata-mata por ele daria
+vitória a uma aposta que perdeu. Consequência declarada: **jogo de mata-mata que foi para a
+prorrogação ou para os pênaltis está fora desta medição**, como está fora da [0.1].
+
+**4. O gate pós-virada é recomposto, não lido.** `porta_liquidez_estrita`, `porta_outlier` e
+`porta_faixa_odd` chegaram por `append_new_columns` na #104 e são NULL para sempre nas linhas de
+jogo já apitado — que são exatamente as liquidadas. Recompor dos insumos congelados
+(`n_casas`, `pen_odd_outlier`, `best_odd`, `line_value`) é a única leitura que cobre a série
+inteira.
+
+**5. `best_odd` é o máximo entre casas** e enviesa o ROI para cima, uniformemente nas três faixas.
+Não afeta a comparação entre faixas, que é o que a decisão usa.
+
+**6. O que invalida estas fronteiras.** Elas são medidas sobre a escala do seed
+`futebol_p95_nota_contexto`. Mudança no seed, no catálogo de premissas, no
+`macros/futebol_nota_contexto.sql` ou no conjunto de barreiras da #109 **remede as duas
+fronteiras**. Em particular: **a B3 (a linha zero do Handicap) muda o par `Pick`** de zero linhas
+publicáveis para até 642 nesta janela — se ela entrar entre esta medição e a virada, invalida o que
+está escrito aqui. A B3 vai **depois** da #109, ou estas fronteiras são remedidas.
+
+## O que ainda não é decisão
+
+O `accepted_values` de `faixa` e as duas RPCs recebem `Alta` / `Média` / `Baixa` com estas
+fronteiras **na virada (#109)**, não aqui. Nada em produção muda nesta entrega.

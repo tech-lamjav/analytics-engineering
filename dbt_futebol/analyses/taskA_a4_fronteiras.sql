@@ -214,6 +214,10 @@ com_nota AS (
             WHEN '{{ slug }}' THEN {{ mid }}
             {%- endfor %}
         END AS market_id,
+        -- o `task01_liquidacao()` chaveia por `outcome_side`; o funil chama a mesma coisa
+        -- de `outcome`. Renomear aqui, e não reescrever o macro, mantém a liquidação
+        -- byte a byte a mesma que produziu os números publicados da [0.1].
+        r.outcome AS outcome_side,
         {{ futebol_nota_contexto() }} AS nota_contexto
     FROM recomputado r
     WHERE r.lado IS NOT NULL
@@ -354,16 +358,69 @@ bloco1 AS (
     JOIN grade_faixa f USING (par)
 ),
 
-{#- A ESCOLHA, aplicando a regra do cabeçalho: entre os pares que passam, maior gap; empate
-    pelo par mais redondo, depois pelo menor B. -#}
-escolhido AS (
-    SELECT par, b, a
+{#- ======================================================================================
+    A ESCOLHA — a regra do cabeçalho aplicada em SQL, e não a olho.
+
+    O ramo E1 ("o objetivo não discrimina") é avaliado ANTES do objetivo, porque é ele que
+    decide QUAL objetivo vale. `discrimina` é o gap maior que 1 erro-padrão da DIFERENÇA,
+    com o EP da diferença tomado como a raiz da soma dos quadrados dos dois EP de faixa.
+
+    ⚠️ Essa soma IGNORA a covariância: um mesmo fixture pode ter linha na Alta e na Baixa,
+    então os dois clusters não são independentes e o EP da diferença é aproximado. A
+    aproximação é conservadora para o lado que interessa aqui — ela não INVENTA
+    discriminação — e a leitura alternativa (comparar o gap contra o maior dos dois EP de
+    faixa, sem somar) devolve o MESMO veredito em todos os oito pares. Está medido, não
+    suposto: nenhuma das duas leituras muda o ramo.
+    ====================================================================================== -#}
+grade_discrimina AS (
+    SELECT
+        *,
+        SQRT(POW(ep_alta, 2) + POW(ep_baixa, 2)) AS ep_gap,
+        ABS(gap_roi) > SQRT(POW(ep_alta, 2) + POW(ep_baixa, 2)) AS discrimina
     FROM grade_veredito
     WHERE c1_ok AND c2_ok AND c3_ok
-    ORDER BY gap_roi DESC,
-             (MOD(b, 5) + MOD(a, 5)) ASC,
-             b ASC
+),
+
+ramo AS (
+    SELECT
+        COUNT(*)                         AS n_pares_validos,
+        COUNTIF(discrimina)              AS n_discriminam,
+        -- E2: nenhum par passa nas restrições -> nada é proposto.
+        -- E1: nenhum par discrimina        -> cai para o melhor equilíbrio.
+        CASE WHEN COUNT(*) = 0        THEN 'E2 - nenhum par satisfaz C1-C3: NADA e proposto, a questao vai ao PM'
+             WHEN COUNTIF(discrimina) = 0 THEN 'E1 - o objetivo nao discrimina: escolha por EQUILIBRIO'
+             ELSE                          'PRINCIPAL - maior gap de ROI entre Alta e Baixa'
+        END AS ramo_aplicado
+    FROM grade_discrimina
+),
+
+escolhido AS (
+    SELECT d.par, d.b, d.a
+    FROM grade_discrimina d
+    CROSS JOIN ramo r
+    ORDER BY
+        -- no ramo principal manda o gap; no E1 ele é ignorado e manda o equilíbrio
+        -- (menor faixa máxima). O desempate é o mesmo nos dois: par mais redondo, menor B.
+        CASE WHEN r.n_discriminam > 0 THEN d.gap_roi      ELSE NULL END DESC,
+        CASE WHEN r.n_discriminam = 0 THEN d.maior_share  ELSE NULL END ASC,
+        (MOD(d.b, 5) + MOD(d.a, 5)) ASC,
+        d.b ASC
     LIMIT 1
+),
+
+bloco0 AS (
+    SELECT
+        '0. RAMO DA REGRA' AS bloco,
+        r.ramo_aplicado AS chave,
+        (SELECT par FROM escolhido) AS sub,
+        r.n_pares_validos AS n_apostas,
+        r.n_discriminam   AS n_jogos,
+        CAST(NULL AS FLOAT64) AS share_pct,
+        CAST(NULL AS FLOAT64) AS roi,
+        CAST(NULL AS FLOAT64) AS ep_cluster,
+        CAST(NULL AS FLOAT64) AS gap_roi,
+        'n_apostas = pares que passam C1-C3; n_jogos = quantos discriminam' AS veredito
+    FROM ramo r
 ),
 
 bloco2 AS (
@@ -416,7 +473,8 @@ bloco4 AS (
     GROUP BY 1, 2, 3
 )
 
-SELECT * FROM bloco1
+SELECT * FROM bloco0
+UNION ALL SELECT * FROM bloco1
 UNION ALL SELECT * FROM bloco2
 UNION ALL SELECT * FROM bloco3
 UNION ALL SELECT * FROM bloco4
