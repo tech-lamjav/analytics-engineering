@@ -315,15 +315,33 @@ grade_faixa AS (
     GROUP BY g.par, g.faixa
 ),
 
-{#- C3: nenhuma faixa vazia em nenhum dos nove pares (mercado, lado) com p95 > 0. -#}
+{#- C3: nenhuma faixa vazia em nenhum dos nove pares (mercado, lado) com p95 > 0.
+
+    ⚠️ A lista dos nove vem do SEED, e não dos lados que por acaso aparecem na população.
+    A diferença importa: um lado que sumisse inteiro do board pós-virada teria ZERO faixas,
+    e um `MIN` sobre os grupos observados simplesmente não o veria — C3 passaria contando
+    oito lados em vez de nove, e o descarte seria silencioso, que é o que a ADR 0006 proíbe.
+    Não é hipótese: nesta mesma rodada o `Pick` do Handicap sumiu exatamente assim (zero
+    linhas publicáveis, apagadas pela porta de linha meia). Ele está fora de C3 por ser
+    `sem_lado_apostado`, mas o modo de falha é o mesmo e o próximo lado a sumir pode não ter
+    essa isenção. Com o CROSS JOIN abaixo, sumir vira C3 vermelho em vez de C3 mudo. -#}
+lados_do_seed AS (
+    SELECT market, lado
+    FROM {{ ref('futebol_p95_nota_contexto') }}
+    WHERE p95 > 0
+),
 grade_c3 AS (
-    SELECT par,
-           MIN(n_faixas_no_lado) = 3 AS c3_ok
-    FROM (
+    SELECT
+        p.par,
+        MIN(COALESCE(o.n_faixas_no_lado, 0)) = 3 AS c3_ok
+    FROM (SELECT DISTINCT par FROM grade) p
+    CROSS JOIN lados_do_seed s
+    LEFT JOIN (
         SELECT par, market, lado, COUNT(DISTINCT faixa) AS n_faixas_no_lado
         FROM grade GROUP BY 1, 2, 3
-    )
-    GROUP BY par
+    ) o
+      ON o.par = p.par AND o.market = s.market AND o.lado = s.lado
+    GROUP BY p.par
 ),
 
 grade_veredito AS (
