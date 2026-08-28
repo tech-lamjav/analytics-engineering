@@ -73,18 +73,20 @@
 
 WITH {{ taskf_fingerprint_insumo_pit() }},
 
--- As partições cujo insumo não se mexeu desde o congelamento. Mesma restrição da Costura A, pelo
+-- As LINHAS cujo insumo não se mexeu desde o congelamento. Mesma restrição da Costura A, pelo
 -- mesmo motivo, e emitida pela mesma macro.
-particoes_casadas AS (
-    SELECT b.competition_id, b.season
-    FROM {{ source('futebol_taskF', 'baseline_pit_fingerprint') }} b
-    JOIN fp_insumo_pit a
-        ON  a.competition_id = b.competition_id
-        AND a.season         = b.season
-    WHERE a.n_fixtures    = b.n_fixtures
-      AND a.fp_fixtures   = b.fp_fixtures
-      AND a.n_grupos      = b.n_grupos
-      AND a.fp_standings IS NOT DISTINCT FROM b.fp_standings
+--
+-- ⚠️ #123: era por (competition_id, season) e passou a ser por (fixture_id, team_id), porque a
+-- partição deixou de ser o fecho da conta quando a #91 virou o default para `pit_escopo: todas`.
+-- Aqui a mudança é mecânica — o veredito desta análise não muda de sentido, só fica restrito ao
+-- recorte honesto.
+linhas_casadas AS (
+    SELECT b.fixture_id, b.team_id
+    FROM {{ source('futebol_taskF', 'baseline_pit_fingerprint_linha') }} b
+    JOIN fp_insumo_por_linha a
+        ON  a.fixture_id = b.fixture_id
+        AND a.team_id    = b.team_id
+    WHERE a.fp_insumo_linha = b.fp_insumo_linha
 ),
 
 cel_base AS (
@@ -113,12 +115,12 @@ emparelhado AS (
 -- O lado `base` do carimbo contra o baseline gravado antes de as vars existirem.
 base_casada AS (
     SELECT fixture_id, team_id, played_total
-    FROM cel_base JOIN particoes_casadas USING (competition_id, season)
+    FROM cel_base JOIN linhas_casadas USING (fixture_id, team_id)
 ),
 baseline_casado AS (
     SELECT fixture_id, team_id, played_total
     FROM {{ source('futebol_taskF', 'baseline_int_futebol_team_form_pit') }}
-    JOIN particoes_casadas USING (competition_id, season)
+    JOIN linhas_casadas USING (fixture_id, team_id)
 ),
 contra_baseline AS (
     SELECT

@@ -540,6 +540,11 @@ fingerprinting by `(competition_id, season)` — Brasileirão 2026 matched byte 
 diverged in 60 rows, because all 20 of its teams also play Libertadores and Copa do Brasil. The
 rule that follows: **any change of axis is a candidate to change the closure**, and "what does
 this row now depend on?" belongs in the checklist of whoever changes it. Emenda to ADR 0007.
+⚠️ A closure is **read off the SQL, never guessed**. Writing #123's fingerprint turned up three
+inputs the grelha's enumeration had missed — the prior fixtures of the *whole* (C,S) (a group
+rival's corrected score moves T's `rank` without touching a single game of T), the (C,S) squad
+(`n_teams`), and the deliberate *exclusion* of the anchor's own score. Erring finer than the
+closure only costs coverage; erring coarser is the lie the term exists to name.
 _Avoid_: partição (bare — ambiguous with the BigQuery partition of a table)
 
 **Célula de medição**:

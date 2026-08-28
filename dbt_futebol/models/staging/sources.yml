@@ -526,38 +526,88 @@ sources:
           sem dbt_loaded_at (que muda a cada build por construção e não é comportamento).
           Lado esquerdo da igualdade de assert_taskf_pit_default_igual_baseline.
 
-      - name: baseline_pit_fingerprint
+      # ⚠️ `baseline_pit_fingerprint` (a digital ANTIGA, por (competition_id, season)) saiu daqui
+      # na #123. A tabela continua no dataset como registro histórico, pelo mesmo precedente das
+      # cópias `baseline_*_pre91`, mas a declaração sai porque source que ninguém lê é convite a
+      # alguém voltar a lê-la — e essa partição é mais grossa que o fecho da conta desde que a #91
+      # virou o default para `pit_escopo: todas`. Ver a emenda à ADR 0007.
+      - name: baseline_pit_fingerprint_linha
         description: >
-          Impressão digital do INSUMO do modelo por (competition_id, season) no instante do
-          congelamento — contagem e BIT_XOR(FARM_FINGERPRINT) dos fixtures e do team_group já
-          resolvido. É o que deixa a Costura A ser exata sem ser frágil: fixture novo, resultado
-          que entra e jogo remarcado mudam legitimamente a saída de uma competição, e a guarda
-          compara só as partições cujo insumo é idêntico ao congelado. Produzida pela macro
-          taskf_fingerprint_insumo_pit(), a MESMA que o teste usa — se as duas divergirem, nenhuma
-          partição casa.
+          Impressão digital do INSUMO do modelo por LINHA (fixture_id, team_id) no instante do
+          congelamento. É o que deixa a Costura A ser exata sem ser frágil: fixture novo, resultado
+          que entra e jogo remarcado mudam legitimamente a saída, e a guarda compara só as linhas
+          cujo insumo é idêntico ao congelado.
+
+          O grão é por linha porque a linha É o fecho da conta desde a #91 — sob `pit_escopo:
+          todas` a linha lê o histórico do time em toda competição, e a partição por
+          (competition_id, season) passou a declarar comparáveis linhas cujo insumo mudou fora do
+          recorte. Ela não ficava frouxa: ficava mentirosa. Emenda à ADR 0007, verbete "Fecho de
+          uma linha" no CONTEXT.md, issue #123.
+
+          Produzida pela macro taskf_fingerprint_insumo_pit(), a MESMA que o teste usa — se as duas
+          divergirem, NENHUMA linha casa e a guarda fica vazia, não vermelha. É o piso de cobertura
+          que transforma essa vacuidade em vermelho.
         columns:
+          - name: fixture_id
+            description: "A âncora de tempo — o jogo cuja linha está sendo digitalizada"
+          - name: team_id
+            description: "O time da linha (um dos dois lados do jogo)"
           - name: competition_id
-            description: "ID da competição (a mesma chave de escopo do join do modelo)"
+            description: "Competição da âncora. Diagnose e legibilidade; não entra no join da guarda."
           - name: season
-            description: "Rótulo de temporada"
-          - name: n_fixtures
-            description: "Quantos fixtures a partição tinha no congelamento"
-          - name: fp_fixtures
+            description: "Temporada da âncora. Diagnose; não entra no join da guarda."
+          - name: fp_ancora
             description: >
-              BIT_XOR(FARM_FINGERPRINT(...)) sobre os campos de fixture que o modelo lê
-              (fixture_id, competition, times, kickoff, status, gols). Independente de ordem.
+              FARM_FINGERPRINT dos campos da PRÓPRIA âncora que a linha lê (fixture_id,
+              competition, competition_id, season, kickoff, os dois team_id). ⚠️ SEM status e SEM
+              placar: a linha de F não lê o resultado de F, e digitalizá-lo faria toda linha
+              quebrar quando o próprio jogo acontecesse.
+          - name: n_hist_time_disponivel
+            description: >
+              Quantos jogos encerrados anteriores o time tinha, em qualquer competição, SEM o teto
+              do recorte. É o insumo do `played_total_disponivel`, que é coluna de saída e é o que
+              o piso de amostra do task01_base() lê.
+          - name: n_hist_time_usado
+            description: "Quantos desses jogos sobreviveram ao teto de 10 e alimentaram as médias."
+          - name: fp_hist_time
+            description: >
+              BIT_XOR(FARM_FINGERPRINT(...)) sobre os 10 jogos anteriores do time, em qualquer
+              competição. `fixture_id` entra no struct porque BIT_XOR de dois structs idênticos se
+              CANCELA. Independente de ordem.
+          - name: n_hist_comp
+            description: "Quantos jogos encerrados de (C,S) inteiro precediam a âncora."
+          - name: fp_hist_comp
+            description: >
+              BIT_XOR(FARM_FINGERPRINT(...)) sobre os jogos anteriores de (C,S) inteiro, de TODOS
+              os times. É o insumo do CTE `tabela` (ADR 0008) e portanto de points/goal_diff/ppg —
+              e do `rank`, que ranqueia o time contra os adversários de grupo. Sem ele a digital
+              seria mentirosa: adversário com placar corrigido muda o rank do time sem tocar em
+              nenhum jogo dele.
+          - name: n_roster
+            description: "Quantos times distintos (C,S) tinha — é o `n_teams`, coluna de saída."
+          - name: fp_roster
+            description: >
+              BIT_XOR(FARM_FINGERPRINT(team_id)) sobre o conjunto DISTINTO de times de (C,S),
+              inclusive os de jogos futuros. ⚠️ Conjunto de TIMES e nunca de fixtures: time novo
+              muda `n_teams` de verdade e tem de quebrar a linha; jogo novo de um time que já
+              estava lá, não. Digitalizar fixtures aqui reproduziria a armadilha do recorte "por
+              time", em que um jogo de amanhã invalida uma linha de 2024.
           - name: n_grupos
-            description: "Quantos times tinham grupo resolvido na partição"
+            description: "Quantos times tinham grupo resolvido em (C,S)"
           - name: fp_standings
             description: >
               BIT_XOR(FARM_FINGERPRINT(...)) sobre (team_id, group_name) do team_group JÁ
-              RESOLVIDO — não do snapshot cru, que ganha uma linha por dia e jogaria todas as
-              competições fora da comparação.
+              RESOLVIDO — não do snapshot cru, que ganha uma linha por dia e jogaria tudo fora da
+              comparação.
+          - name: fp_insumo_linha
+            description: >
+              A digital combinada dos cinco insumos acima. É a ÚNICA coluna que entra no join da
+              guarda; as outras existem para dizer QUAL insumo se mexeu quando a cobertura cai.
 
       - name: baseline_pit_meta
         description: >
-          Quando o baseline foi congelado, de qual commit, e com quantas linhas/partições.
-          Uma linha só.
+          Quando o baseline foi congelado, de qual commit, e com quantas linhas. Uma linha só.
+          ⚠️ A coluna `n_particoes` virou `n_linhas_digital` na #123, junto com o grão da digital.
 
       - name: taskf_teste2_54
         description: >

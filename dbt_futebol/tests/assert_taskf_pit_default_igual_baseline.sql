@@ -1,51 +1,61 @@
 {{ config(tags=['taskf']) }}
 -- COSTURA A da task [F] (issue #49, ADR 0007) — o default do PIT não se move sozinho.
 --
--- ⚠️ ESTA GUARDA MUDOU DE SENTIDO NA #91, E O BASELINE FOI RECONGELADO COM ELA.
+-- O QUE ELA AFIRMA: a saída de produção do int_futebol_team_form_pit não mudou desde o
+-- congelamento, nas linhas cujo INSUMO não mudou. Falha = deriva: a saída se mexeu sem que o
+-- insumo tivesse se mexido.
 --
--- O que ela afirmava até 24/08/2026: a ADR 0007 deixou no código de produção duas vars que
--- produção nunca passava, e prometeu que o DEFAULT delas preservava o comportamento anterior.
--- A guarda transformava a promessa em fato verificado, e falha significava "o andaime da
--- medição vazou para o caminho que o board serve".
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- ⚠️ O RECORTE DA COMPARAÇÃO MUDOU NA #123: DE PARTIÇÃO PARA LINHA.
 --
--- Essa premissa morreu por decisão, não por acidente: a #91 (ADR 0010, Recomendação 1 da [F])
--- virou os defaults para `todas` + `ultimos_10` — a célula `ambos` —, e produção passou a USAR
--- o default. "O default reproduz o comportamento de antes das vars" deixou de ser verdade no
--- mesmo commit em que deixou de ser desejável.
+-- Até 26/08/2026 a guarda comparava as PARTIÇÕES (competition_id, season) cuja impressão digital
+-- do insumo estivesse intacta. Esse recorte era sólido enquanto o default fosse
+-- `da_competicao`/`temporada`: a linha de uma âncora em (C,S) era função só de (C,S). A #91
+-- tornou `todas` o DEFAULT, a linha passou a ler o histórico do time em TODA competição, e a
+-- partição virou mais grossa que o fecho da conta.
 --
--- O que ela afirma AGORA: o default não se move sozinho. O baseline É REGRAVADO (pelo
--- analyses/taskf_congela_baseline.sql) a partir da célula `ambos` com AET/PEN no histórico (#71),
--- e a guarda segue comparando linha a linha contra ele.
+-- Partição mais grossa que o fecho não fica frouxa: fica MENTIROSA — declara comparáveis linhas
+-- cujo insumo mudou fora do recorte. Foi o que a guarda passou a acusar como se fosse regressão:
+-- em 26/08 ela estava vermelha com 60 linhas, todas do Brasileirão 2026, cuja digital de insumo
+-- casava BYTE A BYTE (380 fixtures, mesmo `fp_fixtures`). Os 20 times dele também jogam
+-- Libertadores e Copa do Brasil, e foram essas duas que se mexeram. Recongelar não resolveria:
+-- ficaria verde até a próxima partida em qualquer competição do portfólio, e voltaria. É a
+-- "guarda permanentemente vermelha morre ignorada" na versão lenta.
 --
--- ✅ O RECONGELAMENTO ACONTECEU: 2026-08-25 17:59 UTC, de PRODUÇÃO, carimbado com `887a1f9` —
--- o `PROCEDENCIA_SHA` da imagem que produziu a tabela, que é o merge da #91/#71. 21.078 linhas
--- e 37 partições, contra 21.054 do congelamento de 12/08 (commit `a3b954e`, célula `base`), que
--- ficou preservado nas cópias `baseline_*_pre91`. Rodada a guarda logo depois, `--target prod`:
--- verde.
+-- Hoje o recorte é o FECHO da conta — por (fixture_id, team_id). O que compõe esse fecho, e por
+-- que ele são CINCO insumos e não os dois que o corpo da spec da #123 enumerava, está no
+-- cabeçalho de macros/taskf_fingerprint_insumo_pit.sql. Emenda à ADR 0007; verbete "Fecho de uma
+-- linha" no glossário do CONTEXT.md.
 --
--- ⚠️ Ele tinha de sair de PRODUÇÃO, não do `futebol_taskF`: congelar do dataset de medição
--- carimbaria o baseline de produção com os fatos parados de 12/08, que é pior que não
--- recongelar. A receita do `taskf_congela_baseline.sql` dizia `--target taskF` e foi corrigida
--- no mesmo commit — ela é anterior a esta virada de sentido e mandava fazer exatamente o que
--- este parágrafo proíbe.
+-- ✅ O RECONGELAMENTO ACONTECEU NO MESMO COMMIT: sem ele nenhuma linha casaria — a guarda não
+-- ficaria vermelha, ficaria VAZIA. 2026-08-28 14:25:03 UTC, de PRODUÇÃO, carimbo `687950f` (o
+-- `PROCEDENCIA_SHA` do job `dbt-futebol`), 21.374 linhas. Receita e histórico dos três
+-- congelamentos em analyses/taskf_congela_baseline.sql.
 --
--- Entre a #91 e esse recongelamento a guarda ficou VERMELHA em qualquer build do PIT no default,
--- e é por isso que a receita da âncora da #82 a exclui por escrito. Deixou de ser guarda de
--- vazamento-de-andaime e virou guarda de DERIVA: falha = a saída de produção mudou sem que o
--- insumo tenha mudado, que é o mesmo modo de falha que ela sempre pegou, só que agora sobre o
--- caminho que o board de fato serve.
+-- Rodada logo depois, `--target prod`: VERDE, com cobertura **1,0** — 21.374 de 21.374 linhas
+-- comparadas. Cobertura cheia é o esperado no instante do congelamento, e é dela que a série de
+-- erosão (ou de crescimento) vai partir.
 --
--- É o cabeçalho da própria guarda que autorizava esta saída: "as duas saídas honestas são
--- recongelar o baseline de propósito (no mesmo commit da mudança que o justifica) ou baixar o
--- piso de propósito — as duas explícitas, nenhuma silenciosa".
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- HISTÓRICO DE SENTIDO (a guarda já quis dizer três coisas, e as três estão registradas):
 --
--- QUEM RODA. Não é o agendado: a tag é `taskf` e não `guarda`, de propósito — o pipeline horário
--- executa `dbt test --select tag:guarda` e o ticket que criou este teste (#50) promete que nada
--- do agendado mudou. Quem roda é a própria medição, que materializa a camada de premissas com
--- `dbt build` a cada célula (#51 a #54); a #52 chega a exigir por escrito que "a Costura A segue
--- verde". O teste é executado, portanto, exatamente quando a var pode ter vazado — que é quando
--- a pergunta dele importa. Fora disso: `dbt build --target taskF --select
--- int_futebol_team_form_pit`.
+--   até 24/08 — "o default preserva o comportamento de antes das vars da ADR 0007". Essa premissa
+--   morreu por DECISÃO na #91 (ADR 0010), que virou os defaults para `todas` + `ultimos_10` e pôs
+--   produção a USAR o default.
+--
+--   25/08 — recongelada de PRODUÇÃO contra a célula `ambos` (21.078 linhas, 37 partições, carimbo
+--   `887a1f9`), virando guarda de DERIVA sobre o caminho que o board de fato serve. O baseline
+--   anterior (12/08, commit `a3b954e`, célula `base`) ficou nas cópias `baseline_*_pre91`.
+--
+--   28/08 (#123) — mesmo sentido, recorte novo: a comparação passa a ser por linha, porque a
+--   partição parou de ser o fecho quando o default mudou.
+--
+-- QUEM RODA. Não é o agendado: a tag é `taskf` e não `guarda`, de propósito, pelo precedente da
+-- #33 — guarda com baseline permanente não entra na tag, e o ticket que criou este teste (#50)
+-- promete que nada do agendado mudou. Quem roda é a própria medição, que materializa a camada de
+-- premissas com `dbt build` a cada célula (#51 a #54); a #52 exige por escrito que "a Costura A
+-- segue verde". O teste é executado, portanto, exatamente quando a var pode ter vazado. Fora
+-- disso: `dbt test --target prod --select assert_taskf_pit_default_igual_baseline`.
 --
 -- Igualdade EXATA, sem tolerância: o modelo lê só fact_fixtures e fact_standings_snapshot — é
 -- determinístico, não encosta em odds, e por isso não há deriva legítima para acomodar. A
@@ -56,35 +66,74 @@
 -- ⚠️ O que é restringido é QUAIS LINHAS são comparáveis, nunca QUANTO elas podem diferir. O
 -- porquê, e o contrato congelado da impressão digital, estão na macro
 -- taskf_fingerprint_insumo_pit — a MESMA que gravou o baseline. Se as duas pontas divergirem,
--- nenhuma partição casa.
+-- nenhuma linha casa.
 --
--- PISO DE COBERTURA. Restringir linhas comparáveis tem um modo de falha próprio: a cobertura
--- encolhe sozinha conforme o insumo anda, e uma guarda que compara 3 linhas continua verde
--- dizendo o mesmo que uma que compara 21 mil. Por isso a cobertura é medida e tem piso declarado
--- (`taskf_cobertura_minima`, hoje 0,5 das linhas do baseline): abaixo dele o teste FALHA, com os
--- números na saída. O piso não é alto de propósito — durante a [F] as competições da temporada
--- corrente saem da comparação legitimamente, uma a uma, conforme os jogos acontecem. Ele pega a
--- erosão estrutural, não a natural. Quando ele disparar, as duas saídas honestas são recongelar
--- o baseline de propósito (no mesmo commit da mudança que o justifica) ou baixar o piso de
--- propósito — as duas explícitas, nenhuma silenciosa.
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- PISO DE COBERTURA (`taskf_cobertura_minima`, 0,5) — O NÚMERO É O MESMO, O SENTIDO MUDOU.
 --
--- ⚠️ A FALSIFICAÇÃO INVERTEU DE LADO NA #91. Ela foi falsificada uma vez com
--- `--vars '{pit_escopo: todas}'`, que a deixava vermelha (12.868 divergências) — porque `todas`
--- era a célula juntada e o baseline era o da célula `base`. Hoje `todas` + `ultimos_10` É o
--- default e o baseline, então quem a deixa vermelha agora é o caminho ANTIGO:
+-- Sob o recorte por partição ele era guarda de EROSÃO: a cobertura encolhia sozinha conforme o
+-- insumo andava, e uma guarda que compara 3 linhas continua verde dizendo o mesmo que uma que
+-- compara 21 mil.
 --
---   dbt build --target taskF --select int_futebol_team_form_pit \
---     --vars '{pit_escopo: da_competicao, pit_recorte: temporada}' \
---     --exclude assert_taskf_pit_default_igual_baseline
+-- Sob o recorte por LINHA ele é guarda de VACUIDADE. O fecho de uma âncora de kickoff já passado
+-- é feito só de fatos do passado: ele para de se mexer, e a cobertura CRESCE com o tempo em vez de
+-- erodir. O que o piso pega agora é o passado sendo reescrito em massa — e, sobretudo, o caso
+-- `cobertura = 0`, que é o que acontece quando a digital muda sem recongelamento. Sem o piso isso
+-- passaria em branco; com ele, vira vermelho barulhento.
 --
--- A regra por trás não mudou: esta guarda é default-only por definição, então QUALQUER célula
--- que não seja o default a deixa vermelha por desenho e tem de excluí-la. O que mudou é qual
--- célula é o default. Ela segue sendo a única exclusão que a medição precisa.
+-- ⚠️ O 0,5 NÃO FOI RECALIBRADO, de propósito (#123 diz isso por escrito). Recalibrá-lo exigiria
+-- medir uma trajetória de cobertura sob o recorte novo que ninguém mediu — a projeção da grelha de
+-- 26/08 era 68,2% no instante da medição, e a afirmação de que ela cresce é dedução do fecho, não
+-- série observada. Quando houver série, recalibrar é decisão explícita, no mesmo commit.
 --
--- ⚠️ Esta receita já mandou excluir também o `assert_pit_first_game_has_no_history`. NÃO EXCLUA
--- MAIS (#52): a partição dele passou a seguir os eixos da célula, ele é verde nas quatro, e
--- excluí-lo faz a célula rodar sem guarda de look-ahead — o defeito (Task 0) que contaminou a
--- medição que a [F] existe para refazer.
+-- ─────────────────────────────────────────────────────────────────────────────────────────────
+-- AS DUAS FALSIFICAÇÕES, com comando e resultado.
+--
+-- 1) CÉLULA FORA DO DEFAULT DEIXA A GUARDA VERMELHA POR DESENHO. Esta guarda é default-only por
+--    definição, então qualquer célula que não seja o default tem de excluí-la.
+--
+--      dbt build --target taskF --select int_futebol_team_form_pit \
+--        --vars '{pit_escopo: da_competicao, pit_recorte: temporada}' \
+--        --exclude assert_taskf_pit_default_igual_baseline
+--      dbt test  --target taskF --select assert_taskf_pit_default_igual_baseline \
+--        --vars '{pit_escopo: da_competicao, pit_recorte: temporada}'
+--
+--    EXECUTADA EM 2026-08-28 14:28 UTC, contra o dataset de medição: VERMELHA, **27.278**
+--    divergências — 13.639 `so_no_baseline` + 13.639 `so_no_atual`, simétricas porque a célula
+--    `base` reescreve o valor de toda linha comparável em vez de perder linhas. NENHUMA linha de
+--    `cobertura_abaixo_do_piso`: casaram 13.639 das 21.374 do baseline (63,8%, acima do piso), e é
+--    isso que torna a falsificação boa — ela é vermelha por CONTEÚDO, não por vacuidade, que é o
+--    modo de falha distinto que a falsificação 2 cobre.
+--
+--    ⚠️ A cobertura não é 100% aqui porque a comparação corre com `--target taskF` e a digital sai
+--    da CÓPIA de `fact_fixtures` daquele dataset, que é mais velha que a de produção. Isso é
+--    esperado e não enfraquece a falsificação.
+--
+--    ⚠️ Este comando SOBRESCREVE `futebol_taskF.int_futebol_team_form_pit` com a célula `base` —
+--    é o fluxo documentado no cabeçalho do modelo, uma tabela de trabalho por célula. Depois desta
+--    execução ela foi reconstruída no default. Segue sendo a única exclusão que a medição precisa.
+--    ⚠️ NÃO exclua também o `assert_pit_first_game_has_no_history` (#52): ele é verde nas quatro
+--    células, e excluí-lo faz a célula rodar sem guarda de look-ahead — o defeito (Task 0) que a
+--    [F] existe para refazer.
+--
+-- 2) RECORTE NOVO SEM RECONGELAR O BASELINE TEM DE DAR **VAZIA** — a falsificação que a #123
+--    acrescentou, porque é a falha que o macro descreve e que produzir por acidente é fácil.
+--    Perturbar a digital sem regravar o baseline (um campo a mais no STRUCT que produz o
+--    `fp_insumo_linha`, em macros/taskf_fingerprint_insumo_pit.sql) e rodar:
+--
+--      dbt test --target prod --select assert_taskf_pit_default_igual_baseline
+--
+--    EXECUTADA EM 2026-08-28 14:26 UTC: VERMELHA com **uma** linha só, motivo
+--    `cobertura_abaixo_do_piso`, com
+--
+--      {"linhas_comparadas":0, "linhas_no_baseline":21374, "cobertura":0, "piso":0.5,
+--       "linhas_casadas_n":0, "linhas_na_digital_do_baseline":21374}
+--
+--    ZERO divergências de conteúdo — porque não há conteúdo comparado. É exatamente o modo "vazia"
+--    ficando barulhento por causa do piso: sem ele a saída seria zero linhas e a guarda passaria
+--    dizendo NADA sobre 21.374 linhas. Perturbação revertida em seguida e a guarda voltou a VERDE
+--    (14:27 UTC), o que é a segunda metade da falsificação — uma falsificação que não volta ao
+--    verde não provou o que dizia provar.
 
 {% set colunas = [
     'fixture_id', 'team_id', 'competition', 'competition_id', 'season', 'kickoff_utc',
@@ -99,24 +148,22 @@
 
 WITH {{ taskf_fingerprint_insumo_pit() }},
 
--- As partições em que o insumo não se mexeu desde o congelamento. IS NOT DISTINCT FROM porque
--- fp_standings é NULL em competição sem tabela (Copa do Brasil) — NULL = NULL tem de casar.
-particoes_casadas AS (
-    SELECT b.competition_id, b.season
-    FROM {{ source('futebol_taskF', 'baseline_pit_fingerprint') }} b
-    JOIN fp_insumo_pit a
-        ON  a.competition_id = b.competition_id
-        AND a.season         = b.season
-    WHERE a.n_fixtures    = b.n_fixtures
-      AND a.fp_fixtures   = b.fp_fixtures
-      AND a.n_grupos      = b.n_grupos
-      AND a.fp_standings IS NOT DISTINCT FROM b.fp_standings
+-- As LINHAS em que o insumo não se mexeu desde o congelamento. Uma igualdade só, sobre a digital
+-- combinada: as colunas de componente existem no baseline para dizer QUAL insumo se mexeu quando
+-- a cobertura cai, não para entrar no join.
+linhas_casadas AS (
+    SELECT b.fixture_id, b.team_id
+    FROM {{ source('futebol_taskF', 'baseline_pit_fingerprint_linha') }} b
+    JOIN fp_insumo_por_linha a
+        ON  a.fixture_id = b.fixture_id
+        AND a.team_id    = b.team_id
+    WHERE a.fp_insumo_linha = b.fp_insumo_linha
 ),
 
 atual AS (
     SELECT {{ colunas | join(', ') }}
     FROM {{ ref('int_futebol_team_form_pit') }}
-    JOIN particoes_casadas USING (competition_id, season)
+    JOIN linhas_casadas USING (fixture_id, team_id)
 ),
 
 baseline_completo AS (
@@ -127,7 +174,7 @@ baseline_completo AS (
 baseline AS (
     SELECT {{ colunas | join(', ') }}
     FROM baseline_completo
-    JOIN particoes_casadas USING (competition_id, season)
+    JOIN linhas_casadas USING (fixture_id, team_id)
 ),
 
 divergencias AS (
@@ -150,23 +197,24 @@ SELECT
     'cobertura_abaixo_do_piso' AS motivo,
     TO_JSON_STRING(STRUCT(
         linhas_comparadas, linhas_no_baseline, cobertura, piso,
-        particoes_casadas_n, particoes_no_baseline
+        linhas_casadas_n, linhas_na_digital_do_baseline
     )) AS linha
 FROM (
     SELECT
         linhas_comparadas,
         linhas_no_baseline,
-        particoes_casadas_n,
-        particoes_no_baseline,
+        linhas_casadas_n,
+        linhas_na_digital_do_baseline,
         {{ var('taskf_cobertura_minima', 0.5) }} AS piso,
         SAFE_DIVIDE(linhas_comparadas, linhas_no_baseline) AS cobertura
     FROM (
         SELECT
-            (SELECT COUNT(*) FROM atual)               AS linhas_comparadas,
-            (SELECT COUNT(*) FROM baseline_completo)   AS linhas_no_baseline,
-            (SELECT COUNT(*) FROM particoes_casadas)   AS particoes_casadas_n,
-            (SELECT COUNT(*) FROM {{ source('futebol_taskF', 'baseline_pit_fingerprint') }})
-                                                       AS particoes_no_baseline
+            (SELECT COUNT(*) FROM atual)              AS linhas_comparadas,
+            (SELECT COUNT(*) FROM baseline_completo)  AS linhas_no_baseline,
+            (SELECT COUNT(*) FROM linhas_casadas)     AS linhas_casadas_n,
+            (SELECT COUNT(*)
+             FROM {{ source('futebol_taskF', 'baseline_pit_fingerprint_linha') }})
+                                                      AS linhas_na_digital_do_baseline
     )
 )
 WHERE cobertura IS NULL OR cobertura < piso
