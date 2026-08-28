@@ -282,7 +282,14 @@ grade AS (
         CASE WHEN score_normalizado >= {{ par[1] }} THEN 'Alta'
              WHEN score_normalizado >= {{ par[0] }} THEN 'Media'
              ELSE                                        'Baixa' END AS faixa
-    FROM com_lucro WHERE NOT sem_lado_apostado
+    -- ⚠️ `score_normalizado IS NOT NULL` é EXPLÍCITO, e não confiança no `ELSE`. O CASE das
+    -- faixas termina em `ELSE 'Baixa'`, então uma nota NULL — linha sem premissa avaliável —
+    -- cairia na `Baixa` sem carimbo nenhum, e "não pôde ser avaliada" viraria "foi avaliada
+    -- e tirou pouco", que é a confusão que a ADR 0003 existe para impedir. Medido nesta
+    -- rodada: ZERO linhas nulas na população publicável, nos cinco mercados. O filtro não
+    -- muda número nenhum hoje; ele existe para o dia em que mudar, e o bloco 0 conta quantas
+    -- ele tirou para que o zero seja LIDO em vez de suposto.
+    FROM com_lucro WHERE NOT sem_lado_apostado AND score_normalizado IS NOT NULL
     {%- if not loop.last %}
     UNION ALL
     {%- endif %}
@@ -437,7 +444,12 @@ bloco0 AS (
         CAST(NULL AS FLOAT64) AS roi,
         CAST(NULL AS FLOAT64) AS ep_cluster,
         CAST(NULL AS FLOAT64) AS gap_roi,
-        'n_apostas = pares que passam C1-C3; n_jogos = quantos discriminam' AS veredito
+        'pares que passam C1-C3 = ' || CAST(r.n_pares_validos AS STRING)
+          || ' | discriminam = ' || CAST(r.n_discriminam AS STRING)
+          || ' | linhas com nota NULA excluidas = '
+          || CAST((SELECT COUNT(*) FROM com_lucro
+                   WHERE NOT sem_lado_apostado AND score_normalizado IS NULL) AS STRING)
+          AS veredito
     FROM ramo r
 ),
 

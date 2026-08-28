@@ -810,6 +810,14 @@ inteira.
 **5. `best_odd` é o máximo entre casas** e enviesa o ROI para cima, uniformemente nas três faixas.
 Não afeta a comparação entre faixas, que é o que a decisão usa.
 
+**5b. O universo fecha por fora, e nenhuma linha entra sem nota.** As 3.930 linhas da grade
+reconciliam por `outcome` contra uma contagem independente do funil: Handicap 546 + 542, Gols
+625 + 656, BTTS 372 + 369, Dupla Chance 197 + 198, Resultado 268 + 157 — os mesmos 3.930, à
+linha. E as linhas com nota NULA excluídas são **zero** nos cinco mercados, número que a própria
+análise imprime no bloco 0 em vez de deixar suposto: o `CASE` das faixas termina em
+`ELSE 'Baixa'`, e sem o filtro explícito uma linha sem premissa avaliável seria contada como
+"avaliada e tirou pouco" — a confusão que a ADR 0003 existe para impedir.
+
 **6. O que invalida estas fronteiras.** Elas são medidas sobre a escala do seed
 `futebol_p95_nota_contexto`. Mudança no seed, no catálogo de premissas, no
 `macros/futebol_nota_contexto.sql` ou no conjunto de barreiras da #109 **remede as duas
