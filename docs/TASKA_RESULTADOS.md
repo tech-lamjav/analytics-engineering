@@ -393,6 +393,11 @@ menos oportunidades de nascer versão nova. "Uma semana" aqui vale 162 chances, 
   esse número; é decisão de produto, não defeito.
 - **Zero acima de 24 h.** O expurgo faz exatamente o que a ADR 0009 desenhou.
 
+⚠️ **E o zero não é de raspão.** A versão mais atrasada da janela está em **16,28 h** — **7,72 h
+de folga** até a fronteira da carência —, e **nenhuma** das 45 passa de 20 h. Importa porque um
+resultado colado na fronteira mudaria de lado com uma remarcação de jogo ou um arredondamento;
+este não muda.
+
 ### Quem são as 45
 
 Oito fixtures, todos `FT`, todos com o atraso dentro das primeiras 16,3 h:
