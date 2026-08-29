@@ -1,0 +1,90 @@
+# Marca PR que altera modelo cuja tabela é sincronizada para o Postgres de serving.
+#
+# POR QUE ISTO EXISTE:
+# mudar coluna de um modelo que o sync copia exige o DDL correspondente no Postgres no
+# MESMO deploy. Sem isso o parity check pré-flight do sync aborta TUDO — as 22 tabelas,
+# em PRD e DEV — até alguém aplicar o DDL à mão. Já aconteceu 4 vezes. Na última (PR #122,
+# que removeu `linha_subindo`/`linha_descendo` de `int_futebol_premissas_ou`) o serving
+# ficou 3 dias congelado servindo dado de 26/08, e o que acusou foi um e-mail diário que
+# ninguém leu. Nas quatro vezes o gatilho foi o mesmo: mudou o mart, ninguém olhou o
+# Postgres.
+#
+# POR QUE ISTO SÓ MARCA, e não verifica:
+# não dá para verificar aqui. No momento do PR o modelo ainda não rodou, então o BigQuery
+# ainda tem as colunas VELHAS — um parity check daria verde no PR #122 e só ficaria
+# vermelho depois do deploy. Verificação real exigiria `dbt compile` + dry-run no BQ para
+# extrair as colunas de saída do modelo. Desproporcional hoje; anotado como possível.
+#
+# ⚠️ A allowlist é lida do `data-engineering` em tempo de execução, não copiada para cá.
+# Uma segunda cópia derivaria — que é a doença que este aviso trata. Ver
+# scripts/tabelas_sincronizadas.py.
+
+name: PR toca tabela sincronizada
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'dbt_futebol/models/**/*.sql'
+
+jobs:
+  marca:
+    name: tabela sincronizada?
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Modelos sincronizados alterados
+        id: detecta
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          # O script sai != 0 se não conseguir ler a allowlist: marcar a menos é pior que
+          # não marcar, então a falha tem que derrubar o job em vez de virar lista vazia.
+          tabelas=$(git diff --name-only "$BASE" "$HEAD" \
+            | python3 scripts/tabelas_sincronizadas.py)
+          echo "tabelas<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$tabelas" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+
+      - name: Marcar e avisar
+        if: steps.detecta.outputs.tabelas != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.pull_request.number }}
+          TABELAS: ${{ steps.detecta.outputs.tabelas }}
+        run: |
+          set -euo pipefail
+          ja_marcado=$(gh pr view "$PR" --json labels \
+            --jq '.labels[].name' | grep -Fx 'tabela-sincronizada' || true)
+          gh pr edit "$PR" --add-label tabela-sincronizada
+
+          # Comentário só na primeira vez: um aviso repetido a cada push é o mesmo papel de
+          # parede que deixou o sync 3 dias parado.
+          if [ -n "$ja_marcado" ]; then
+            echo "PR já marcado; sem comentário novo."
+            exit 0
+          fi
+
+          lista=$(echo "$TABELAS" | sed 's/^/- `/; s/$/`/')
+          gh pr comment "$PR" --body "$(cat <<EOF
+          ⚠️ **Este PR altera modelo cuja tabela é sincronizada para o Postgres de serving.**
+
+          $lista
+
+          Se a mudança **adiciona, remove ou renomeia coluna**, o DDL correspondente no Postgres (PRD **e** DEV) precisa sair no mesmo deploy. Sem ele o parity check pré-flight aborta o sync inteiro — as 22 tabelas, nos dois ambientes — de hora em hora, até alguém aplicar o DDL à mão. Nada é truncado nem corrompido; o serving simplesmente congela no último dado bom, e o app continua respondendo com ele.
+
+          Antes de mergear, conferir quem lê essas colunas: \`data-engineering/docs/contrato-serving-gerado.md\` (mapa RPC×tabela gerado do \`pg_proc\` do PRD). Função não bloqueia \`DROP COLUMN\` — a RPC só estoura em runtime, depois.
+
+          Se a mudança não mexe em coluna, ignorar este aviso.
+          EOF
+          )"
