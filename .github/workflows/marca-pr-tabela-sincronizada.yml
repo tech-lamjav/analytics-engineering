@@ -26,6 +26,9 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - 'dbt_futebol/models/**/*.sql'
+      # A `fact_value_opportunities_hist` e SNAPSHOT, nao modelo: uma das 22 tabelas
+      # sincronizadas mora aqui, e sem esta linha mudar coluna nela nao dispara nada.
+      - 'dbt_futebol/snapshots/**/*.sql'
 
 jobs:
   marca:
@@ -34,6 +37,11 @@ jobs:
     permissions:
       contents: read
       pull-requests: write
+    # A guarda de "comenta uma vez so" e um read-then-write nao atomico: dois pushes
+    # seguidos leem a label ausente antes de qualquer um gravar, e os dois comentam.
+    concurrency:
+      group: marca-pr-sincronizada-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
 
     steps:
       - name: Checkout
@@ -50,7 +58,12 @@ jobs:
           set -euo pipefail
           # O script sai != 0 se não conseguir ler a allowlist: marcar a menos é pior que
           # não marcar, então a falha tem que derrubar o job em vez de virar lista vazia.
-          tabelas=$(git diff --name-only "$BASE" "$HEAD" \
+          # Tres pontos (merge-base), nao dois: com dois, tudo que entrou na base depois
+          # do fork aparece como alterado por este PR, e o aviso passa a citar arquivo que
+          # o PR nao tocou -- o papel de parede que este workflow existe para evitar.
+          # --no-renames porque a deteccao de rename imprime SO o destino, e renomear um
+          # modelo sincronizado (que DERRUBA a tabela no BQ, o pior caso) passaria batido.
+          tabelas=$(git diff --no-renames --name-only "$BASE...$HEAD" \
             | python3 scripts/tabelas_sincronizadas.py)
           echo "tabelas<<EOF" >> "$GITHUB_OUTPUT"
           echo "$tabelas" >> "$GITHUB_OUTPUT"
@@ -83,7 +96,7 @@ jobs:
 
           Se a mudança **adiciona, remove ou renomeia coluna**, o DDL correspondente no Postgres (PRD **e** DEV) precisa sair no mesmo deploy. Sem ele o parity check pré-flight aborta o sync inteiro — as 22 tabelas, nos dois ambientes — de hora em hora, até alguém aplicar o DDL à mão. Nada é truncado nem corrompido; o serving simplesmente congela no último dado bom, e o app continua respondendo com ele.
 
-          Antes de mergear, conferir quem lê essas colunas: \`data-engineering/docs/contrato-serving-gerado.md\` (mapa RPC×tabela gerado do \`pg_proc\` do PRD). Função não bloqueia \`DROP COLUMN\` — a RPC só estoura em runtime, depois.
+          Antes de mergear, conferir quem lê essas colunas em \`dbt_futebol/docs/contrato-serving-rpcs.md\`. Função não bloqueia \`DROP COLUMN\` — a RPC só estoura em runtime, depois.
 
           Se a mudança não mexe em coluna, ignorar este aviso.
           EOF

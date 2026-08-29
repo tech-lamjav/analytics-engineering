@@ -20,6 +20,7 @@ o job de propósito: marcar a menos seria pior que não marcar.
 import os
 import re
 import sys
+import time
 import urllib.request
 
 CONFIG_URL = (
@@ -27,10 +28,27 @@ CONFIG_URL = (
 )
 LISTA = "FUTEBOL_SYNC_TABLES_ORDERED"
 
+# Só o que o dbt_futebol produz conta. Sem o prefixo, o `dbt_nba/models/marts/dim_teams.sql`
+# — nome homônimo de uma tabela sincronizada do futebol — marcaria o PR por engano.
+PREFIXOS = ("dbt_futebol/models/", "dbt_futebol/snapshots/")
+
+TENTATIVAS = 3
+
 
 def allowlist(url: str = CONFIG_URL) -> set[str]:
-    with urllib.request.urlopen(url, timeout=30) as r:
-        fonte = r.read().decode("utf-8")
+    # Falhar fechado é o desenho (marcar a menos é pior que não marcar), mas sem retry um
+    # blip de rede no raw.githubusercontent pinta de vermelho todo PR de dbt por motivo
+    # que nada tem a ver com o PR.
+    for tentativa in range(1, TENTATIVAS + 1):
+        try:
+            with urllib.request.urlopen(url, timeout=30) as r:
+                fonte = r.read().decode("utf-8")
+            break
+        except Exception as e:
+            if tentativa == TENTATIVAS:
+                raise
+            print(f"tentativa {tentativa} falhou ({e}); repetindo", file=sys.stderr)
+            time.sleep(2**tentativa)
 
     bloco = re.search(rf"^{LISTA}\s*=\s*\[(.*?)^\]", fonte, re.S | re.M)
     if not bloco:
@@ -47,7 +65,7 @@ def afetadas(arquivos, tabelas: set[str]) -> list[str]:
     achadas = set()
     for caminho in arquivos:
         caminho = caminho.strip()
-        if not caminho.endswith(".sql"):
+        if not caminho.endswith(".sql") or not caminho.startswith(PREFIXOS):
             continue
         nome = os.path.basename(caminho)[: -len(".sql")]
         if nome in tabelas:
