@@ -7,7 +7,7 @@ version: 2
 # portas — quantas linhas cada uma remove sozinha, e quantas ela ainda remove depois
 # das anteriores. Numa contagem sobre produção essa distinção é indistinguível de
 # muitas outras coisas: um funil em que toda linha reprovada tem
-# `porta_conjunto_completo = FALSE` é compatível tanto com "a coluna está certa e o
+# `porta_cobertura_pinnacle = FALSE` é compatível tanto com "a coluna está certa e o
 # conjunto incompleto é mesmo 49% do universo" quanto com "todas as portas estão
 # copiando a mesma expressão". Só linha construída separa as duas.
 #
@@ -75,7 +75,7 @@ unit_tests:
           # `funil_duas_portas_o_empate_e_o_insumo_nulo`.
           - {fixture_id: 2, competition: 'brasileirao', season: 2026, market_id: 12, outcome_side: '12', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 1.50, best_book: 'Bet365', avg_odd: 1.45, n_casas: 5, prob_justa_fechamento: 0.60, pin_n_outcomes: , n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
-          # -- 3: porta_conjunto_completo. O 1X2 exige as três saídas da Pinnacle; vieram
+          # -- 3: porta_cobertura_pinnacle. O 1X2 exige as três saídas da Pinnacle; vieram
           # duas. É a MAIOR rejeição do sistema (~49% do universo) e até esta entrega ela
           # não existia em lugar nenhum — saía num `WHERE` dentro do join. ⚠️ O de-vig
           # real anularia prob_justa junto (ADR 0002); aqui ela fica para isolar a porta.
@@ -149,15 +149,15 @@ unit_tests:
 
     expect:
       rows:
-        - {fixture_id: 1, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: true,  motivo_primario: , sem_lado_apostado: false}
-        - {fixture_id: 2, market: 'double_chance',    outcome: '12',   score: 45, porta_saida_catalogada: false, porta_conjunto_completo: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'saida_nao_catalogada', sem_lado_apostado: false}
-        - {fixture_id: 3, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: false, porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'conjunto_incompleto', sem_lado_apostado: false}
-        - {fixture_id: 4, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: true,  porta_valor_estimavel: false, porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'valor_nao_estimavel', sem_lado_apostado: false}
-        - {fixture_id: 5, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: true,  porta_valor_estimavel: true,  porta_liquidez: false, porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'sem_liquidez', sem_lado_apostado: false}
-        - {fixture_id: 6, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: false, porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'sem_edge', sem_lado_apostado: false}
-        - {fixture_id: 7, market: 'match_winner',     outcome: 'Home', score: 30, porta_saida_catalogada: true,  porta_conjunto_completo: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'nota_abaixo_da_regua', sem_lado_apostado: false}
-        - {fixture_id: 8, market: 'goals_over_under', outcome: 'Over', score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: false, porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'linha_nao_meia', sem_lado_apostado: false}
-        - {fixture_id: 9, market: 'double_chance',    outcome: '1X',   score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: false, passou_no_gate: false, motivo_primario: 'odd_dc_abaixo_do_minimo', sem_lado_apostado: false}
+        - {fixture_id: 1, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: true,  motivo_primario: , sem_lado_apostado: false}
+        - {fixture_id: 2, market: 'double_chance',    outcome: '12',   score: 45, porta_saida_catalogada: false, porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'saida_nao_catalogada', sem_lado_apostado: false}
+        - {fixture_id: 3, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: false, porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'sem_cobertura_pinnacle', sem_lado_apostado: false}
+        - {fixture_id: 4, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: false, porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'valor_nao_estimavel', sem_lado_apostado: false}
+        - {fixture_id: 5, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: false, porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'sem_liquidez', sem_lado_apostado: false}
+        - {fixture_id: 6, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: false, porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'sem_edge', sem_lado_apostado: false}
+        - {fixture_id: 7, market: 'match_winner',     outcome: 'Home', score: 30, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'nota_abaixo_da_regua', sem_lado_apostado: false}
+        - {fixture_id: 8, market: 'goals_over_under', outcome: 'Over', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: false, porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'linha_nao_meia', sem_lado_apostado: false}
+        - {fixture_id: 9, market: 'double_chance',    outcome: '1X',   score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: false, passou_no_gate: false, motivo_primario: 'odd_dc_abaixo_do_minimo', sem_lado_apostado: false}
 
   # ---------------------------------------------------------------------------
   # 2. OS CASOS QUE A TABELA EXISTE PARA REGISTRAR.
@@ -237,13 +237,13 @@ unit_tests:
     expect:
       rows:
         # duas portas FALSE na mesma linha, e o motivo elege só a primeira.
-        - {fixture_id: 10, market: 'match_winner',  outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: true, porta_valor_estimavel: true, porta_liquidez: false, porta_edge: false, porta_nota: true,  porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_liquidez',         sem_lado_apostado: false, pts_premissas: 15}
+        - {fixture_id: 10, market: 'match_winner',  outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez: false, porta_edge: false, porta_nota: true,  porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_liquidez',         sem_lado_apostado: false, pts_premissas: 15}
         # a "12" real: sem premissa -> nota NULL -> porta_nota FALSE, e a saída não catalogada.
-        - {fixture_id: 11, market: 'double_chance', outcome: '12',   score: ,   porta_saida_catalogada: false, porta_conjunto_completo: true, porta_valor_estimavel: true, porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'saida_nao_catalogada', sem_lado_apostado: false, pts_premissas: }
+        - {fixture_id: 11, market: 'double_chance', outcome: '12',   score: ,   porta_saida_catalogada: false, porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'saida_nao_catalogada', sem_lado_apostado: false, pts_premissas: }
         # o empate: nota 20 (um número), marca própria e motivo próprio.
-        - {fixture_id: 12, market: 'match_winner',  outcome: 'Draw', score: 20, porta_saida_catalogada: true,  porta_conjunto_completo: true, porta_valor_estimavel: true, porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_lado_apostado',   sem_lado_apostado: true,  pts_premissas: 0}
+        - {fixture_id: 12, market: 'match_winner',  outcome: 'Draw', score: 20, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_lado_apostado',   sem_lado_apostado: true,  pts_premissas: 0}
         # insumo NULL: porta FALSE, gate FALSE — nunca NULL.
-        - {fixture_id: 13, market: 'match_winner',  outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_conjunto_completo: true, porta_valor_estimavel: true, porta_liquidez: false, porta_edge: true,  porta_nota: true,  porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_liquidez',         sem_lado_apostado: false, pts_premissas: 15}
+        - {fixture_id: 13, market: 'match_winner',  outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez: false, porta_edge: true,  porta_nota: true,  porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_liquidez',         sem_lado_apostado: false, pts_premissas: 15}
 
   # ---------------------------------------------------------------------------
   # 3. AS QUATRO JANELAS.
