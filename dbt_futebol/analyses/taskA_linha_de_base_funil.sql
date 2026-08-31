@@ -100,13 +100,12 @@
     a quatro cópias (#101/#114). Os prefixos `c1..c7` existem porque são o produto da análise — a
     conjunção inteira já existe e se lê.
 
-    ⚠️ AS DUAS PORTAS DE "COMPLETUDE" SÃO COISAS DIFERENTES, e por isso saem com nomes diferentes.
-    A `porta_conjunto_completo` é `pin_n_outcomes >= N` — a versão anterior à #22, que pergunta
-    "a Pinnacle cobriu?". A regra da ADR 0002 (`n_outcomes_valor = conjunto_esperado`) mora no
-    de-vig e aparece como `porta_valor_estimavel`. Medido (números no documento de resultados),
-    o aninhamento existe no sentido CONTRÁRIO ao que o cabeçalho do mart declara: reprovar em
-    valor implica reprovar em cobertura, e nunca o inverso. Aqui é só rótulo; o predicado é
-    assunto da #118. Nada em produção muda nesta entrega.
+    ⚠️ RESOLVIDO NA #118 (31/08): a porta que perguntava "a Pinnacle cobriu?" chamava-se
+    `porta_conjunto_completo` e o nome escondia dois predicados diferentes por trás de um só.
+    Ela virou `porta_cobertura_pinnacle` no mart — `pin_n_outcomes >= N`, exatamente a versão
+    anterior à #22. A regra da ADR 0002 (`n_outcomes_valor = conjunto_esperado`) mora no de-vig
+    e aparece aqui como `porta_valor_estimavel`; as duas nunca foram aninhadas. Este bloco só lê
+    o mart — nada em produção muda nesta entrega.
 
     ⚠️ O EMPATE DO 1X2 SAI DA FILA (seção 2, com os números inteiros). Ele é um terço do universo
     do 1X2 POR CONSTRUÇÃO — nunca teve lado apostado, nenhuma premissa se aplica (ADR 0005/0006).
@@ -188,16 +187,16 @@ portas AS (
         origem,
         gravado_em,
         sem_lado_apostado,
-        porta_saida_catalogada  AS p1,
-        porta_conjunto_completo AS p2,
-        porta_valor_estimavel   AS p3,
-        porta_linha_meia        AS p4,
-        porta_liquidez          AS p5,
-        porta_odd_dc            AS p6,
-        porta_edge              AS p7,
-        porta_nota              AS p8,
+        porta_saida_catalogada   AS p1,
+        porta_cobertura_pinnacle AS p2,
+        porta_valor_estimavel    AS p3,
+        porta_linha_meia         AS p4,
+        porta_liquidez           AS p5,
+        porta_odd_dc             AS p6,
+        porta_edge               AS p7,
+        porta_nota               AS p8,
         {# a conjunção das oito, DERIVADA NO MART. Ver o ⚠️ do cabeçalho. #}
-        passou_no_gate          AS c8
+        passou_no_gate           AS c8
     FROM funil
 ),
 

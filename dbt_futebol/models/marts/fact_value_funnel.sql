@@ -5,7 +5,7 @@
     on_schema_change='append_new_columns',
     full_refresh=false,
     cluster_by=['competition', 'fixture_id'],
-    description='O FUNIL DE AVALIAÇÃO (#95/#96, ADR 0011 + ADR 0006). 1 linha por (fixture_id, market, outcome, line_value, janela) que TEVE PREÇO naquela janela, nos CINCO mercados pontuados (1X2, Handicap asiático, Gols O/U, Ambos Marcam, Dupla Chance) — e NADA filtrado. Cada porta do Motor é uma COLUNA BOOLEANA (TRUE = passou), nunca um WHERE: porta_saida_catalogada, porta_conjunto_completo, porta_valor_estimavel, porta_liquidez, porta_edge, porta_nota, porta_linha_meia, porta_odd_dc. `passou_no_gate` é a CONJUNÇÃO derivada das oito, jamais escrita à mão; `motivo_primario` é derivado por cima dos booleanos e é conveniência de leitura, não fonte (uma linha reprova em várias portas ao mesmo tempo, e é a leitura marginal — quantas linhas a porta ainda remove DEPOIS das anteriores — que dá valor à tabela). Cada porta é NULL-safe INDIVIDUALMENTE (COALESCE(..., FALSE)): insumo ausente reprova a porta em vez de propagar NULL para dentro da conjunção. UNIVERSO: os candidatos do int_futebol_odds_devig nos cinco mercados, quatro janelas (daily<t24h<t1h<t15m). Gols do 1º tempo (mercado 6) fica FORA — não existe modelo de premissa para ele e a sua ausência não é decisão nossa (ADR 0011). A saída "12" da Dupla Chance fica DENTRO, com porta_saida_catalogada=FALSE: ela é precificada e a decisão de não pontuá-la é nossa. As duas rejeições que hoje são SUMIÇO no fact_value_opportunities — conjunto de saídas incompleto (a maior do sistema) e a "12" da DC — passam a ser linha com carimbo: os WHERE de completude de cada ramo viram coluna e o INNER JOIN com as premissas vira LEFT JOIN. `janela_e_corrente` é COLUNA e fica FORA da conjunção: é redução (qual janela publica), não veredito de qualidade (ADR 0011, D8). O EXPURGO NÃO É PORTA (ADR 0011): o funil guarda jogo encerrado de propósito — é ele que responde quanto rendeu a faixa descartada — e o expurgo continua no board, sobre o status vindo de fact_fixtures. Por isso `kickoff_utc` sai daqui e o STATUS não: status muda depois do apito e uma coluna congelada com o status de antes mentiria (ADR 0011, D10). Sem evidencias[]/avisos[]: são derivados e reconstruíveis. O EMPATE DO 1X2 carrega marca própria (`sem_lado_apostado`): sem lado apostado nenhuma premissa dispara, e um terço do universo do 1X2 está em zero POR CONSTRUÇÃO — sob o motivo genérico ele seria lido como severidade da régua (ADR 0005/0006). APPEND-ONLY, CONGELADO NO APITO (#96, ADR 0011): materialização INCREMENTAL por merge no grão (fixture_id, market, outcome, line_key, janela). A linha é escrita e atualizada enquanto o kickoff do fixture está no FUTURO e nenhuma escrita acontece depois dele — o funil deixa de ser uma foto do que o código de hoje diria e passa a ser registro do que o Motor disse. `full_refresh=false` no config porque a fase de RECOVERY do workflow_futebol_odds roda o mesmo --select com --full-refresh: sem isso, a primeira recuperação de deriva apagaria o histórico inteiro. Toda linha carrega `gravado_em` e `origem`: `backfill` no build que cria a tabela (recalculado com o código de hoje, e é a única parte que NÃO é registro de época) e `corrente` em toda escrita incremental. Jogo adiado (PST/SUSP) cujo kickoff volta para o futuro VOLTA a ser gravável — o filtro lê o kickoff corrente, não o da escrita anterior. Fixture ausente em fact_fixtures (kickoff NULL) é FAIL-OPEN: continua gravável para sempre, porque perdê-lo quebraria a reconciliação (ADR 0003). NÃO HÁ EXPURGO DO FUNIL (~45 mil linhas/mês; a política se revisita se a tabela passar de 10 milhões de linhas). NÃO VAI PARA O SUPABASE: o app não lê funil — sem migração no Postgres, sem RPC, sem tocar check_schema_parity. O board NÃO muda nesta entrega; quem prova que o funil o descreve de verdade é a guarda assert_funil_paridade_com_board, e quem prova que o universo está inteiro é assert_funil_reconcilia_com_devig (que lê a FONTE, nunca o próprio funil). A NOTA DE CONTEXTO (#103, ADR 0012): a coluna `nota_contexto` é a nota depois que o preço sai dela — pts_premissas menos as penalidades de CONTEXTO (pick_empate −10, desfalque_proprio −15, linha_extrema −10, handicap_alto −12), com GREATEST(..., 0) —, e nada mais: sem pts_valor, sem corroboração e sem as quatro penalidades de odd. Ela nasce AO LADO do `score`, que continua sendo o do board: nesta entrega o produto não muda de gate nem de número, e existe UMA virada só, no fim da [A]. A composição mora em macros/futebol_nota_contexto.sql (num lugar só, consumida pelo funil e pela guarda de reconstrução, nunca copiada); duas guardas a protegem — assert_nota_contexto_sem_preco (sentinela da decisão: falha se qualquer componente de preço aparecer no texto da composição) e assert_funil_nota_contexto_reconstroi (a coluna gravada bate com a recomposta). NULL onde não houve premissa a avaliar (a "12" da DC), pelo mesmo motivo que o score (ADR 0003). ⚠️ A coluna chega por append_new_columns e SÓ nas linhas que o congelamento ainda deixa gravar: as linhas de jogo já apitado antes do deploy da A1 ficam com nota_contexto NULL para sempre, e isso é o append-only funcionando (ADR 0011), não defeito — a guarda de reconstrução é escopada a elas de propósito. A NOTA NORMALIZADA (#105, ADR 0005): as colunas `lado` e `score_normalizado`. `lado` é o eixo do denominador — os ONZE pares de (mercado, lado) que `futebol_lado()` enumera, e no Handicap ele NÃO é o outcome (é o sinal do handicap na ótica do lado apostado: Favorito/Azarao/Pick), enquanto na Dupla Chance 1X e X2 colapsam em `unico` porque as quatro premissas se aplicam às duas saídas. `score_normalizado` é a nota de contexto dividida pelo p95 OBSERVADO daquele lado, congelado no seed versionado `futebol_p95_nota_contexto` (medido uma vez, sobre janela declarada — recalcular em runtime faria a régua significar coisa diferente a cada dia). A nota é ABSOLUTA — quanta evidência acendeu —, nunca percentil dentro do lado: o preço declarado é que os mercados publicam em taxas diferentes, e isso é consequência, não defeito. Clamp em 100 EXPLÍCITO, porque com o p95 no denominador ~5% das linhas de cada lado ficam acima de 100 por construção. Denominador zero (o empate do 1X2 e o Pick do Handicap, que não têm lado apostado) resolve para ZERO explícito e nunca por SAFE_DIVIDE: o NULL faria a comparação com a régua virar NULL e a linha sairia sem passar e sem ser marcada. Denominador AUSENTE (lado fora do seed) cai no mesmo ramo — o join é LEFT para que a linha nunca suma — e quem acende é assert_p95_nota_contexto_nao_derivou, que cobra tanto a COBERTURA dos onze lados quanto a DERIVA do p95 vivo contra o congelado. A aritmética mora em macros/futebol_score_normalizado.sql, sem argumento, pela mesma razão do macro da nota de contexto. O BOARD NÃO MUDA: ele segue no `score` e no gate de 40, e a virada é uma só, no fim da [A]. ⚠️ As duas colunas chegam por append_new_columns e SÓ nas linhas que o congelamento ainda deixa gravar — linha de jogo já apitado antes do deploy fica com elas NULL para sempre, e isso é o append-only funcionando. AS TRÊS BARREIRAS DE PREÇO (#104, A3+A5): as colunas `porta_liquidez_estrita` (n_casas >= 4), `porta_outlier` (NOT pen_odd_outlier) e `porta_faixa_odd` (best_odd dentro de [1,50; 4,00], e [1,25; 2,00] na Dupla Chance, fronteiras INCLUSIVAS nas duas pontas). Elas são MEDIDAS e ficam FORA de `passou_no_gate` — dizem quem passaria sem remover ninguém; quem as põe em vigor é a virada (#109), que no mesmo ato tira a `porta_liquidez` (>= 3) e põe a `porta_liquidez_estrita` no lugar. ⚠️ A de liquidez tem NOME PRÓPRIO em vez de a `porta_liquidez` ser redefinida para 4, e isso é decisão: o funil é append-only, então redefinir o predicado no lugar faria um nome de coluna valer >= 3 nas linhas congeladas e >= 4 nas novas, para sempre, dentro do registro de época — e as outras duas saídas (mínimo 4 dentro da conjunção, ou a porta de liquidez fora dela) mudariam o board, contra o aceite. As duas convivem e a virada troca qual está na conjunção, sem renomear nada. `porta_outlier` inverte a polaridade da penalidade (penalidade TRUE = suspeita; porta TRUE = passa) com o COALESCE POR FORA do NOT, para que penalidade ausente reprove em vez de aprovar por acidente de negação. Os quatro limites são `var` com default no modelo (liquidez_min_casas=4, faixa_odd_min=1.50, faixa_odd_max=4.00, faixa_odd_dc_min=1.25, faixa_odd_dc_max=2.00), e o piso da DC é lido TAMBÉM pela `porta_odd_dc` já em vigor — o 1,25 existe num lugar só. ⚠️ As três chegam por append_new_columns, como as anteriores, e ficam NULL para sempre na linha de jogo já apitado antes deste deploy. `motivo_primario` NÃO as conhece: linha que só reprovaria nelas continua passando hoje, e dar-lhe um motivo seria descrever uma rejeição que não aconteceu.'
+    description='O FUNIL DE AVALIAÇÃO (#95/#96, ADR 0011 + ADR 0006). 1 linha por (fixture_id, market, outcome, line_value, janela) que TEVE PREÇO naquela janela, nos CINCO mercados pontuados (1X2, Handicap asiático, Gols O/U, Ambos Marcam, Dupla Chance) — e NADA filtrado. Cada porta do Motor é uma COLUNA BOOLEANA (TRUE = passou), nunca um WHERE: porta_saida_catalogada, porta_cobertura_pinnacle, porta_valor_estimavel, porta_liquidez, porta_edge, porta_nota, porta_linha_meia, porta_odd_dc. `passou_no_gate` é a CONJUNÇÃO derivada das oito, jamais escrita à mão; `motivo_primario` é derivado por cima dos booleanos e é conveniência de leitura, não fonte (uma linha reprova em várias portas ao mesmo tempo, e é a leitura marginal — quantas linhas a porta ainda remove DEPOIS das anteriores — que dá valor à tabela). Cada porta é NULL-safe INDIVIDUALMENTE (COALESCE(..., FALSE)): insumo ausente reprova a porta em vez de propagar NULL para dentro da conjunção. UNIVERSO: os candidatos do int_futebol_odds_devig nos cinco mercados, quatro janelas (daily<t24h<t1h<t15m). Gols do 1º tempo (mercado 6) fica FORA — não existe modelo de premissa para ele e a sua ausência não é decisão nossa (ADR 0011). A saída "12" da Dupla Chance fica DENTRO, com porta_saida_catalogada=FALSE: ela é precificada e a decisão de não pontuá-la é nossa. As duas rejeições que hoje são SUMIÇO no fact_value_opportunities — conjunto de saídas incompleto (a maior do sistema) e a "12" da DC — passam a ser linha com carimbo: os WHERE de completude de cada ramo viram coluna e o INNER JOIN com as premissas vira LEFT JOIN. `janela_e_corrente` é COLUNA e fica FORA da conjunção: é redução (qual janela publica), não veredito de qualidade (ADR 0011, D8). O EXPURGO NÃO É PORTA (ADR 0011): o funil guarda jogo encerrado de propósito — é ele que responde quanto rendeu a faixa descartada — e o expurgo continua no board, sobre o status vindo de fact_fixtures. Por isso `kickoff_utc` sai daqui e o STATUS não: status muda depois do apito e uma coluna congelada com o status de antes mentiria (ADR 0011, D10). Sem evidencias[]/avisos[]: são derivados e reconstruíveis. O EMPATE DO 1X2 carrega marca própria (`sem_lado_apostado`): sem lado apostado nenhuma premissa dispara, e um terço do universo do 1X2 está em zero POR CONSTRUÇÃO — sob o motivo genérico ele seria lido como severidade da régua (ADR 0005/0006). APPEND-ONLY, CONGELADO NO APITO (#96, ADR 0011): materialização INCREMENTAL por merge no grão (fixture_id, market, outcome, line_key, janela). A linha é escrita e atualizada enquanto o kickoff do fixture está no FUTURO e nenhuma escrita acontece depois dele — o funil deixa de ser uma foto do que o código de hoje diria e passa a ser registro do que o Motor disse. `full_refresh=false` no config porque a fase de RECOVERY do workflow_futebol_odds roda o mesmo --select com --full-refresh: sem isso, a primeira recuperação de deriva apagaria o histórico inteiro. Toda linha carrega `gravado_em` e `origem`: `backfill` no build que cria a tabela (recalculado com o código de hoje, e é a única parte que NÃO é registro de época) e `corrente` em toda escrita incremental. Jogo adiado (PST/SUSP) cujo kickoff volta para o futuro VOLTA a ser gravável — o filtro lê o kickoff corrente, não o da escrita anterior. Fixture ausente em fact_fixtures (kickoff NULL) é FAIL-OPEN: continua gravável para sempre, porque perdê-lo quebraria a reconciliação (ADR 0003). NÃO HÁ EXPURGO DO FUNIL (~45 mil linhas/mês; a política se revisita se a tabela passar de 10 milhões de linhas). NÃO VAI PARA O SUPABASE: o app não lê funil — sem migração no Postgres, sem RPC, sem tocar check_schema_parity. O board NÃO muda nesta entrega; quem prova que o funil o descreve de verdade é a guarda assert_funil_paridade_com_board, e quem prova que o universo está inteiro é assert_funil_reconcilia_com_devig (que lê a FONTE, nunca o próprio funil). A NOTA DE CONTEXTO (#103, ADR 0012): a coluna `nota_contexto` é a nota depois que o preço sai dela — pts_premissas menos as penalidades de CONTEXTO (pick_empate −10, desfalque_proprio −15, linha_extrema −10, handicap_alto −12), com GREATEST(..., 0) —, e nada mais: sem pts_valor, sem corroboração e sem as quatro penalidades de odd. Ela nasce AO LADO do `score`, que continua sendo o do board: nesta entrega o produto não muda de gate nem de número, e existe UMA virada só, no fim da [A]. A composição mora em macros/futebol_nota_contexto.sql (num lugar só, consumida pelo funil e pela guarda de reconstrução, nunca copiada); duas guardas a protegem — assert_nota_contexto_sem_preco (sentinela da decisão: falha se qualquer componente de preço aparecer no texto da composição) e assert_funil_nota_contexto_reconstroi (a coluna gravada bate com a recomposta). NULL onde não houve premissa a avaliar (a "12" da DC), pelo mesmo motivo que o score (ADR 0003). ⚠️ A coluna chega por append_new_columns e SÓ nas linhas que o congelamento ainda deixa gravar: as linhas de jogo já apitado antes do deploy da A1 ficam com nota_contexto NULL para sempre, e isso é o append-only funcionando (ADR 0011), não defeito — a guarda de reconstrução é escopada a elas de propósito. A NOTA NORMALIZADA (#105, ADR 0005): as colunas `lado` e `score_normalizado`. `lado` é o eixo do denominador — os ONZE pares de (mercado, lado) que `futebol_lado()` enumera, e no Handicap ele NÃO é o outcome (é o sinal do handicap na ótica do lado apostado: Favorito/Azarao/Pick), enquanto na Dupla Chance 1X e X2 colapsam em `unico` porque as quatro premissas se aplicam às duas saídas. `score_normalizado` é a nota de contexto dividida pelo p95 OBSERVADO daquele lado, congelado no seed versionado `futebol_p95_nota_contexto` (medido uma vez, sobre janela declarada — recalcular em runtime faria a régua significar coisa diferente a cada dia). A nota é ABSOLUTA — quanta evidência acendeu —, nunca percentil dentro do lado: o preço declarado é que os mercados publicam em taxas diferentes, e isso é consequência, não defeito. Clamp em 100 EXPLÍCITO, porque com o p95 no denominador ~5% das linhas de cada lado ficam acima de 100 por construção. Denominador zero (o empate do 1X2 e o Pick do Handicap, que não têm lado apostado) resolve para ZERO explícito e nunca por SAFE_DIVIDE: o NULL faria a comparação com a régua virar NULL e a linha sairia sem passar e sem ser marcada. Denominador AUSENTE (lado fora do seed) cai no mesmo ramo — o join é LEFT para que a linha nunca suma — e quem acende é assert_p95_nota_contexto_nao_derivou, que cobra tanto a COBERTURA dos onze lados quanto a DERIVA do p95 vivo contra o congelado. A aritmética mora em macros/futebol_score_normalizado.sql, sem argumento, pela mesma razão do macro da nota de contexto. O BOARD NÃO MUDA: ele segue no `score` e no gate de 40, e a virada é uma só, no fim da [A]. ⚠️ As duas colunas chegam por append_new_columns e SÓ nas linhas que o congelamento ainda deixa gravar — linha de jogo já apitado antes do deploy fica com elas NULL para sempre, e isso é o append-only funcionando. AS TRÊS BARREIRAS DE PREÇO (#104, A3+A5): as colunas `porta_liquidez_estrita` (n_casas >= 4), `porta_outlier` (NOT pen_odd_outlier) e `porta_faixa_odd` (best_odd dentro de [1,50; 4,00], e [1,25; 2,00] na Dupla Chance, fronteiras INCLUSIVAS nas duas pontas). Elas são MEDIDAS e ficam FORA de `passou_no_gate` — dizem quem passaria sem remover ninguém; quem as põe em vigor é a virada (#109), que no mesmo ato tira a `porta_liquidez` (>= 3) e põe a `porta_liquidez_estrita` no lugar. ⚠️ A de liquidez tem NOME PRÓPRIO em vez de a `porta_liquidez` ser redefinida para 4, e isso é decisão: o funil é append-only, então redefinir o predicado no lugar faria um nome de coluna valer >= 3 nas linhas congeladas e >= 4 nas novas, para sempre, dentro do registro de época — e as outras duas saídas (mínimo 4 dentro da conjunção, ou a porta de liquidez fora dela) mudariam o board, contra o aceite. As duas convivem e a virada troca qual está na conjunção, sem renomear nada. `porta_outlier` inverte a polaridade da penalidade (penalidade TRUE = suspeita; porta TRUE = passa) com o COALESCE POR FORA do NOT, para que penalidade ausente reprove em vez de aprovar por acidente de negação. Os quatro limites são `var` com default no modelo (liquidez_min_casas=4, faixa_odd_min=1.50, faixa_odd_max=4.00, faixa_odd_dc_min=1.25, faixa_odd_dc_max=2.00), e o piso da DC é lido TAMBÉM pela `porta_odd_dc` já em vigor — o 1,25 existe num lugar só. ⚠️ As três chegam por append_new_columns, como as anteriores, e ficam NULL para sempre na linha de jogo já apitado antes deste deploy. `motivo_primario` NÃO as conhece: linha que só reprovaria nelas continua passando hoje, e dar-lhe um motivo seria descrever uma rejeição que não aconteceu.'
 ) }}
 
 -- ============================================================================
@@ -83,8 +83,11 @@ fixtures AS (
 
 -- ============================================================================
 -- Ramo 1X2 (market_id=1). Saídas catalogadas: Home / Draw / Away.
--- Completude do conjunto = 1X2 inteiro na Pinnacle (pin_n_outcomes >= 3) — o MESMO
--- predicado que hoje é `WHERE d.pin_n_outcomes >= 3` no ramo do board, virado coluna.
+-- Cobertura da Pinnacle = 1X2 inteiro precificado por ela (pin_n_outcomes >= 3),
+-- INDEPENDENTE de qual fonte a linha realmente usou (Pinnacle ou fallback de
+-- consenso) — o MESMO predicado que hoje é `WHERE d.pin_n_outcomes >= 3` no ramo do
+-- board, virado coluna. Nome corrigido na #118: ver bloco de comentário antes de
+-- `com_portas` para o porquê.
 -- ============================================================================
 cand_1x2 AS (
     SELECT
@@ -123,7 +126,7 @@ cand_1x2 AS (
         COALESCE(c.linha_sharp_confirma, FALSE)         AS linha_sharp_confirma,
 
         COALESCE(d.outcome_side IN ('Home', 'Draw', 'Away'), FALSE) AS porta_saida_catalogada,
-        COALESCE(d.pin_n_outcomes >= 3, FALSE)          AS porta_conjunto_completo,
+        COALESCE(d.pin_n_outcomes >= 3, FALSE)          AS porta_cobertura_pinnacle,
         -- O EMPATE (ADR 0005/0006). Não tem lado apostado: nenhuma premissa do 1X2 se
         -- aplica, o teto de premissa é zero e — quando a A6 introduzir o denominador —
         -- ele também será zero, explicitamente antes da divisão. A marca é ESTRUTURAL
@@ -144,7 +147,8 @@ cand_1x2 AS (
 
 -- ============================================================================
 -- Ramo Gols O/U (market_id=5). Saídas catalogadas: Over / Under.
--- Completude = par Over+Under da Pinnacle na linha (pin_n_outcomes >= 2).
+-- Cobertura da Pinnacle = par Over+Under precificado por ela na linha
+-- (pin_n_outcomes >= 2), independente da fonte real da linha (#118).
 -- ============================================================================
 cand_ou AS (
     SELECT
@@ -183,7 +187,7 @@ cand_ou AS (
         COALESCE(c.linha_sharp_confirma, FALSE)         AS linha_sharp_confirma,
 
         COALESCE(d.outcome_side IN ('Over', 'Under'), FALSE) AS porta_saida_catalogada,
-        COALESCE(d.pin_n_outcomes >= 2, FALSE)          AS porta_conjunto_completo,
+        COALESCE(d.pin_n_outcomes >= 2, FALSE)          AS porta_cobertura_pinnacle,
         FALSE                                           AS sem_lado_apostado
     FROM devig d
     LEFT JOIN prem_ou p
@@ -201,7 +205,8 @@ cand_ou AS (
 -- ============================================================================
 -- Ramo Handicap asiático (market_id=4). Saídas catalogadas: Home / Away.
 -- `line_value` é o handicap na ótica do MANDANTE e é o MESMO para Home e Away (par
--- complementar). Completude = par da Pinnacle (pin_n_outcomes >= 2).
+-- complementar). Cobertura da Pinnacle = par precificado por ela (pin_n_outcomes
+-- >= 2), independente da fonte real da linha (#118).
 -- ============================================================================
 cand_ah AS (
     SELECT
@@ -240,7 +245,7 @@ cand_ah AS (
         COALESCE(c.linha_sharp_confirma, FALSE)         AS linha_sharp_confirma,
 
         COALESCE(d.outcome_side IN ('Home', 'Away'), FALSE) AS porta_saida_catalogada,
-        COALESCE(d.pin_n_outcomes >= 2, FALSE)          AS porta_conjunto_completo,
+        COALESCE(d.pin_n_outcomes >= 2, FALSE)          AS porta_cobertura_pinnacle,
         FALSE                                           AS sem_lado_apostado
     FROM devig d
     LEFT JOIN prem_ah p
@@ -257,9 +262,19 @@ cand_ah AS (
 
 -- ============================================================================
 -- Ramo Ambos Marcam / BTTS (market_id=8). Saídas catalogadas: Yes / No.
--- A Pinnacle NÃO precifica BTTS -> o valor vem do CONSENSO, e a completude é medida
--- por `n_outcomes_valor >= 2` (o par Yes+No da mediana), não por pin_n_outcomes —
--- que fica NULL aqui, honestamente.
+-- A Pinnacle NÃO precifica BTTS -> `pin_n_outcomes` fica NULL aqui, honestamente, e
+-- a pergunta "a Pinnacle cobriu?" não se aplica: `porta_cobertura_pinnacle` é
+-- TRIVIALMENTE TRUE, mesmo padrão de `porta_odd_dc`/`porta_linha_meia` num mercado
+-- onde a porta não se aplica.
+--
+-- ⚠️ #118: até 28/08 esta porta usava `n_outcomes_valor >= 2` sob o nome de
+-- "conjunto completo" — mas isso é o MESMO que `porta_valor_estimavel` já garante
+-- (ADR 0002 exige n_outcomes_valor = conjunto_esperado, e 2 é o teto do BTTS, então
+-- `>= 2` e `= 2` coincidem sempre). Medido em produção antes da troca: as duas
+-- colunas concordam em 100% das 3.410 linhas de BTTS — zero divergência. A porta era
+-- uma cópia disfarçada, não uma checagem própria; o valor real já vem de
+-- `porta_valor_estimavel`, e trivializar aqui não muda `passou_no_gate` em nenhuma
+-- linha, passada ou futura.
 -- ============================================================================
 cand_btts AS (
     SELECT
@@ -298,7 +313,7 @@ cand_btts AS (
         COALESCE(c.linha_sharp_confirma, FALSE)         AS linha_sharp_confirma,
 
         COALESCE(d.outcome_side IN ('Yes', 'No'), FALSE) AS porta_saida_catalogada,
-        COALESCE(d.n_outcomes_valor >= 2, FALSE)        AS porta_conjunto_completo,
+        TRUE                                             AS porta_cobertura_pinnacle,
         FALSE                                           AS sem_lado_apostado
     FROM devig d
     LEFT JOIN prem_btts p
@@ -320,10 +335,13 @@ cand_btts AS (
 -- JOIN ela entra com `porta_saida_catalogada = FALSE`, que é o que ela é: uma decisão
 -- nossa de não pontuar, não uma ausência de mercado.
 --
--- Completude = conjunto 1X2 DE ORIGEM completo (n_outcomes_valor >= 3): a prob justa da
--- DC é derivada do de-vig 1X2 da Pinnacle. E a DC tem GATE DE ODD PRÓPRIO
--- (best_odd >= 1,25), que hoje mora no `WHERE` do ramo do board e aqui é a
--- `porta_odd_dc`.
+-- A prob justa da DC é derivada do de-vig do 1X2 subjacente, e `pin_n_outcomes` não
+-- existe nesse eixo — a pergunta "a Pinnacle cobriu?" não se aplica aqui do mesmo
+-- jeito que no 1X2 direto: `porta_cobertura_pinnacle` é TRIVIALMENTE TRUE (#118, ver
+-- o comentário equivalente no ramo BTTS — mesma redundância medida e confirmada
+-- aqui: 5.034 linhas concordam em TRUE e 81 em FALSE com `porta_valor_estimavel`,
+-- zero divergência). E a DC tem GATE DE ODD PRÓPRIO (best_odd >= 1,25), que hoje
+-- mora no `WHERE` do ramo do board e aqui é a `porta_odd_dc`.
 -- ============================================================================
 cand_dc AS (
     SELECT
@@ -370,7 +388,7 @@ cand_dc AS (
         COALESCE(c.linha_sharp_confirma, FALSE)         AS linha_sharp_confirma,
 
         COALESCE(d.outcome_side IN ('1X', 'X2'), FALSE) AS porta_saida_catalogada,
-        COALESCE(d.n_outcomes_valor >= 3, FALSE)        AS porta_conjunto_completo,
+        TRUE                                             AS porta_cobertura_pinnacle,
         FALSE                                           AS sem_lado_apostado
     FROM devig d
     LEFT JOIN prem_dc p
@@ -495,22 +513,26 @@ com_nota_normalizada AS (
 -- reprova a porta em vez de propagar NULL para dentro da conjunção. É a degradação
 -- graciosa do Motor, e é o que impede o descarte silencioso que a ADR 0006 proíbe.
 --
--- ⚠️ CORREÇÃO (#118, medida em 28/08): este parágrafo dizia que `porta_conjunto_completo`
--- e `porta_valor_estimavel` são ANINHADAS ("pela ADR 0002, conjunto incompleto implica
--- prob justa ausente") e avisava contra somá-las. Os dados dizem o contrário: elas são
--- quase DISJUNTAS, e quem seguir o aviso antigo SUBESTIMA a leitura marginal.
+-- ⚠️ RESOLVIDO (#118, opção 1 aplicada em 31/08): este parágrafo dizia que
+-- `porta_conjunto_completo` e `porta_valor_estimavel` são ANINHADAS ("pela ADR 0002,
+-- conjunto incompleto implica prob justa ausente") e avisava contra somá-las. Os dados
+-- diziam o contrário — elas eram quase DISJUNTAS em AH/Gols — porque o nome escondia
+-- DOIS predicados diferentes por trás de UM só:
 --
 --   | mercado          | valor_fonte | completo | estimavel | linhas |
 --   |------------------|-------------|----------|-----------|--------|
 --   | asian_handicap   | consenso    | false    | TRUE      |  9.102 |
 --   | goals_over_under | consenso    | false    | TRUE      | 10.644 |
 --
--- O motivo é que as duas fazem perguntas diferentes, apesar do nome: a
--- `porta_valor_estimavel` é a regra da ADR 0002 (`n_outcomes_valor = conjunto_esperado`),
--- enquanto a `porta_conjunto_completo` é `pin_n_outcomes >= N` em 1X2/Gols/Handicap — ou
--- seja, "a PINNACLE cobriu?" — e `n_outcomes_valor >= N` em BTTS/DC. Um nome, dois
--- predicados. A decisão sobre o que fazer com isso é a #118 (`ready-for-human`); aqui só
--- o parágrafo que afirmava o oposto do medido sai do caminho.
+-- A porta virou `porta_cobertura_pinnacle`, que é o que ela sempre testou em
+-- 1X2/Gols/Handicap: `pin_n_outcomes >= N`, "a PINNACLE cobriu?" — independente da
+-- fonte real da linha. A Pinnacle não precifica BTTS nem tem eixo próprio na Dupla
+-- Chance, então nesses dois mercados a pergunta não se aplica e a porta é
+-- TRIVIALMENTE TRUE (mesmo padrão de `porta_odd_dc` fora da DC): o predicado antigo
+-- daqueles dois ramos (`n_outcomes_valor >= N`) provou ser uma cópia disfarçada de
+-- `porta_valor_estimavel` — zero divergência medida em 8.525 linhas de BTTS+DC — e
+-- não precisava de porta própria. `passou_no_gate` não muda em NENHUMA linha, passada
+-- ou futura: só o nome deixou de mentir sobre o que a coluna testa.
 -- ============================================================================
 com_portas AS (
     SELECT
@@ -617,7 +639,7 @@ com_gate AS (
     SELECT
         *,
         (   porta_saida_catalogada
-        AND porta_conjunto_completo
+        AND porta_cobertura_pinnacle
         AND porta_valor_estimavel
         AND porta_liquidez
         AND porta_edge
@@ -659,7 +681,7 @@ SELECT
 
     -- ------------------------------------------------- as oito portas EM VIGOR
     porta_saida_catalogada,
-    porta_conjunto_completo,
+    porta_cobertura_pinnacle,
     porta_valor_estimavel,
     porta_liquidez,
     porta_edge,
@@ -687,15 +709,15 @@ SELECT
     -- dentro da porta de nota: sem ele, um terço do universo do 1X2 apareceria como
     -- "nota abaixo da régua" e a régua pareceria mais severa no 1X2 do que é.
     CASE
-        WHEN NOT porta_saida_catalogada  THEN 'saida_nao_catalogada'
-        WHEN NOT porta_conjunto_completo THEN 'conjunto_incompleto'
-        WHEN NOT porta_valor_estimavel   THEN 'valor_nao_estimavel'
-        WHEN NOT porta_liquidez          THEN 'sem_liquidez'
-        WHEN NOT porta_edge              THEN 'sem_edge'
+        WHEN NOT porta_saida_catalogada   THEN 'saida_nao_catalogada'
+        WHEN NOT porta_cobertura_pinnacle THEN 'sem_cobertura_pinnacle'
+        WHEN NOT porta_valor_estimavel    THEN 'valor_nao_estimavel'
+        WHEN NOT porta_liquidez           THEN 'sem_liquidez'
+        WHEN NOT porta_edge               THEN 'sem_edge'
         WHEN NOT porta_nota
             THEN IF(sem_lado_apostado, 'sem_lado_apostado', 'nota_abaixo_da_regua')
-        WHEN NOT porta_linha_meia        THEN 'linha_nao_meia'
-        WHEN NOT porta_odd_dc            THEN 'odd_dc_abaixo_do_minimo'
+        WHEN NOT porta_linha_meia         THEN 'linha_nao_meia'
+        WHEN NOT porta_odd_dc             THEN 'odd_dc_abaixo_do_minimo'
         ELSE NULL
     END AS motivo_primario,
 

@@ -128,25 +128,29 @@ models:
       - name: porta_saida_catalogada
         description: "TRUE = a saída é pontuada pelo Motor. FALSE só na \"12\" da Dupla Chance, hoje. É a porta que existe para que uma saída precificada e não modelada seja um DESCARTE registrado, e não um sumiço."
         tests: [not_null]
-      - name: porta_conjunto_completo
+      - name: porta_cobertura_pinnacle
         description: >
-          TRUE = o conjunto de saídas do de-vig tem o tamanho declarado (ADR 0002): 1X2
-          exige 3 saídas da Pinnacle, Handicap e Gols exigem o par, BTTS exige o par no
-          consenso, Dupla Chance exige o conjunto 1X2 DE ORIGEM completo. É a maior
-          rejeição do sistema (~49% do universo) e até esta entrega ela não existia em
-          lugar nenhum — saía num `WHERE` dentro do join, antes de qualquer nota.
+          TRUE = a Pinnacle precifica o conjunto de saídas inteiro deste mercado
+          (`pin_n_outcomes >= N`), em 1X2 (3), Handicap e Gols (2 cada) — INDEPENDENTE de
+          qual fonte a linha realmente usou (Pinnacle ou fallback de consenso). A Pinnacle
+          não precifica BTTS nem tem eixo próprio na Dupla Chance, então nesses dois a
+          porta é TRIVIALMENTE TRUE (mesmo padrão de `porta_odd_dc` fora da DC).
+
+          ⚠️ RENOMEADA NA #118 (opção 1, 31/08). Chamava-se `porta_conjunto_completo` e o
+          nome mentia de duas formas: (a) em AH/Gols ela reprovava linha de consenso com
+          preço válido só porque a PINNACLE especificamente não cobriu — 9.102 linhas de
+          Handicap e 10.644 de Gols, todas de consenso, tinham `porta_valor_estimavel =
+          TRUE` e a porta velha `= FALSE`; (b) em BTTS/DC ela usava `n_outcomes_valor >=
+          N`, que é uma cópia disfarçada de `porta_valor_estimavel` (zero divergência
+          medida em 8.525 linhas) e não testava nada próprio. `passou_no_gate` não mudou
+          em nenhuma linha — só o nome e a lógica dos dois ramos redundantes.
         tests: [not_null]
       - name: porta_valor_estimavel
         description: >
           TRUE = há `prob_justa_fechamento` — a regra da ADR 0002
-          (`n_outcomes_valor = conjunto_esperado`).
-
-          ⚠️ CORREÇÃO (#118, medida em 28/08): esta descrição afirmava que a porta é
-          ANINHADA com `porta_conjunto_completo` e avisava contra somá-las. É o oposto do
-          medido — elas são quase DISJUNTAS, e quem seguir o aviso antigo SUBESTIMA a
-          leitura marginal: 9.102 linhas de Handicap e 10.644 de Gols, todas de consenso,
-          têm `porta_valor_estimavel = TRUE` e `porta_conjunto_completo = FALSE`. As duas
-          fazem perguntas diferentes apesar do nome; ver a #118 (`ready-for-human`).
+          (`n_outcomes_valor = conjunto_esperado`). Independente de `porta_cobertura_pinnacle`
+          — as duas fazem perguntas diferentes (ver a #118 para o porquê do nome antigo
+          confundir isso) e não são aninhadas.
         tests: [not_null]
       - name: porta_liquidez
         description: >
@@ -231,7 +235,7 @@ models:
         tests:
           - accepted_values:
               arguments:
-                values: ['saida_nao_catalogada', 'conjunto_incompleto', 'valor_nao_estimavel',
+                values: ['saida_nao_catalogada', 'sem_cobertura_pinnacle', 'valor_nao_estimavel',
                          'sem_liquidez', 'sem_edge', 'nota_abaixo_da_regua', 'sem_lado_apostado',
                          'linha_nao_meia', 'odd_dc_abaixo_do_minimo']
       - name: sem_lado_apostado

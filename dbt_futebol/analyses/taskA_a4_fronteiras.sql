@@ -137,7 +137,7 @@ WITH universo AS (
         f.pen_odd_outlier,
         f.prob_justa_fechamento,
         f.porta_saida_catalogada,
-        f.porta_conjunto_completo,
+        f.porta_cobertura_pinnacle,
         {{ futebol_lado('f.market', 'f.outcome', 'f.line_value') }} AS lado
     FROM {{ ref('fact_value_funnel') }} f
     WHERE f.janela_e_corrente
@@ -245,7 +245,7 @@ publicavel AS (
     FROM normalizado n
     JOIN jogos j ON j.fixture_id = n.fixture_id
     WHERE COALESCE(n.porta_saida_catalogada, FALSE)
-      AND COALESCE(n.porta_conjunto_completo, FALSE)
+      AND COALESCE(n.porta_cobertura_pinnacle, FALSE)
       AND n.prob_justa_fechamento IS NOT NULL
       AND COALESCE(n.n_casas >= {{ var('liquidez_min_casas', 4) }}, FALSE)
       AND NOT COALESCE(n.pen_odd_outlier, TRUE)
