@@ -232,12 +232,18 @@ models:
           várias portas ao mesmo tempo, e é justamente a leitura marginal — isolada vs.
           depois das anteriores — que dá valor à tabela: quem for medir porta lê os oito
           booleanos, nunca esta coluna.
+
+          ⚠️ `'conjunto_incompleto'` é um valor LEGADO (pré-#118, pré-31/08): 69.019 linhas
+          já congeladas no apito carregam esse rótulo para sempre — é o append-only
+          funcionando (ADR 0011), não sujeira. Recomputar essas linhas violaria o próprio
+          contrato da tabela. Toda linha nova usa `'sem_cobertura_pinnacle'`.
         tests:
           - accepted_values:
               arguments:
                 values: ['saida_nao_catalogada', 'sem_cobertura_pinnacle', 'valor_nao_estimavel',
                          'sem_liquidez', 'sem_edge', 'nota_abaixo_da_regua', 'sem_lado_apostado',
-                         'linha_nao_meia', 'odd_dc_abaixo_do_minimo']
+                         'linha_nao_meia', 'odd_dc_abaixo_do_minimo',
+                         'conjunto_incompleto']  # legado pré-#118, congelado em linha já apitada
       - name: sem_lado_apostado
         description: >
           O empate do 1X2 (ADR 0005/0006). Marca ESTRUTURAL — o mercado e a saída —, nunca
