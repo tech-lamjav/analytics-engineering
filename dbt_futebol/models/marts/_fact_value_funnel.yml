@@ -237,13 +237,23 @@ models:
           já congeladas no apito carregam esse rótulo para sempre — é o append-only
           funcionando (ADR 0011), não sujeira. Recomputar essas linhas violaria o próprio
           contrato da tabela. Toda linha nova usa `'sem_cobertura_pinnacle'`.
+
+          ⚠️ #109 (2026-09-01): `porta_edge` e `porta_nota` saíram da conjunção — `'sem_edge'`,
+          `'nota_abaixo_da_regua'` e `'sem_lado_apostado'` (o ramo do empate, que só existia
+          dentro do `NOT porta_nota`) viram LEGADO, congelados nas linhas de jogo já apitado
+          antes deste deploy. `'sem_liquidez'` também é legado — o piso subiu de `n_casas>=3`
+          para `>=4` e o novo predicado tem nome próprio (`sem_liquidez_estrita`), pela mesma
+          razão da #118: um rótulo não pode valer dois predicados diferentes em duas eras da
+          mesma tabela. `'sem_liquidez_estrita'`, `'odd_outlier'` e `'faixa_odd_fora'` são os
+          três valores novos, um por barreira que entrou na conjunção.
         tests:
           - accepted_values:
               arguments:
                 values: ['saida_nao_catalogada', 'sem_cobertura_pinnacle', 'valor_nao_estimavel',
-                         'sem_liquidez', 'sem_edge', 'nota_abaixo_da_regua', 'sem_lado_apostado',
+                         'sem_liquidez', 'sem_edge', 'nota_abaixo_da_regua', 'sem_lado_apostado',  # legado pré-#109
                          'linha_nao_meia', 'odd_dc_abaixo_do_minimo',
-                         'conjunto_incompleto']  # legado pré-#118, congelado em linha já apitada
+                         'conjunto_incompleto',  # legado pré-#118, congelado em linha já apitada
+                         'sem_liquidez_estrita', 'odd_outlier', 'faixa_odd_fora']  # novo, pós-#109
       - name: sem_lado_apostado
         description: >
           O empate do 1X2 (ADR 0005/0006). Marca ESTRUTURAL — o mercado e a saída —, nunca

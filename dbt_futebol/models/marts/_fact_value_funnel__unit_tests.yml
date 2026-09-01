@@ -58,9 +58,13 @@ unit_tests:
       macros:
         is_incremental: false
     description: >
-      Nove candidatos idênticos fora de uma coisa cada: o base (passa em tudo) e um por
-      porta. Prova que as oito portas são independentes entre si e que
-      `passou_no_gate` é a conjunção delas — nunca uma segunda cópia do gate do board.
+      ⚠️ #109 (2026-09-01): a virada trocou a conjunção — `porta_liquidez_estrita`,
+      `porta_outlier` e `porta_faixa_odd` entraram; `porta_liquidez`, `porta_edge` e
+      `porta_nota` saíram. Onze candidatos idênticos fora de uma coisa cada: o base
+      (passa em tudo), um por porta da conjunção NOVA (oito), e dois que provam a
+      negativa — edge negativo e nota abaixo da régua NÃO barram mais (5/6 abaixo).
+      Prova que `passou_no_gate` é a conjunção das oito portas em vigor — nunca uma
+      segunda cópia do gate do board.
     given:
       - input: ref('int_futebol_odds_devig')
         rows:
@@ -84,22 +88,37 @@ unit_tests:
           # -- 4: porta_valor_estimavel. Sem prob justa não há estimativa. --------------
           - {fixture_id: 4, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: , pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
-          # -- 5: porta_liquidez. Duas casas cobrindo o mercado. -----------------------
-          - {fixture_id: 5, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          # -- 5: porta_liquidez_estrita. TRÊS casas — passa na antiga porta_liquidez
+          # (>=3) e reprova só na estrita (>=4, #104/#109). É o par que prova que a
+          # barreira nova é mais rígida, não uma renomeação da velha.
+          - {fixture_id: 5, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 3, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
-          # -- 6: porta_edge. O mercado corrigiu e a vantagem virou negativa. ----------
+          # -- 6: edge negativo NÃO BARRA MAIS (#103/#109). `porta_edge` fica FALSE,
+          # medida, e não entra na conjunção — a linha publica.
           - {fixture_id: 6, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.05, pts_valor: 30, best_odd: 1.90, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
-          # -- 7: porta_nota. Idêntico ao base; o que muda está nas premissas (0 pontos),
-          # então o score cai para 30 e não alcança a régua de 40.
+          # -- 7: nota abaixo da régua NÃO BARRA MAIS (#109). Idêntico ao base; o que
+          # muda está nas premissas (0 pontos), score cai para 30. `porta_nota` fica
+          # FALSE, medida, e não entra na conjunção — a linha publica com faixa Baixa.
           - {fixture_id: 7, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
           # -- 8: porta_linha_meia. Gols O/U na linha CHEIA 2.0 — pode dar push, e o
           # de-vig 2-way superdimensiona o edge nela.
           - {fixture_id: 8, competition: 'brasileirao', season: 2026, market_id: 5, outcome_side: 'Over', line_value: 2.0, janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
-          # -- 9: porta_odd_dc. Dupla Chance com odd abaixo do mínimo próprio (1,25). ---
+          # -- 9: porta_odd_dc. Dupla Chance com odd abaixo do mínimo próprio (1,25).
+          # ⚠️ 1,25 é o MESMO piso de `faixa_odd_dc_min` — nesta linha `porta_faixa_odd`
+          # também reprova (as duas leem a mesma var). Não é possível isolar as duas
+          # portas na Dupla Chance; a ladder do motivo_primario resolve testando
+          # `porta_odd_dc` antes, então o motivo continua determinístico.
           - {fixture_id: 9, competition: 'brasileirao', season: 2026, market_id: 12, outcome_side: '1X', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 1.20, best_book: 'Bet365', avg_odd: 1.18, n_casas: 5, prob_justa_fechamento: 0.85, pin_n_outcomes: , n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 10: porta_outlier (#104/#109). best_odd dentro da faixa, mas a flag de
+          # outlier veio TRUE do de-vig — provável linha mole ou erro de precificação.
+          - {fixture_id: 10, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 30, pen_odd_outlier: true, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+          # -- 11: porta_faixa_odd (#104/#109). best_odd 5,00 — acima do teto de 4,00.
+          - {fixture_id: 11, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 5.00, best_book: 'Bet365', avg_odd: 4.80, n_casas: 5, prob_justa_fechamento: 0.18, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: true, pen_odd_juice: false}
 
       # format: sql porque `evidencias`/`avisos` são ARRAY<STRING> nos modelos de
       # premissa, e o formato de dicionário entrega todo valor como escalar. O funil não
@@ -115,6 +134,8 @@ unit_tests:
           UNION ALL SELECT 6, 'Home', 15, 0, 0
           -- fixture 7: a premissa não acendeu nada. É a ÚNICA diferença dele para o base.
           UNION ALL SELECT 7, 'Home', 0, 0, 0
+          UNION ALL SELECT 10, 'Home', 15, 0, 0
+          UNION ALL SELECT 11, 'Home', 15, 0, 0
 
       - input: ref('int_futebol_premissas_ou')
         format: sql
@@ -145,19 +166,21 @@ unit_tests:
         format: sql
         rows: |
           SELECT id AS fixture_id, TIMESTAMP '2099-01-01 00:00:00+00' AS kickoff_utc
-          FROM UNNEST([1,2,3,4,5,6,7,8,9]) AS id
+          FROM UNNEST([1,2,3,4,5,6,7,8,9,10,11]) AS id
 
     expect:
       rows:
-        - {fixture_id: 1, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: true,  motivo_primario: , sem_lado_apostado: false}
-        - {fixture_id: 2, market: 'double_chance',    outcome: '12',   score: 45, porta_saida_catalogada: false, porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'saida_nao_catalogada', sem_lado_apostado: false}
-        - {fixture_id: 3, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: false, porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'sem_cobertura_pinnacle', sem_lado_apostado: false}
-        - {fixture_id: 4, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: false, porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'valor_nao_estimavel', sem_lado_apostado: false}
-        - {fixture_id: 5, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: false, porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'sem_liquidez', sem_lado_apostado: false}
-        - {fixture_id: 6, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: false, porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'sem_edge', sem_lado_apostado: false}
-        - {fixture_id: 7, market: 'match_winner',     outcome: 'Home', score: 30, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_linha_meia: true,  porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'nota_abaixo_da_regua', sem_lado_apostado: false}
-        - {fixture_id: 8, market: 'goals_over_under', outcome: 'Over', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: false, porta_odd_dc: true,  passou_no_gate: false, motivo_primario: 'linha_nao_meia', sem_lado_apostado: false}
-        - {fixture_id: 9, market: 'double_chance',    outcome: '1X',   score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez: true,  porta_edge: true,  porta_nota: true,  porta_linha_meia: true,  porta_odd_dc: false, passou_no_gate: false, motivo_primario: 'odd_dc_abaixo_do_minimo', sem_lado_apostado: false}
+        - {fixture_id: 1,  market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: true,  passou_no_gate: true,  motivo_primario: , sem_lado_apostado: false}
+        - {fixture_id: 2,  market: 'double_chance',    outcome: '12',   score: 45, porta_saida_catalogada: false, porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: true,  passou_no_gate: false, motivo_primario: 'saida_nao_catalogada', sem_lado_apostado: false}
+        - {fixture_id: 3,  market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: false, porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: true,  passou_no_gate: false, motivo_primario: 'sem_cobertura_pinnacle', sem_lado_apostado: false}
+        - {fixture_id: 4,  market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: false, porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: true,  passou_no_gate: false, motivo_primario: 'valor_nao_estimavel', sem_lado_apostado: false}
+        - {fixture_id: 5,  market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: false, porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: true,  passou_no_gate: false, motivo_primario: 'sem_liquidez_estrita', sem_lado_apostado: false}
+        - {fixture_id: 6,  market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: true,  passou_no_gate: true,  motivo_primario: , sem_lado_apostado: false}
+        - {fixture_id: 7,  market: 'match_winner',     outcome: 'Home', score: 30, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: true,  passou_no_gate: true,  motivo_primario: , sem_lado_apostado: false}
+        - {fixture_id: 8,  market: 'goals_over_under', outcome: 'Over', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: false, porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: true,  passou_no_gate: false, motivo_primario: 'linha_nao_meia', sem_lado_apostado: false}
+        - {fixture_id: 9,  market: 'double_chance',    outcome: '1X',   score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: false, porta_outlier: true,  porta_faixa_odd: false, passou_no_gate: false, motivo_primario: 'odd_dc_abaixo_do_minimo', sem_lado_apostado: false}
+        - {fixture_id: 10, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: false, porta_faixa_odd: true,  passou_no_gate: false, motivo_primario: 'odd_outlier', sem_lado_apostado: false}
+        - {fixture_id: 11, market: 'match_winner',     outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true,  porta_valor_estimavel: true,  porta_liquidez_estrita: true,  porta_linha_meia: true,  porta_odd_dc: true,  porta_outlier: true,  porta_faixa_odd: false, passou_no_gate: false, motivo_primario: 'faixa_odd_fora', sem_lado_apostado: false}
 
   # ---------------------------------------------------------------------------
   # 2. OS CASOS QUE A TABELA EXISTE PARA REGISTRAR.
@@ -173,18 +196,20 @@ unit_tests:
       macros:
         is_incremental: false
     description: >
-      Uma linha reprovando em duas portas ao mesmo tempo — as DUAS colunas FALSE, que é a
-      propriedade que a coluna única de motivo destruiria; a "12" da Dupla Chance na sua
-      forma real (sem premissa nenhuma); o empate do 1X2 com marca própria e nota
-      explícita, nunca NULL; e insumo ausente reprovando a porta sem propagar NULL para
-      dentro da conjunção.
+      ⚠️ #109: redesenhado sob a conjunção nova. Uma linha reprovando em duas portas ao
+      mesmo tempo — as DUAS colunas FALSE, que é a propriedade que a coluna única de
+      motivo destruiria; a "12" da Dupla Chance na sua forma real (sem premissa
+      nenhuma); o empate do 1X2, que a partir da virada PASSA no gate (porta_nota saiu
+      da conjunção) com nota explícita, nunca NULL; e insumo ausente reprovando a porta
+      sem propagar NULL para dentro da conjunção.
     given:
       - input: ref('int_futebol_odds_devig')
         rows:
-          # -- 10: DUAS portas ao mesmo tempo — sem liquidez E sem edge. O `motivo_primario`
-          # elege a primeira da ordem de leitura, e é justamente por isso que ele não pode
-          # ser a fonte: sob ele, esta linha seria contada só como "sem liquidez".
-          - {fixture_id: 10, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.05, pts_valor: 30, best_odd: 1.90, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          # -- 10: DUAS portas ao mesmo tempo sob a conjunção NOVA — sem liquidez estrita
+          # (n_casas=2) E outlier (#104/#109). O `motivo_primario` elege a primeira da
+          # ordem de leitura, e é justamente por isso que ele não pode ser a fonte: sob
+          # ele, esta linha seria contada só como "sem liquidez estrita".
+          - {fixture_id: 10, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.05, pts_valor: 30, best_odd: 1.90, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 30, pen_odd_outlier: true, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
           # -- 11: a "12" da DC COMO ELA É em produção — precificada e sem nenhuma linha em
           # `int_futebol_premissas_dc`. O LEFT JOIN traz pts_premissas NULL, a nota fica NULL,
@@ -193,8 +218,11 @@ unit_tests:
           - {fixture_id: 11, competition: 'brasileirao', season: 2026, market_id: 12, outcome_side: '12', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 1.50, best_book: 'Bet365', avg_odd: 1.45, n_casas: 5, prob_justa_fechamento: 0.60, pin_n_outcomes: , n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
           # -- 12: o EMPATE do 1X2. Sem lado apostado nenhuma premissa dispara e a penalidade
-          # de pick_empate (−10) pesa: 30 + 0 − 10 = 20. A nota é um NÚMERO, não NULL — o
-          # zero é explícito (ADR 0005) e a linha sai marcada, não descartada em silêncio.
+          # de pick_empate (−10) pesa: 30 + 0 − 10 = 20 (score antigo, ainda calculado). A
+          # nota é um NÚMERO, não NULL — o zero é explícito (ADR 0005) e a linha sai
+          # marcada, não descartada em silêncio. ⚠️ #109: com `porta_nota` fora da
+          # conjunção, o empate PASSA no gate a partir da virada — é o consumo direto da
+          # decisão do PM (20/08) de o board mapear todas as faixas.
           - {fixture_id: 12, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Draw', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 3.40, best_book: 'Bet365', avg_odd: 3.20, n_casas: 5, prob_justa_fechamento: 0.32, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
           # -- 13: INSUMO AUSENTE numa porta — `n_casas` chega NULL. A porta reprova
@@ -236,14 +264,15 @@ unit_tests:
 
     expect:
       rows:
-        # duas portas FALSE na mesma linha, e o motivo elege só a primeira.
-        - {fixture_id: 10, market: 'match_winner',  outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez: false, porta_edge: false, porta_nota: true,  porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_liquidez',         sem_lado_apostado: false, pts_premissas: 15}
-        # a "12" real: sem premissa -> nota NULL -> porta_nota FALSE, e a saída não catalogada.
-        - {fixture_id: 11, market: 'double_chance', outcome: '12',   score: ,   porta_saida_catalogada: false, porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'saida_nao_catalogada', sem_lado_apostado: false, pts_premissas: }
-        # o empate: nota 20 (um número), marca própria e motivo próprio.
-        - {fixture_id: 12, market: 'match_winner',  outcome: 'Draw', score: 20, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez: true,  porta_edge: true,  porta_nota: false, porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_lado_apostado',   sem_lado_apostado: true,  pts_premissas: 0}
+        # duas portas FALSE na mesma linha (conjunção nova), e o motivo elege só a primeira.
+        - {fixture_id: 10, market: 'match_winner',  outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez_estrita: false, porta_nota: true,  porta_odd_dc: true, porta_outlier: false, porta_faixa_odd: true, passou_no_gate: false, motivo_primario: 'sem_liquidez_estrita', sem_lado_apostado: false, pts_premissas: 15}
+        # a "12" real: sem premissa -> nota NULL -> porta_nota FALSE (informativa, fora da
+        # conjunção), e a saída não catalogada segue sendo a única porta da conjunção que reprova.
+        - {fixture_id: 11, market: 'double_chance', outcome: '12',   score: ,   porta_saida_catalogada: false, porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez_estrita: true,  porta_nota: false, porta_odd_dc: true, porta_outlier: true,  porta_faixa_odd: true, passou_no_gate: false, motivo_primario: 'saida_nao_catalogada', sem_lado_apostado: false, pts_premissas: }
+        # o empate: nota 20 (um número, informativa), marca própria — e a partir da #109 PASSA.
+        - {fixture_id: 12, market: 'match_winner',  outcome: 'Draw', score: 20, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez_estrita: true,  porta_nota: false, porta_odd_dc: true, porta_outlier: true,  porta_faixa_odd: true, passou_no_gate: true,  motivo_primario: ,                       sem_lado_apostado: true,  pts_premissas: 0}
         # insumo NULL: porta FALSE, gate FALSE — nunca NULL.
-        - {fixture_id: 13, market: 'match_winner',  outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez: false, porta_edge: true,  porta_nota: true,  porta_odd_dc: true, passou_no_gate: false, motivo_primario: 'sem_liquidez',         sem_lado_apostado: false, pts_premissas: 15}
+        - {fixture_id: 13, market: 'match_winner',  outcome: 'Home', score: 45, porta_saida_catalogada: true,  porta_cobertura_pinnacle: true, porta_valor_estimavel: true, porta_liquidez_estrita: false, porta_nota: true,  porta_odd_dc: true, porta_outlier: true,  porta_faixa_odd: true, passou_no_gate: false, motivo_primario: 'sem_liquidez_estrita', sem_lado_apostado: false, pts_premissas: 15}
 
   # ---------------------------------------------------------------------------
   # 3. AS QUATRO JANELAS.
@@ -261,20 +290,21 @@ unit_tests:
       macros:
         is_incremental: false
     description: >
-      O mesmo candidato coletado nas quatro janelas vira quatro linhas, e só a mais
-      recente tem `janela_e_corrente`. O veredito das portas varia entre elas (é isso
-      que muda entre janelas depois que o preço sai da nota), e a redução não interfere
-      no gate.
+      ⚠️ #109: redesenhado sob a conjunção nova (liquidez estrita e faixa de odd variam
+      entre janelas, não mais liquidez/edge). O mesmo candidato coletado nas quatro
+      janelas vira quatro linhas, e só a mais recente tem `janela_e_corrente`. O
+      veredito das portas varia entre elas, e a redução não interfere no gate.
     given:
       - input: ref('int_futebol_odds_devig')
         rows:
-          # daily: o mercado ainda não estava líquido — reprova na liquidez.
-          - {fixture_id: 20, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 'daily', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          # daily: o mercado ainda não estava líquido — reprova na liquidez estrita.
+          - {fixture_id: 20, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 'daily', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 3, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
           - {fixture_id: 20, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't24h', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
           - {fixture_id: 20, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't1h',  edge: 0.08, pts_valor: 30, best_odd: 2.15, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          # t15m: a janela corrente. O mercado corrigiu e o edge virou negativo — a linha
-          # não publicaria, e continua registrada, que é o ponto da tabela inteira.
-          - {fixture_id: 20, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.02, pts_valor: 30, best_odd: 1.95, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          # t15m: a janela corrente. O mercado corrigiu e a odd caiu abaixo do piso da
+          # faixa (1,50) — a linha não publicaria, e continua registrada, que é o ponto
+          # da tabela inteira.
+          - {fixture_id: 20, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.02, pts_valor: 30, best_odd: 1.40, best_book: 'Bet365', avg_odd: 1.45, n_casas: 5, prob_justa_fechamento: 0.65, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
       - input: ref('int_futebol_premissas_1x2')
         format: sql
@@ -303,10 +333,10 @@ unit_tests:
 
     expect:
       rows:
-        - {fixture_id: 20, janela: 'daily', janela_e_corrente: false, porta_liquidez: false, porta_edge: true,  passou_no_gate: false}
-        - {fixture_id: 20, janela: 't24h',  janela_e_corrente: false, porta_liquidez: true,  porta_edge: true,  passou_no_gate: true}
-        - {fixture_id: 20, janela: 't1h',   janela_e_corrente: false, porta_liquidez: true,  porta_edge: true,  passou_no_gate: true}
-        - {fixture_id: 20, janela: 't15m',  janela_e_corrente: true,  porta_liquidez: true,  porta_edge: false, passou_no_gate: false}
+        - {fixture_id: 20, janela: 'daily', janela_e_corrente: false, porta_liquidez_estrita: false, porta_faixa_odd: true,  passou_no_gate: false}
+        - {fixture_id: 20, janela: 't24h',  janela_e_corrente: false, porta_liquidez_estrita: true,  porta_faixa_odd: true,  passou_no_gate: true}
+        - {fixture_id: 20, janela: 't1h',   janela_e_corrente: false, porta_liquidez_estrita: true,  porta_faixa_odd: true,  passou_no_gate: true}
+        - {fixture_id: 20, janela: 't15m',  janela_e_corrente: true,  porta_liquidez_estrita: true,  porta_faixa_odd: false, passou_no_gate: false}
 
   # ---------------------------------------------------------------------------
   # 4. A PORTA DA LINHA MEIA, QUARTO A QUARTO (#101).
