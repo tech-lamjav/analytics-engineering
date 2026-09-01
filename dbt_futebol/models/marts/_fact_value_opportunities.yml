@@ -3,12 +3,17 @@ version: 2
 models:
   - name: fact_value_opportunities
     description: >
+      ⚠️ A VIRADA (#109, 2026-09-01): gate deixou de ser de preço e passou a ser de
+      qualidade de dado — sai `edge>0` e a régua de nota, entram `n_casas>=4`, ausência de
+      outlier e `best_odd` na faixa do mercado. Score = nota normalizada (contexto, sem
+      preço); faixa passa a materializar Baixa também.
       Mart de saída do Motor de Score de Confiabilidade (value bet futebol). 1 linha por
-      (fixture_id, market, outcome, line_value) que passa no gate (edge>0 E n_casas>=3 E de-vig
-      válido E conjunto da Pinnacle completo pro mercado E score>=40 E — p/ asian_handicap e
-      goals_over_under — linha meia .5, sem push). Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS
-      + PTS_CORROBORACAO − PENALIDADES) — índice de CONFIABILIDADE, não de EV (ranqueie por
-      `edge`); faixa Alta(>=60)/Média(40-59). Long por
+      (fixture_id, market, outcome, line_value) que passa no gate (n_casas>=4 E sem outlier
+      de odd E best_odd na faixa do mercado E de-vig válido E conjunto da Pinnacle completo
+      pro mercado E — p/ asian_handicap e goals_over_under — linha meia .5, sem push). Score
+      0-100 = nota de contexto (PTS_PREMISSAS − penalidades de contexto) normalizada pelo p95
+      congelado do lado — índice de CONFIABILIDADE, nunca de EV (ranqueie por `edge`); faixa
+      Alta(>=55)/Média(25-55)/Baixa(<25). Long por
       `market` — v5: 1X2 (match_winner) + Gols O/U (goals_over_under) + Handicap asiático
       (asian_handicap) + Ambos Marcam/BTTS (btts, via de-vig de consenso) + Dupla Chance
       (double_chance, saídas 1X/X2, prob derivada do 1X2 da Pinnacle, gate próprio). valor_fonte distingue.
@@ -55,10 +60,11 @@ models:
                 values: ['pinnacle', 'consenso']
       - name: score
         description: >
-          Índice de CONFIABILIDADE 0-100 = clamp(PTS_VALOR(≤30) + PTS_PREMISSAS + PTS_CORROBORACAO
-          − PENALIDADES). NÃO é ranking de EV: pts_valor (o componente de edge) é minoria do total,
-          então score maior ≠ edge maior. O gate exige score>=40 ("abaixo de 40 não vira
-          oportunidade"). Para ordenar por tamanho de vantagem, use `edge`.
+          ⚠️ #109: publica `score_normalizado` do funil — a nota de contexto (PTS_PREMISSAS
+          menos penalidades de contexto) dividida pelo p95 congelado do (mercado, lado),
+          0-100. Índice de CONFIABILIDADE, nunca de EV: preço não compõe mais o score (saiu
+          na #103/#109) — para ordenar por tamanho de vantagem, use `edge`. O gate não exige
+          mais score mínimo (a régua saiu do gate na #109); a faixa é rótulo, não corte.
         tests:
           - not_null
           - dbt_utils.accepted_range:
@@ -66,11 +72,28 @@ models:
                 min_value: 0
                 max_value: 100
       - name: faixa
-        description: "Faixa de CONFIABILIDADE derivada do score: 'Alta' (>=60) | 'Média' (40-59). 'Baixa' (<40) NÃO é materializada — o gate score>=40 já a exclui ('abaixo de 40 não vira oportunidade'); o accepted_values sem 'Baixa' vira sentinela do gate."
+        description: "Faixa de CONFIABILIDADE derivada do score, fronteiras da #107 (PR #133): 'Alta' (>=55) | 'Média' (25-54) | 'Baixa' (<25), fronteira pertencendo à faixa de cima nas duas. ⚠️ #109: 'Baixa' passa a materializar — a régua de nota saiu do gate (decisão do PM de 20/08), então a faixa não é mais sentinela de corte, é rótulo."
         tests:
           - accepted_values:
               arguments:
-                values: ['Alta', 'Média']
+                values: ['Alta', 'Média', 'Baixa']
+      - name: score_versao
+        description: "⚠️ #109: escala em que o Score foi calculado. Todo dado que este mart materializa a partir da virada é 'contexto_v1' — o valor 'legacy' só existe em linhas sincronizadas antes deste deploy, carimbado pelo default da migration 112 do app, nunca escrito por este modelo. Técnico, nunca exibido ao usuário."
+        tests:
+          # `tag:guarda`, e não teste comum: a coluna É NOVA — não existe na tabela até o
+          # primeiro `dbt run` pós-deploy. Sem a tag, `dbt test` roda contra a tabela
+          # VELHA (pré-virada) e explode com "Unrecognized name: score_versao" — erro de
+          # schema, não vermelho de guarda. Mesmo padrão do accepted_values de
+          # `janela_deteccao` mais abaixo: o agendado só roda `tag:guarda` como fase à
+          # parte, depois do `dbt run` já ter subido a coluna.
+          - not_null:
+              config:
+                tags: ['guarda']
+          - accepted_values:
+              arguments:
+                values: ['contexto_v1']
+              config:
+                tags: ['guarda']
       - name: premissas_sem_dado
         description: >
           Quantas premissas do mercado se aplicavam a esta linha, não acenderam, e não
@@ -121,34 +144,36 @@ models:
               config:
                 severity: error
                 tags: ['guarda']
-      # AS QUATRO PARCELAS DE penalidades_globais_pts (#87). Sem teste de coluna aqui: a
-      # afirmação que importa não é sobre cada uma isolada, é a identidade entre as quatro e
-      # o agregado — e ela vive em assert_penalidades_globais_decompostas (tag:guarda), que é
-      # onde o agendado a lê. Um not_null por coluna seria mais fraco (o braço do NULL da
-      # guarda já cobre) e diria menos.
+      # ⚠️ #109: os quatro flags NÃO somam mais pontos — `penalidades_globais_pts`, o
+      # agregado deles, SAIU do mart (não compõe mais o `penalidades` publicado). Ficam
+      # publicados porque a migration 112 do app (`get_futebol_fixture_value`) ainda os lê
+      # para montar o aviso de risco de preço da tela de detalhe — dropá-los quebraria essa
+      # RPC. São leitura de risco de PREÇO, não mais parcela do Score de CONTEXTO.
       - name: pen_odd_outlier
         description: >
           TRUE quando a melhor odd está >= 10% acima da média das OUTRAS casas — provável linha
-          mole ou erro de precificação (−30 pts). Vale para a janela PUBLICADA (`janela_usada`)
-          e para o mercado desta linha. É uma das quatro parcelas de `penalidades_globais_pts`,
-          e é a mesma flag que emite o aviso correspondente em `avisos[]`.
+          mole ou erro de precificação. Vale para a janela PUBLICADA (`janela_usada`) e para o
+          mercado desta linha. ⚠️ #109: não desconta mais do score; é a mesma flag que a
+          porta_outlier do funil usa como barreira do gate (a linha nem chega a publicar se
+          TRUE), então toda linha publicada tem este campo FALSE.
       - name: pen_poucas_casas
         description: >
-          TRUE quando menos de 4 casas cobrem o mercado (−12 pts) — mercado fino, preço menos
-          confiável. Não confundir com o gate `n_casas >= 3`, que é eliminatório: aqui a linha
-          entrou no board e leva desconto. Parcela de `penalidades_globais_pts`.
+          TRUE quando menos de 4 casas cobrem o mercado — mercado fino, preço menos confiável.
+          ⚠️ #109: o piso de liquidez do gate subiu para `n_casas >= 4` (porta_liquidez_estrita);
+          toda linha publicada já tem `n_casas >= 4`, então este campo é sempre FALSE nas linhas
+          publicadas a partir da virada — fica pela leitura do histórico e pela RPC de detalhe.
       - name: pen_odd_longshot
         description: >
-          TRUE quando a melhor odd passa de 4,5 (−15 pts) — azarão, onde o de-vig erra mais e a
-          variância manda mais que o edge. Parcela de `penalidades_globais_pts`.
+          TRUE quando a melhor odd passa de 4,5 — azarão, onde o de-vig erra mais e a variância
+          manda mais que o edge. ⚠️ #109: não desconta mais do score; é informação de risco de
+          preço na tela de detalhe.
       - name: pen_odd_juice
         description: >
-          TRUE quando a melhor odd é menor que 1,40 (−10 pts) — retorno baixo demais para o
-          risco. Parcela de `penalidades_globais_pts`. ⚠️ Sempre FALSE na Dupla Chance, e de
-          propósito: aquele ramo tem gate de odd próprio (melhor_odd >= 1,25) e não aplica a
-          penalidade de juice, então a soma dele também não tem o termo de 10 pontos.
+          TRUE quando a melhor odd é menor que 1,40 — retorno baixo demais para o risco. ⚠️
+          #109: não desconta mais do score. Sempre FALSE na Dupla Chance, de propósito: aquele
+          ramo tem gate de odd próprio (melhor_odd >= 1,25).
       - name: edge
-        description: "EV/edge = best_odd * prob_justa − 1. Gate garante > 0 nas linhas materializadas. É a MEDIDA DE VALOR/EV — ranqueie por `edge` p/ tamanho de vantagem; `score`/`faixa` são índice de CONFIABILIDADE (não monotônicos no edge)."
+        description: "EV/edge = best_odd * prob_justa − 1. ⚠️ #109: o gate NÃO garante mais > 0 — `edge > 0` saiu da conjunção; a linha publica com edge negativo se passar nas portas de qualidade. É a MEDIDA DE VALOR/EV — ranqueie por `edge` p/ tamanho de vantagem; `score`/`faixa` são índice de CONFIABILIDADE (não monotônicos no edge)."
     tests:
       # O GRÃO NÃO MUDOU com a #40 — a janela NÃO entra nele. Depois que o gate passou a ser
       # avaliado por (linha × janela), esta guarda é o que prova que a redução final continua

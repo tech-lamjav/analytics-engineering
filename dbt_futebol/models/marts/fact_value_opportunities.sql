@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     cluster_by=['competition', 'fixture_id'],
-    description='Mart de saída do Motor de Score de Confiabilidade (value bet futebol). ⚠️ DESDE A #97 (A7-3, ADR 0011) ESTE MODELO É O FUNIL FILTRADO, e não uma segunda derivação do Motor: ele lê `fact_value_funnel` e aplica, na leitura, `janela_e_corrente AND passou_no_gate` mais a regra de expurgo da #85. A lógica de porta passou a existir NUM LUGAR SÓ — os cinco ramos por mercado saíram daqui, e com eles a duplicação que a `assert_funil_paridade_com_board` existia para vigiar (guarda APOSENTADA no mesmo commit: depois do flip ela compara a tabela consigo mesma, e guarda que não pode falhar é ruído com cara de cobertura). O GATE NÃO É RECOMPOSTO AQUI: lê-se a coluna `passou_no_gate` GRAVADA no funil, nunca a conjunção das portas — recompô-la seria recriar a segunda cópia que este ticket veio matar, e é também o que mantém as três barreiras de preço da #104 (porta_liquidez_estrita/porta_outlier/porta_faixa_odd) FORA do board até a virada (#109), já que elas estão fora da conjunção gravada. O QUE AINDA NÃO VEM DO FUNIL, e por decisão: `evidencias[]` e `avisos[]`. A ADR 0011 deixou os dois fora do funil por serem derivados e reconstruíveis, então o mart mantém UM join com os cinco modelos de premissas — unidos em `premissas`, com o mesmo grão (fixture, mercado, saída, line_key) e as mesmas chaves dos cinco ramos antigos — só para as duas arrays de exibição. Nenhum veredito sai daí. 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate. Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES), calculado no funil. faixa Alta(>=60)/Média(40-59)/Baixa; abaixo de 40 não vira oportunidade porque a porta de nota já reprovou. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market`: 1X2 (1) + Gols O/U (5) + Handicap asiático (4) + Ambos Marcam (8) + Dupla Chance (12, saídas 1X/X2). line_value é NULL no 1X2/BTTS/DC, a linha L no O/U e o handicap (ótica do mandante) no AH. valor_fonte = pinnacle ou consenso (rotular como estimativa no front). Contador de cegueira (#41, ADR 0003): premissas_sem_dado diz QUANTAS premissas aplicáveis àquela linha não puderam ser avaliadas por falta de insumo; não desconta nada e sai como aviso SEM pontos entre parênteses. JANELA DE DETECÇÃO (#40, ADR 0004): janela_deteccao é a janela mais cedo (daily<t24h<t1h<t15m) em que ESTA linha passou no gate, calculada agora sobre as quatro janelas DO FUNIL — que é a mesma população de (linha × janela) que o mart avaliava à mão antes, e por isso a coluna não muda de sentido. Nunca posterior a janela_usada (guarda assert_janela_deteccao_nao_posterior). Linha que passou numa janela cedo e não passa na corrente NÃO aparece no board: preço que o usuário não consegue mais pegar não é oportunidade, e o histórico do que já foi anunciado vive no snapshot fact_value_opportunities_hist. PARCELAS DA PENALIDADE GLOBAL (#87): as quatro flags pen_odd_* continuam publicadas, agora lidas do funil. EXPURGO DO BOARD (#85, ADR 0009): o mart é a janela do que AINDA DÁ PARA APOSTAR — junta fact_fixtures e não emite linha de jogo com status terminal nem ao vivo, com rede de segurança em kickoff + var expurgo_carencia_horas (24). PST/SUSP/INT SOBREVIVEM. ⚠️ O expurgo é lido de `fact_fixtures`, NUNCA do `kickoff_utc` gravado no funil: aquela coluna congela no apito e o expurgo precisa do relógio corrente. NENHUMA COLUNA NOVA sai daqui — mesmo payload de antes do flip, mesma ordem, mesmos tipos: sem migração no Postgres, sem tocar RPC, `check_schema_parity` intacto. O funil segue sem sincronizar.'
+    description='⚠️ A VIRADA (#109), 2026-09-01: o Score de Confiabilidade passa a ser a nota normalizada (contexto, sem preço); `edge > 0` e a régua de nota SAEM do gate; `porta_liquidez_estrita`/`porta_outlier`/`porta_faixa_odd` entram na conjunção lida do funil. `score_versao` entra como `contexto_v1`. Saem `pts_valor`, `pts_corroboracao` e `penalidades_globais_pts`; `penalidades` publicada passa a ser só `penalidades_especificas_pts` (contexto). ⚠️ Os quatro `pen_odd_*` FICAM — a issue #109 dizia que sairiam, mas a migration já escrita no app (prop-play-predictor, `20260829120000_112_futebol_score_contexto_contrato`) lê `pen_odd_outlier/pen_poucas_casas/pen_odd_longshot/pen_odd_juice` de `futebol.fact_value_opportunities` em `get_futebol_fixture_value` — dropá-las quebraria essa RPC. O aceite da issue está desatualizado nesse ponto; a migration manda, porque já foi revisada e é a metade do contrato que não muda mais. Coordenado com prop-play-predictor#301/#309. Mart de saída do Motor de Score de Confiabilidade (value bet futebol). ⚠️ DESDE A #97 (A7-3, ADR 0011) ESTE MODELO É O FUNIL FILTRADO, e não uma segunda derivação do Motor: ele lê `fact_value_funnel` e aplica, na leitura, `janela_e_corrente AND passou_no_gate` mais a regra de expurgo da #85. A lógica de porta passou a existir NUM LUGAR SÓ — os cinco ramos por mercado saíram daqui, e com eles a duplicação que a `assert_funil_paridade_com_board` existia para vigiar (guarda APOSENTADA no mesmo commit: depois do flip ela compara a tabela consigo mesma, e guarda que não pode falhar é ruído com cara de cobertura). O GATE NÃO É RECOMPOSTO AQUI: lê-se a coluna `passou_no_gate` GRAVADA no funil, nunca a conjunção das portas — recompô-la seria recriar a segunda cópia que este ticket veio matar, e é também o que mantém as três barreiras de preço da #104 (porta_liquidez_estrita/porta_outlier/porta_faixa_odd) FORA do board até a virada (#109), já que elas estão fora da conjunção gravada. O QUE AINDA NÃO VEM DO FUNIL, e por decisão: `evidencias[]` e `avisos[]`. A ADR 0011 deixou os dois fora do funil por serem derivados e reconstruíveis, então o mart mantém UM join com os cinco modelos de premissas — unidos em `premissas`, com o mesmo grão (fixture, mercado, saída, line_key) e as mesmas chaves dos cinco ramos antigos — só para as duas arrays de exibição. Nenhum veredito sai daí. 1 linha por (fixture_id, market, outcome, line_value) que PASSA no gate. Score 0-100 = clamp(PTS_VALOR + PTS_PREMISSAS + PTS_CORROBORACAO − PENALIDADES), calculado no funil. faixa Alta(>=60)/Média(40-59)/Baixa; abaixo de 40 não vira oportunidade porque a porta de nota já reprovou. evidencias[] = o "por quê" (premissas + corroboração); avisos[] = red flags. Long por `market`: 1X2 (1) + Gols O/U (5) + Handicap asiático (4) + Ambos Marcam (8) + Dupla Chance (12, saídas 1X/X2). line_value é NULL no 1X2/BTTS/DC, a linha L no O/U e o handicap (ótica do mandante) no AH. valor_fonte = pinnacle ou consenso (rotular como estimativa no front). Contador de cegueira (#41, ADR 0003): premissas_sem_dado diz QUANTAS premissas aplicáveis àquela linha não puderam ser avaliadas por falta de insumo; não desconta nada e sai como aviso SEM pontos entre parênteses. JANELA DE DETECÇÃO (#40, ADR 0004): janela_deteccao é a janela mais cedo (daily<t24h<t1h<t15m) em que ESTA linha passou no gate, calculada agora sobre as quatro janelas DO FUNIL — que é a mesma população de (linha × janela) que o mart avaliava à mão antes, e por isso a coluna não muda de sentido. Nunca posterior a janela_usada (guarda assert_janela_deteccao_nao_posterior). Linha que passou numa janela cedo e não passa na corrente NÃO aparece no board: preço que o usuário não consegue mais pegar não é oportunidade, e o histórico do que já foi anunciado vive no snapshot fact_value_opportunities_hist. PARCELAS DA PENALIDADE GLOBAL (#87): as quatro flags pen_odd_* continuam publicadas, agora lidas do funil. EXPURGO DO BOARD (#85, ADR 0009): o mart é a janela do que AINDA DÁ PARA APOSTAR — junta fact_fixtures e não emite linha de jogo com status terminal nem ao vivo, com rede de segurança em kickoff + var expurgo_carencia_horas (24). PST/SUSP/INT SOBREVIVEM. ⚠️ O expurgo é lido de `fact_fixtures`, NUNCA do `kickoff_utc` gravado no funil: aquela coluna congela no apito e o expurgo precisa do relógio corrente. ⚠️ ISTO NÃO VALE MAIS PARA A VIRADA DA #109 (ver nota no topo da description): aquele flip (#97) não tocava coluna; este toca — `score_versao` entra, `pts_valor`/`pts_corroboracao`/`penalidades_globais_pts` saem, e a migration `20260829120000_112_futebol_score_contexto_contrato` do app já espera essa forma. Merge e `build-and-push.sh` esperam a janela combinada; rodar a imagem cedo tira coluna do BigQuery que o Postgres ainda tem, e é exatamente o congelamento de sync que o pré-flight de paridade existe para evitar. O funil segue sem sincronizar.'
 ) }}
 
 -- ============================================================================
@@ -132,41 +132,50 @@ SELECT
     f.season,
 
     f.edge,
-    f.pts_valor,
     f.pts_premissas,
     -- quantas premissas do mercado se aplicavam a esta linha, não acenderam, e não acenderam
     -- por falta de insumo (#41). Não entra na conta do score: é o que o score NÃO pôde levar
     -- em conta. Filtrar por ela é o que permite medir a base por completude.
     f.premissas_sem_dado,
-    f.pts_corroboracao,
-    f.penalidades,
-    f.score,
+    -- ⚠️ #109: penalidade publicada passa a ser só a de CONTEXTO — a mesma parcela que
+    -- `futebol_nota_contexto()` subtrai (pick_empate/desfalque_proprio/linha_extrema/
+    -- handicap_alto). `penalidades_globais_pts` (as quatro de odd) sai da soma publicada
+    -- aqui porque saiu do Score; os quatro flags continuam publicados abaixo, sem compor
+    -- nada — são leitura de risco de preço, lidas pelo app na tela de detalhe.
+    f.penalidades_especificas_pts AS penalidades,
+    -- ⚠️ #109: o Score publicado passa a SER a nota normalizada do funil — a mesma
+    -- aritmética, um nome em cada tabela (glossário, CONTEXT.md). Não é uma segunda
+    -- fórmula: `score_normalizado` já é 0–100, absoluto, sem preço.
+    f.score_normalizado AS score,
+    -- ⚠️ #109: fronteiras da #107 (PR #133), medidas sobre a escala normalizada
+    -- pós-A6 — Baixa < 25 <= Média < 55 <= Alta, fronteira na faixa de cima nas duas.
+    -- 'Baixa' passa a materializar: a régua de nota saiu do gate (decisão do PM de
+    -- 20/08), então a faixa é rótulo, não mais sentinela de corte.
     CASE
-        WHEN f.score >= 60 THEN 'Alta'
-        WHEN f.score >= 40 THEN 'Média'
+        WHEN f.score_normalizado IS NULL THEN NULL
+        WHEN f.score_normalizado >= 55   THEN 'Alta'
+        WHEN f.score_normalizado >= 25   THEN 'Média'
         ELSE 'Baixa'
     END AS faixa,
+    -- técnica, nunca exibida ao usuário (comment da migration 112 do app). 'legacy' é o
+    -- default que a migration carimba nas linhas já sincronizadas antes deste deploy;
+    -- toda linha que este mart materializa a partir daqui é 'contexto_v1'.
+    'contexto_v1' AS score_versao,
 
-    -- "por quê": premissas que dispararam + corroboração confirmada.
-    ARRAY_CONCAT(
-        p.evidencias_premissas,
-        ARRAY(SELECT x FROM UNNEST([
-            IF(f.modelo_api_concorda, 'modelo da API concorda com o lado (+7)', NULL),
-            IF(f.linha_sharp_confirma, 'linha da Pinnacle se moveu pro nosso lado (+8)', NULL)
-        ]) AS x WHERE x IS NOT NULL)
-    ) AS evidencias,
+    -- "por quê": só premissas que dispararam. ⚠️ #109: a corroboração saiu — ela não soma
+    -- mais ao Score, então as duas bullets "+7"/"+8" (modelo da API, linha sharp) mentiam
+    -- pontos que deixaram de existir. `modelo_api_concorda`/`linha_sharp_confirma`
+    -- continuam publicadas abaixo, informativas, para quem quiser o dado cru.
+    p.evidencias_premissas AS evidencias,
 
-    -- avisos: penalidades específicas do mercado + penalidades globais de odds + cegueira.
-    -- O aviso de cegueira NÃO leva pontos entre parênteses como os outros, e é de propósito
-    -- (#41, ADR 0003): ele não desconta nada. Ele diz que a nota saiu de menos informação —
-    -- incompleta, não contrária. Vem por último porque é o único que não é red flag do preço.
+    -- avisos: penalidades específicas do mercado + cegueira. ⚠️ #109: os quatro avisos de
+    -- odd (outlier/poucas casas/longshot/juice) SAEM daqui — os pen_odd_* continuam
+    -- publicados como coluna (a RPC do app monta o próprio aviso a partir deles via
+    -- `futebol_copy`), mas o texto fixo com pontos entre parênteses (−30/−12/−15/−10)
+    -- descreveria um desconto que não acontece mais no Score.
     ARRAY_CONCAT(
         p.avisos_especificos,
         ARRAY(SELECT y FROM UNNEST([
-            IF(f.pen_odd_outlier,  '⚠ odd fora da média — provável linha mole/erro (−30)', NULL),
-            IF(f.pen_poucas_casas, '⚠ poucas casas cobrindo o mercado (−12)', NULL),
-            IF(f.pen_odd_longshot, '⚠ odd muito alta / longshot (−15)', NULL),
-            IF(f.pen_odd_juice,    '⚠ retorno baixo / juice (−10)', NULL),
             IF(f.premissas_sem_dado > 0,
                FORMAT('⚠ %d premissa(s) sem dado — a nota está incompleta, não contrária',
                       f.premissas_sem_dado), NULL)
@@ -188,12 +197,11 @@ SELECT
     -- no board antes. Nunca posterior a janela_usada.
     f.janela_deteccao,
 
-    -- componentes (transparência/debug)
-    f.penalidades_globais_pts,
-    -- AS PARCELAS DA SOMA ACIMA (#87), agora lidas do funil em vez de recompostas do de-vig.
-    -- A identidade 30*outlier + 12*poucas + 15*longshot + 10*juice = penalidades_globais_pts
-    -- vale em todo ramo (na DC o juice é FALSE de propósito) e segue medida por
-    -- assert_penalidades_globais_decompostas.
+    -- componentes (transparência/debug). ⚠️ #109: `penalidades_globais_pts` SAI — era o
+    -- agregado das quatro de odd, que deixaram de compor o Score publicado (ver
+    -- `penalidades` acima). Os quatro flags abaixo (#87) FICAM: a migration 112 do app
+    -- (`get_futebol_fixture_value`) ainda os lê para montar o aviso de risco de preço na
+    -- tela de detalhe — dropá-los quebraria essa RPC.
     f.pen_odd_outlier,
     f.pen_poucas_casas,
     f.pen_odd_longshot,
@@ -237,8 +245,9 @@ LEFT JOIN fixtures fx
 --
 -- ⚠️ `passou_no_gate` é a COLUNA GRAVADA no funil, lida e nunca recomposta a partir das
 -- portas. Recompô-la aqui recriaria a segunda cópia da aritmética que este ticket veio
--- matar — e, de quebra, arrastaria para o board as três barreiras de preço da #104, que
--- estão FORA da conjunção gravada de propósito, até a virada (#109).
+-- matar. As três barreiras de preço da #104 (liquidez estrita, outlier, faixa de odd)
+-- entraram na conjunção gravada na #109 — este board já as herda por ler `passou_no_gate`,
+-- sem precisar saber o nome de nenhuma delas.
 WHERE f.janela_e_corrente
   AND f.passou_no_gate
   -- O BOARD É A JANELA DO QUE AINDA DÁ PARA APOSTAR (#85, ADR 0009). É a condição que o

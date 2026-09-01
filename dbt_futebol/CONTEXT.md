@@ -22,19 +22,22 @@ each fixture x market x outcome. Rules and arithmetic, not statistics.
 _Avoid_: model (reserved for statistical models)
 
 **Score de Confiabilidade**:
-The 0–100 rating of how trustworthy a value opportunity is: value points + premissa
-points + corroboration points, minus penalties, clamped. It is an **absolute** measure —
+Since the virada (#109), the nota normalizada itself: premissa points minus the
+penalidades de contexto, divided by the (mercado, lado)'s frozen p95, 0–100. Price
+(edge, corroboração, penalidades de odd) no longer composes it — it stays published as
+information and as gate (the safety bands, per mercado). It is an **absolute** measure —
 how much evidence fired — and never a rank within its peer group. So a régua on it means
 "this much evidence", not "the best of this mercado"; markets legitimately publish at
 different rates, and that is a consequence, not a defect.
-_Avoid_: reading a score as a percentile or a quota
+_Avoid_: reading a score as a percentile or a quota; describing it as valor + premissas +
+corroboração − penalidades (that was the score before the virada)
 
 **Nota de contexto**:
 The Score with the price taken out (#103, ADR 0012): pontos de premissa minus the
 **penalidades de contexto** (`pick_empate`, `desfalque_proprio`, `linha_extrema`,
 `handicap_alto`), floored at zero — no `pts_valor`, no corroboração, none of the four odd
-penalties. It is a column of `fact_value_funnel`, written **alongside** the Score, which the
-board keeps reading unchanged until the flip at the end of the [A]. Composed in one place
+penalties. It is a column of `fact_value_funnel`; since the virada (#109) its normalized
+form (`score_normalizado`) **is** what the board publishes as `score`. Composed in one place
 only (`macros/futebol_nota_contexto.sql`, no arguments) and defended by three things that
 each cover what the others cannot — the sentinel over the composition's text, the
 reconstruction guard over the written column, and a unit test that scores two candidates of
@@ -70,8 +73,9 @@ every lado. Absolute, never a percentile within the lado. ~5% of each lado's lin
 100 **by construction** — that is the quantile, not an error — and a zero denominator (the
 1X2 draw, the Handicap pick) resolves to an explicit zero, never a `SAFE_DIVIDE` NULL that
 would let the line leave without passing and without being marked.
-_Avoid_: calling it the Score — the board still reads `score` and the régua of 40 until the
-flip at the end of the [A]
+_Avoid_: calling it something other than the Score — since the virada (#109) the board's
+`score` **is** `score_normalizado`; the two names describe the same number, one in the
+funil and one on the board
 
 **Premissa**:
 A boolean context signal computed from the data, carrying a point weight. Fired
@@ -79,11 +83,17 @@ premissas add to the score and become evidence bullets.
 _Avoid_: feature, predictor
 
 **Gate**:
-The eliminatory precondition (positive edge and enough bookmakers). Failing the gate
-means the bet is not an opportunity at all. Dupla Chance has its own gate. The gate is
-the **conjunction of the portas** — it says whether a line publishes, never which
-condition stopped it.
-_Avoid_: using gate where the individual condition is meant (that is a **porta**)
+Since the virada (#109), a **data-quality-only** precondition — it no longer asks
+whether the price is favorable, only whether the line is trustworthy enough to publish
+at all: catalogued saída, Pinnacle coverage, an estimable fair price, enough
+bookmakers (`n_casas >= 4`), no outlier odd, `best_odd` inside the mercado's band, and
+linha meia on Handicap/Gols. Dupla Chance has its own odd floor. The gate is the
+**conjunction of the portas** — it says whether a line publishes, never which condition
+stopped it. `edge > 0` and the nota régua left the gate at the same virada: they are
+published as information, not as preconditions.
+_Avoid_: using gate where the individual condition is meant (that is a **porta**);
+describing the gate as requiring positive edge or a minimum nota (that was the gate
+before the virada)
 
 **Porta**:
 One named eliminatory condition, recorded as one boolean per candidato. Portas are
@@ -104,9 +114,12 @@ of one measurement, on the scale that will actually ship.
 _Avoid_: treating the régua as independent of the bands
 
 **Value opportunity**:
-A fixture x market x outcome that passed the gate with positive edge — the product's
-unit of output.
-_Avoid_: pick, tip
+A fixture x market x outcome that passed the gate — the product's unit of output. Since
+the virada (#109) the gate no longer requires positive edge; `edge` still publishes as
+information, and the apostador reads it to judge price, not to know whether the line
+made the board.
+_Avoid_: pick, tip; implying every value opportunity has positive edge (that was the
+gate before the virada)
 
 **Candidato**:
 A (fixture, mercado, saída, linha, janela) that **had a price in that janela** — the
@@ -235,12 +248,20 @@ A fired premissa surfaced to the user as a "why" bullet, ordered by weight.
 An applied penalty surfaced to the user as a warning.
 
 **Penalidade**:
-A point deduction for a red flag: outlier odd, few bookmakers, longshot, juice, plus
-market-specific ones (e.g. picking the draw).
+Since the virada (#109), the word means only the **penalidades de contexto**
+(`pick_empate`, `desfalque_proprio`, `linha_extrema`, `handicap_alto`) — the ones that
+subtract from the Score. The four odd flags (outlier odd, few bookmakers, longshot,
+juice) still exist, still publish as `pen_odd_*` and still drive `avisos` — they are
+price risk, read at the portas (liquidez/outlier/faixa de odd bands) — but they no
+longer subtract a point from the Score.
+_Avoid_: including the odd flags when totalling "penalidades" against the Score (that
+was the sum before the virada)
 
 **Corroboração**:
-External confirmation points: the API's prediction model agrees, or the sharp line
-moved toward our side.
+External confirmation: the API's prediction model agrees, or the sharp line moved
+toward our side. Since the virada (#109) it no longer adds points to the Score — it
+stays as `modelo_api_concorda`/`linha_sharp_confirma`, informational only.
+_Avoid_: calling it "corroboration points" or implying it still composes the Score
 
 **Degradação graciosa**:
 Missing data means the premissa simply does not fire — never an error or NULL. The rule
