@@ -26,11 +26,18 @@
   Dois denominadores ali seriam duas medições do mesmo número, cada uma com metade da
   amostra.
 
-  ⚠️ O `Pick` do Handicap (linha 0) entra na enumeração pelo mesmo motivo que o `Draw` do
-  1X2: nenhuma premissa dispara — todas são `is_favorito AND ...` ou `is_azarao AND ...`, e
-  as duas flags são FALSE quando o handicap é zero. Teto de premissa zero, p95 zero,
-  denominador zero. A ADR 0005 nomeia só o empate porque foi o caso que apareceu na
-  medição; a aritmética é a mesma, e o seed carrega os dois com zero explícito.
+  ⚠️ O `Pick` do Handicap (linha 0) FICOU DORMENTE NA #109/B3 (2026-09-01). Até então
+  entrava na enumeração pelo mesmo motivo que o `Draw` do 1X2 — nenhuma premissa disparava,
+  `is_favorito`/`is_azarao` eram as duas FALSE em handicap zero, e o seed carrega o lado
+  com p95 zero explícito. O achado da B3: ao contrário do empate (que é estrutural — não
+  existe "favorito no empate"), a linha 0 do Handicap TEM lado — ninguém dá pontos por
+  PREÇO, mas o mando ainda diz quem é favorito. Sem essa distinção a linha nunca podia
+  publicar (nota sempre zero) nem contribuir a nada. O mando desempata: `outcome='Home'`
+  vira Favorito, `'Away'` vira Azarao — mesma regra em `int_futebol_premissas_ah`, porque
+  os dois têm de concordar sobre qual lado é qual (é a chave do join com o p95). O `Pick`
+  segue no seed (histórico, p95 zero) mas nenhum candidato vivo volta a produzi-lo — é
+  dormente, não removido, mesmo padrão de valor legado que este projeto já usa em
+  `motivo_primario`.
 
   ⚠️ FAIL-CLOSED, igual ao `futebol_market_slug`: saída fora do catálogo resolve para NULL
   — a "12" da Dupla Chance, e qualquer `outcome` que o de-vig emita e o Motor não pontue.
@@ -58,8 +65,12 @@
                 -- o handicap na ótica do lado apostado; `line_value` vem na do mandante.
                 WHEN IF({{ outcome_col }} = 'Home', {{ line_col }}, -{{ line_col }}) < 0 THEN 'Favorito'
                 WHEN IF({{ outcome_col }} = 'Home', {{ line_col }}, -{{ line_col }}) > 0 THEN 'Azarao'
-                -- linha 0: ninguém dá e ninguém recebe. Nenhuma premissa dispara.
-                WHEN IF({{ outcome_col }} = 'Home', {{ line_col }}, -{{ line_col }}) = 0 THEN 'Pick'
+                -- linha 0 (B3, #109): ninguém dá/recebe por PREÇO, mas o mando desempata —
+                -- Home é o favorito estrutural (vantagem de campo). MESMA regra em
+                -- `int_futebol_premissas_ah` (is_favorito/is_azarao); os dois têm de
+                -- concordar, porque é esta coluna que casa a linha com o p95 do lado.
+                WHEN IF({{ outcome_col }} = 'Home', {{ line_col }}, -{{ line_col }}) = 0
+                    THEN IF({{ outcome_col }} = 'Home', 'Favorito', 'Azarao')
                 -- handicap ausente: não dá para dizer o lado, e inventá-lo é pior.
                 ELSE NULL
             END
