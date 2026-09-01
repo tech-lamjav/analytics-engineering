@@ -648,9 +648,13 @@ unit_tests:
           - {fixture_id: 5, competition: 'brasileirao', season: 2026, market_id: 5, outcome_side: 'Over', line_value: 0.5, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.20, best_book: 'Bet365', avg_odd: 1.18, n_casas: 5, prob_justa_fechamento: 0.85, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
           # -- 6: DENOMINADOR ZERO com pontos zero — o empate do 1X2, que é o caso real.
           - {fixture_id: 6, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Draw', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 3.50, best_book: 'Bet365', avg_odd: 3.30, n_casas: 5, prob_justa_fechamento: 0.30, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          # -- 7: DENOMINADOR ZERO com pontos > 0 — o Pick do Handicap (linha 0), com
-          # premissa fabricada. Isola o ramo do zero do caso 6.
-          - {fixture_id: 7, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Home', line_value: 0.0, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.95, best_book: 'Bet365', avg_odd: 1.90, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          # -- 7: DENOMINADOR ZERO com pontos > 0 — o empate do 1X2, com premissa
+          # fabricada (na vida real o empate nunca tem premissa: nenhuma se aplica).
+          # Isola o ramo do zero do caso 6, que tem pontos zero. ⚠️ B3 (#109): até
+          # 2026-09-01 este caso usava o Pick do Handicap (linha 0) — deixou de servir
+          # porque a B3 deu lado a ele (Favorito/Azarao pelo mando), e a macro não
+          # produz mais 'Pick' para candidato nenhum.
+          - {fixture_id: 7, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Draw', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 3.50, best_book: 'Bet365', avg_odd: 3.30, n_casas: 5, prob_justa_fechamento: 0.30, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
           # -- 8: A "12" da Dupla Chance. Sem premissa a avaliar -> nota de contexto NULL
           # -> normalizada NULL. Zero diria "foi avaliada e tirou zero" (ADR 0003).
           - {fixture_id: 8, competition: 'brasileirao', season: 2026, market_id: 12, outcome_side: '12', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.50, best_book: 'Bet365', avg_odd: 1.45, n_casas: 5, prob_justa_fechamento: 0.60, pin_n_outcomes: , n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
@@ -670,6 +674,9 @@ unit_tests:
           UNION ALL SELECT 4, 'Home', 25, 0, 0
           -- o empate: zero de premissa e os −10 do `pick_empate`.
           UNION ALL SELECT 6, 'Draw', 0, 0, 10
+          -- fixture 7: empate FABRICADO com premissa (não acontece na vida real — isola
+          -- o ramo do denominador zero com numerador > 0, ver comentário acima).
+          UNION ALL SELECT 7, 'Draw', 20, 0, 0
 
       - input: ref('int_futebol_premissas_ou')
         format: sql
@@ -680,9 +687,8 @@ unit_tests:
       - input: ref('int_futebol_premissas_ah')
         format: sql
         rows: |
-          SELECT 7 AS fixture_id, 'Home' AS outcome, 0.0 AS line_value,
+          SELECT 9 AS fixture_id, 'Home' AS outcome, -1.5 AS line_value,
                  20 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts
-          UNION ALL SELECT  9, 'Home', -1.5, 20, 0, 0
           UNION ALL SELECT 10, 'Away', -1.5, 20, 0, 0
 
       # A "12" (fixture 8) NÃO tem linha aqui, de propósito: é o que a torna a saída
@@ -709,7 +715,7 @@ unit_tests:
         - {fixture_id: 4,  lado: 'Home',     nota_contexto: 25, score_normalizado: 63}
         - {fixture_id: 5,  lado: 'Over',     nota_contexto: 0,  score_normalizado: 0}
         - {fixture_id: 6,  lado: 'Draw',     nota_contexto: 0,  score_normalizado: 0}
-        - {fixture_id: 7,  lado: 'Pick',     nota_contexto: 20, score_normalizado: 0}
+        - {fixture_id: 7,  lado: 'Draw',     nota_contexto: 20, score_normalizado: 0}
         - {fixture_id: 8,  lado: ,           nota_contexto: ,   score_normalizado: }
         - {fixture_id: 9,  lado: 'Favorito', nota_contexto: 20, score_normalizado: 50}
         - {fixture_id: 10, lado: 'Azarao',   nota_contexto: 20, score_normalizado: 100}
