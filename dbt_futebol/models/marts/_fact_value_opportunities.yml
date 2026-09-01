@@ -80,10 +80,20 @@ models:
       - name: score_versao
         description: "⚠️ #109: escala em que o Score foi calculado. Todo dado que este mart materializa a partir da virada é 'contexto_v1' — o valor 'legacy' só existe em linhas sincronizadas antes deste deploy, carimbado pelo default da migration 112 do app, nunca escrito por este modelo. Técnico, nunca exibido ao usuário."
         tests:
-          - not_null
+          # `tag:guarda`, e não teste comum: a coluna É NOVA — não existe na tabela até o
+          # primeiro `dbt run` pós-deploy. Sem a tag, `dbt test` roda contra a tabela
+          # VELHA (pré-virada) e explode com "Unrecognized name: score_versao" — erro de
+          # schema, não vermelho de guarda. Mesmo padrão do accepted_values de
+          # `janela_deteccao` mais abaixo: o agendado só roda `tag:guarda` como fase à
+          # parte, depois do `dbt run` já ter subido a coluna.
+          - not_null:
+              config:
+                tags: ['guarda']
           - accepted_values:
               arguments:
                 values: ['contexto_v1']
+              config:
+                tags: ['guarda']
       - name: premissas_sem_dado
         description: >
           Quantas premissas do mercado se aplicavam a esta linha, não acenderam, e não

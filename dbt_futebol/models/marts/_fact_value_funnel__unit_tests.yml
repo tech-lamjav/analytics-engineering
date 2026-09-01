@@ -115,7 +115,7 @@ unit_tests:
 
           # -- 10: porta_outlier (#104/#109). best_odd dentro da faixa, mas a flag de
           # outlier veio TRUE do de-vig — provável linha mole ou erro de precificação.
-          - {fixture_id: 10, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 30, pen_odd_outlier: true, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 10, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: true, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
           # -- 11: porta_faixa_odd (#104/#109). best_odd 5,00 — acima do teto de 4,00.
           - {fixture_id: 11, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 30, best_odd: 5.00, best_book: 'Bet365', avg_odd: 4.80, n_casas: 5, prob_justa_fechamento: 0.18, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: true, pen_odd_juice: false}
@@ -209,7 +209,7 @@ unit_tests:
           # (n_casas=2) E outlier (#104/#109). O `motivo_primario` elege a primeira da
           # ordem de leitura, e é justamente por isso que ele não pode ser a fonte: sob
           # ele, esta linha seria contada só como "sem liquidez estrita".
-          - {fixture_id: 10, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.05, pts_valor: 30, best_odd: 1.90, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 30, pen_odd_outlier: true, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 10, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: -0.05, pts_valor: 30, best_odd: 1.90, best_book: 'Bet365', avg_odd: 2.00, n_casas: 2, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: true, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
           # -- 11: a "12" da DC COMO ELA É em produção — precificada e sem nenhuma linha em
           # `int_futebol_premissas_dc`. O LEFT JOIN traz pts_premissas NULL, a nota fica NULL,
