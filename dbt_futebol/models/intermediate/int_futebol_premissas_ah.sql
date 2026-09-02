@@ -1,6 +1,6 @@
 {{ config(
     materialized='table',
-    description='S3 do Motor de Score — premissas de contexto do mercado HANDICAP ASIATICO (market_id 4). ⚠️ B3 (#109, 2026-09-01): a linha 0 (side_handicap=0) deixou de ser "pick sem lado" — o mando desempata (Home=favorito, Away=azarão), mesma regra de `futebol_lado()`, para as premissas do lado certo acenderem. ⚠️ Task 0 (look-ahead): supremacia/tende_golear/adversario_fragil_fora/mando_forte/sem_rodizio/defesa_fora_solida leem int_futebol_team_form_pit (point-in-time por fixture) — o lado FAVORITO era 100% contaminado. raramente_perde_por_2 e favorito_irregular já eram limpos (margin_stats com kickoff_utc <) e não mudaram. 2 linhas por (fixture, line_value): outcome_side Home e Away. Convenção dos dados (API-Football, confirmada 2026-06-24): line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ os dois lados — "Home -1.5" e "Away -1.5" são o PAR complementar (de-vig soma ~1.03, pin_n_outcomes=2). Logo o handicap NA ÓTICA DO LADO = IF(side=Home, line_value, -line_value): side_handicap<0 => FAVORITO (dá handicap), >0 => AZARÃO (recebe), =0 => o mando decide (B3). Favorito: 5 premissas (Σ40, §12.3); Azarão: 3 (Σ30). Penalidade específica: handicap_alto (-12, |line_value|>=2.5). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. Gate/edge/Score saem no mart fact_value_opportunities (gate de completude Pinnacle = par >=2, igual O/U).
+    description='S3 do Motor de Score — premissas de contexto do mercado HANDICAP ASIATICO (market_id 4). ⚠️ B3 (#109, 2026-09-01, corrigido 02/09): a linha 0 (side_handicap=0) deixou de ser "pick sem lado" — a ODD decide quem é favorito (menor odd), o mando só desempata odds iguais ou ausentes, mesma regra de `futebol_lado()`, para as premissas do lado certo acenderem. ⚠️ Task 0 (look-ahead): supremacia/tende_golear/adversario_fragil_fora/mando_forte/sem_rodizio/defesa_fora_solida leem int_futebol_team_form_pit (point-in-time por fixture) — o lado FAVORITO era 100% contaminado. raramente_perde_por_2 e favorito_irregular já eram limpos (margin_stats com kickoff_utc <) e não mudaram. 2 linhas por (fixture, line_value): outcome_side Home e Away. Convenção dos dados (API-Football, confirmada 2026-06-24): line_value é o handicap na ÓTICA DO MANDANTE e é o MESMO p/ os dois lados — "Home -1.5" e "Away -1.5" são o PAR complementar (de-vig soma ~1.03, pin_n_outcomes=2). Logo o handicap NA ÓTICA DO LADO = IF(side=Home, line_value, -line_value): side_handicap<0 => FAVORITO (dá handicap), >0 => AZARÃO (recebe), =0 => a odd decide, mando desempata (B3). Favorito: 5 premissas (Σ40, §12.3); Azarão: 3 (Σ30). Penalidade específica: handicap_alto (-12, |line_value|>=2.5). Degradação graciosa: dado ausente -> premissa FALSE. evidencias[]/avisos[] = bullets pro front. Gate/edge/Score saem no mart fact_value_opportunities (gate de completude Pinnacle = par >=2, igual O/U).
     ⚠️ Reconciliação §12.3: o bloco "Azarão" do playbook mistura rótulos S/O (ex.: "favorito_irregular | S venceu por 2+..."); aqui as premissas seguem o NOME/INTENÇÃO: raramente_perde_por_2 e defesa_fora_solida medem o AZARÃO (S); favorito_irregular mede o FAVORITO (O). Ao calibrar, alinhar o .md a esta leitura. ⚠️ MEDIÇÃO (task [F], ADR 0007): o margin_stats aceita as DUAS vars da medição — pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10). ⚠️ Desde a #91 (ADR 0010) os DEFAULTS são `todas` + `ultimos_10` — a célula `ambos` — e NÃO reproduzem mais o comportamento descrito acima; ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no dataset futebol_taskF. supremacia e sem_rodizio NÃO seguem o eixo (rank/ppg/n_teams vêm do team_form_pit, que os mantém competição-scoped em todas as células, ADR 0008). ⚠️ O margin_stats não tem filtro de season nem no default — ele já atravessa temporada hoje —, então sob `todas` ele passa a contar todas as competições E todo o tempo coletado. Contador de cegueira (#41, ADR 0003): premissas_cegas[] e premissas_sem_dado dizem quais premissas APLICÁVEIS a cada linha não puderam ser avaliadas por falta de insumo — geradas do mapa futebol_insumos_premissa(), nunca escritas à mão. O score NÃO muda: a premissa cega já não acendia e continua não acendendo; o que muda é o board passar a dizer o que não levou em conta. A aplicabilidade aqui é o LADO (is_favorito/is_azarao) — sem ela toda linha contaria 3 ou 5 cegas por desenho. A lista de ligas de pontos corridos do sem_rodizio saiu para futebol_ligas_pontos_corridos(), lida também pelo mapa.'
 ) }}
 {#- EIXOS DE ESCOPO E RECORTE DA MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — desde a #91 o DEFAULT destas vars é o que produção usa.
@@ -162,18 +162,39 @@ margin_stats AS (
 ),
 {%- endif %}
 
+-- A odd da linha 0 (B3, #109/decisão do Victor 25/08): quem tem a MENOR odd é o
+-- favorito; empate (ou odd ausente) desempata pelo mando. `QUALIFY` já reduz a 1 linha
+-- por fixture — no máximo Home e Away entram aqui (market_id=4, line_value=0), a janela
+-- corrente resolve as duas juntas (mesma janela pros dois lados, ver
+-- `futebol_devig_janela_corrente()`), e a ORDER BY escolhe a de menor odd, com o mando
+-- como critério de desempate.
+odds_linha_zero AS (
+    SELECT
+        fixture_id,
+        outcome_side = 'Home' AS home_e_favorito_por_odd
+    FROM ({{ futebol_devig_janela_corrente() }})
+    WHERE market_id = 4 AND line_value = 0
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY fixture_id
+        ORDER BY best_odd ASC, IF(outcome_side = 'Home', 0, 1) ASC
+    ) = 1
+),
+
 -- Métricas brutas por outcome×linha.
 metrics AS (
     SELECT
         o.fixture_id, o.competition, o.season, o.outcome, o.line_value,
         o.s_is_home, o.side_handicap,
-        -- ⚠️ B3 (#109, 2026-09-01): linha 0 (side_handicap=0) não fica mais sem lado. O
-        -- mando desempata — MESMA regra que `macros/futebol_lado.sql` usa, e os dois têm
-        -- de concordar (é o que casa esta linha com o p95 do lado no funil). Antes desta
-        -- entrega as duas eram FALSE em handicap zero: nenhuma premissa disparava, a
-        -- linha nunca tinha nota, e não tinha lado para casar com denominador nenhum.
-        (o.side_handicap < 0 OR (o.side_handicap = 0 AND o.s_is_home))     AS is_favorito,
-        (o.side_handicap > 0 OR (o.side_handicap = 0 AND NOT o.s_is_home)) AS is_azarao,
+        -- ⚠️ B3 (#109, 2026-09-01): linha 0 (side_handicap=0) não fica mais sem lado. A ODD
+        -- decide quem é favorito (decisão do Victor, 25/08) — MESMA regra que
+        -- `macros/futebol_lado.sql` usa, e os dois têm de concordar (é o que casa esta
+        -- linha com o p95 do lado no funil). Sem odd pra essa linha, cai no mando —
+        -- degradação graciosa, nunca NULL. Antes desta entrega as duas eram FALSE em
+        -- handicap zero: nenhuma premissa disparava, a linha nunca tinha nota.
+        (o.side_handicap < 0
+            OR (o.side_handicap = 0 AND COALESCE(olz.home_e_favorito_por_odd, o.s_is_home)))     AS is_favorito,
+        (o.side_handicap > 0
+            OR (o.side_handicap = 0 AND NOT COALESCE(olz.home_e_favorito_por_odd, o.s_is_home))) AS is_azarao,
 
         -- ataque/defesa de S no campo deste jogo (tende_golear, defesa_fora_solida)
         IF(o.s_is_home, s.goals_for_avg_home,     s.goals_for_avg_away)     AS s_gf_venue,
@@ -199,6 +220,7 @@ metrics AS (
     LEFT JOIN pit od  ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id
     LEFT JOIN margin_stats sm ON sm.fixture_id = o.fixture_id AND sm.team_id = o.s_team_id
     LEFT JOIN margin_stats om ON om.fixture_id = o.fixture_id AND om.team_id = o.o_team_id
+    LEFT JOIN odds_linha_zero olz ON olz.fixture_id = o.fixture_id
 ),
 
 -- Premissas (booleanos). Gated por favorito/azarão -> só o lado certo dispara; soma <=40 (fav) ou <=30 (dog).
