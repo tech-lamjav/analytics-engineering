@@ -1,5 +1,5 @@
 {{ config(
-    description='Flatten do raw_futebol_fixtures. 1 linha por fixture (jogo). Apenas a espinha (/fixtures): fixture, league, teams, goals, score. Stats/events/lineups vêm de endpoints separados (subtasks 5-8). fact_fixtures deriva competition/date_utc e dedup por fixture_id.'
+    description='Flatten do raw_futebol_fixtures. NÃO é 1 linha por fixture — é 1 linha por EXTRAÇÃO: raw_futebol_fixtures é append-only e o extractor re-busca jogo recente pra pegar status/placar atualizado, então o mesmo fixture_id repete com loaded_at maior (ver models.yml, corrigido 02/09/2026). Apenas a espinha (/fixtures): fixture, league, teams, goals, score. Stats/events/lineups vêm de endpoints separados (subtasks 5-8). fact_fixtures deriva competition/date_utc e faz o dedup de verdade (latest-wins por loaded_at).'
 ) }}
 
 WITH src AS (
