@@ -147,14 +147,16 @@ SELECT
     -- aritmética, um nome em cada tabela (glossário, CONTEXT.md). Não é uma segunda
     -- fórmula: `score_normalizado` já é 0–100, absoluto, sem preço.
     f.score_normalizado AS score,
-    -- ⚠️ #109: fronteiras da #107 (PR #133), medidas sobre a escala normalizada
-    -- pós-A6 — Baixa < 25 <= Média < 55 <= Alta, fronteira na faixa de cima nas duas.
-    -- 'Baixa' passa a materializar: a régua de nota saiu do gate (decisão do PM de
-    -- 20/08), então a faixa é rótulo, não mais sentinela de corte.
+    -- ⚠️ #109: fronteiras da #107 (PR #133) eram 25/55; trocadas para 30/60 por decisão
+    -- do PM (01/09, comentário na #109) — não é leitura de evidência nova, a #107 já
+    -- tinha medido que nenhum par da grade discrimina Alta de Baixa além de 1 EP. Baixa
+    -- < 30 <= Média < 60 <= Alta, fronteira na faixa de cima nas duas. 'Baixa' passa a
+    -- materializar: a régua de nota saiu do gate (decisão do PM de 20/08), então a faixa
+    -- é rótulo, não mais sentinela de corte.
     CASE
         WHEN f.score_normalizado IS NULL THEN NULL
-        WHEN f.score_normalizado >= 55   THEN 'Alta'
-        WHEN f.score_normalizado >= 25   THEN 'Média'
+        WHEN f.score_normalizado >= 60   THEN 'Alta'
+        WHEN f.score_normalizado >= 30   THEN 'Média'
         ELSE 'Baixa'
     END AS faixa,
     -- técnica, nunca exibida ao usuário (comment da migration 112 do app). 'legacy' é o

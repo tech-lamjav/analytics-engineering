@@ -72,7 +72,7 @@ models:
                 min_value: 0
                 max_value: 100
       - name: faixa
-        description: "Faixa de CONFIABILIDADE derivada do score, fronteiras da #107 (PR #133): 'Alta' (>=55) | 'Média' (25-54) | 'Baixa' (<25), fronteira pertencendo à faixa de cima nas duas. ⚠️ #109: 'Baixa' passa a materializar — a régua de nota saiu do gate (decisão do PM de 20/08), então a faixa não é mais sentinela de corte, é rótulo."
+        description: "Faixa de CONFIABILIDADE derivada do score: 'Alta' (>=60) | 'Média' (30-59) | 'Baixa' (<30), fronteira pertencendo à faixa de cima nas duas. Fronteiras trocadas de 25/55 (#107, PR #133) para 30/60 por decisão do PM na #109 (01/09) — decisão de comunicação, não leitura de evidência nova; ambos os pares vêm da mesma grade medida na #107. ⚠️ #109: 'Baixa' passa a materializar — a régua de nota saiu do gate (decisão do PM de 20/08), então a faixa não é mais sentinela de corte, é rótulo."
         tests:
           - accepted_values:
               arguments:
