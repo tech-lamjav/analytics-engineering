@@ -447,10 +447,18 @@ unioned AS (
 -- handicap na ótica do lado apostado, e os conjuntos de premissa de favorito e azarão são
 -- disjuntos (Σ40 contra Σ30).
 -- ============================================================================
+-- PARTITION BY não aceita FLOAT64 (line_value): CAST p/ STRING, mesma conversão que
+-- `futebol_devig_todas_janelas()._line_key` usa pro mesmo motivo.
 com_lado AS (
     SELECT
         u.*,
-        {{ futebol_lado('u.market', 'u.outcome', 'u.line_value') }} AS lado
+        {{ futebol_lado(
+            'u.market', 'u.outcome', 'u.line_value',
+            "(ROW_NUMBER() OVER ("
+            "  PARTITION BY u.fixture_id, u.market, COALESCE(CAST(u.line_value AS STRING), 'NONE'), u.janela_usada"
+            "  ORDER BY u.best_odd ASC, IF(u.outcome = 'Home', 0, 1) ASC"
+            ") = 1)"
+        ) }} AS lado
     FROM unioned u
 ),
 

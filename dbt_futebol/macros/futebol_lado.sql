@@ -30,14 +30,21 @@
   entrava na enumeração pelo mesmo motivo que o `Draw` do 1X2 — nenhuma premissa disparava,
   `is_favorito`/`is_azarao` eram as duas FALSE em handicap zero, e o seed carrega o lado
   com p95 zero explícito. O achado da B3: ao contrário do empate (que é estrutural — não
-  existe "favorito no empate"), a linha 0 do Handicap TEM lado — ninguém dá pontos por
-  PREÇO, mas o mando ainda diz quem é favorito. Sem essa distinção a linha nunca podia
-  publicar (nota sempre zero) nem contribuir a nada. O mando desempata: `outcome='Home'`
-  vira Favorito, `'Away'` vira Azarao — mesma regra em `int_futebol_premissas_ah`, porque
-  os dois têm de concordar sobre qual lado é qual (é a chave do join com o p95). O `Pick`
-  segue no seed (histórico, p95 zero) mas nenhum candidato vivo volta a produzi-lo — é
-  dormente, não removido, mesmo padrão de valor legado que este projeto já usa em
-  `motivo_primario`.
+  existe "favorito no empate"), a linha 0 do Handicap TEM lado. O `Pick` segue no seed
+  (histórico, p95 zero) mas nenhum candidato vivo volta a produzi-lo — é dormente, não
+  removido, mesmo padrão de valor legado que este projeto já usa em `motivo_primario`.
+
+  ⚠️ QUEM DECIDE O LADO NA LINHA 0 É A ODD, NÃO O MANDO — decisão do Victor na B3
+  (comentário de 25/08/2026, ClickUp `wdx6zev656`): "vamos pela menor odd, com desempate
+  pelo mando quando as odds forem iguais". A primeira entrega (#138, 01/09) implementou só
+  mando — corrigido aqui. O `outcome_e_favorito_por_odd_col` é um BOOLEAN já resolvido pelo
+  CHAMADOR (TRUE quando este `outcome_col` tem a menor odd pra esse fixture+linha, com
+  empate desempatado pelo mando) — o macro não tem acesso a odd sozinho, porque ela não
+  está nos três argumentos de sempre. `NULL`/omitido cai no mando puro: é a degradação
+  graciosa de quando não há odd pra essa linha (mesmo padrão do resto do projeto — dado
+  ausente nunca propaga NULL pro veredito, decide pelo fallback mais simples). MESMA regra
+  em `int_futebol_premissas_ah` (`is_favorito`/`is_azarao`), porque os dois têm de
+  concordar sobre qual lado é qual (é a chave do join com o p95).
 
   ⚠️ FAIL-CLOSED, igual ao `futebol_market_slug`: saída fora do catálogo resolve para NULL
   — a "12" da Dupla Chance, e qualquer `outcome` que o de-vig emita e o Motor não pontue.
@@ -46,10 +53,10 @@
   e já está carimbada na `porta_saida_catalogada`. Um lado inventado por acidente casaria
   com nenhuma linha do seed, e o modelo o trataria como denominador ausente.
 
-  Os três argumentos são expressões já qualificadas pelo chamador (ex.: `f.market`), porque
-  os consumidores juntam as tabelas com aliases diferentes.
+  Os argumentos são expressões já qualificadas pelo chamador (ex.: `f.market`), porque os
+  consumidores juntam as tabelas com aliases diferentes.
 -#}
-{% macro futebol_lado(market_col, outcome_col, line_col) -%}
+{% macro futebol_lado(market_col, outcome_col, line_col, outcome_e_favorito_por_odd_col=none) -%}
     CASE {{ market_col }}
         WHEN '{{ futebol_mercados_pontuados()[1] }}' THEN
             IF({{ outcome_col }} IN ('Home', 'Draw', 'Away'), {{ outcome_col }}, NULL)
@@ -65,12 +72,19 @@
                 -- o handicap na ótica do lado apostado; `line_value` vem na do mandante.
                 WHEN IF({{ outcome_col }} = 'Home', {{ line_col }}, -{{ line_col }}) < 0 THEN 'Favorito'
                 WHEN IF({{ outcome_col }} = 'Home', {{ line_col }}, -{{ line_col }}) > 0 THEN 'Azarao'
-                -- linha 0 (B3, #109): ninguém dá/recebe por PREÇO, mas o mando desempata —
-                -- Home é o favorito estrutural (vantagem de campo). MESMA regra em
-                -- `int_futebol_premissas_ah` (is_favorito/is_azarao); os dois têm de
-                -- concordar, porque é esta coluna que casa a linha com o p95 do lado.
+                -- linha 0 (B3, #109): a odd decide quem é favorito, mando só desempata
+                -- odds iguais (ou ausentes). MESMA regra em `int_futebol_premissas_ah`
+                -- (is_favorito/is_azarao); os dois têm de concordar, porque é esta coluna
+                -- que casa a linha com o p95 do lado.
                 WHEN IF({{ outcome_col }} = 'Home', {{ line_col }}, -{{ line_col }}) = 0
-                    THEN IF({{ outcome_col }} = 'Home', 'Favorito', 'Azarao')
+                    THEN IF(
+                        {% if outcome_e_favorito_por_odd_col is not none -%}
+                        COALESCE({{ outcome_e_favorito_por_odd_col }}, {{ outcome_col }} = 'Home')
+                        {%- else -%}
+                        {{ outcome_col }} = 'Home'
+                        {%- endif %},
+                        'Favorito', 'Azarao'
+                    )
                 -- handicap ausente: não dá para dizer o lado, e inventá-lo é pior.
                 ELSE NULL
             END

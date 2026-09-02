@@ -749,3 +749,59 @@ unit_tests:
         - {fixture_id: 8,  lado: ,           nota_contexto: ,   score_normalizado: }
         - {fixture_id: 9,  lado: 'Favorito', nota_contexto: 20, score_normalizado: 50}
         - {fixture_id: 10, lado: 'Azarao',   nota_contexto: 20, score_normalizado: 100}
+
+  - name: funil_linha_zero_do_handicap_decide_pela_odd
+    model: fact_value_funnel
+    overrides:
+      macros:
+        is_incremental: false
+    description: >
+      B3 (#109, corrigido 02/09): na linha 0 do Handicap quem decide o favorito é a
+      MENOR odd, o mando só desempata. Fixture 11 prova o caso que a primeira entrega
+      (mando puro) errava: o Away tem a odd menor, então é ELE o favorito, mesmo sendo
+      visitante. Fixture 12 prova que o mando ainda desempata quando as odds EMPATAM.
+    given:
+      - input: ref('int_futebol_odds_devig')
+        rows:
+          # -- 11: odd DISCORDA do mando. Away (1.75, menor) é favorito; Home (2.20,
+          # maior) é azarão — o oposto do que "mando puro" (Home=Favorito) diria.
+          - {fixture_id: 11, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Home', line_value: 0.0, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.10, n_casas: 5, prob_justa_fechamento: 0.45, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 11, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Away', line_value: 0.0, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.75, best_book: 'Bet365', avg_odd: 1.70, n_casas: 5, prob_justa_fechamento: 0.55, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          # -- 12: odds EMPATADAS. Sem preferência de mercado, o mando desempata: Home
+          # vira Favorito.
+          - {fixture_id: 12, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Home', line_value: 0.0, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.90, best_book: 'Bet365', avg_odd: 1.88, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+          - {fixture_id: 12, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Away', line_value: 0.0, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.90, best_book: 'Bet365', avg_odd: 1.88, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
+
+      - input: ref('int_futebol_premissas_1x2')
+        rows: []
+      - input: ref('int_futebol_premissas_ou')
+        rows: []
+      - input: ref('int_futebol_premissas_dc')
+        rows: []
+      - input: ref('int_futebol_premissas_btts')
+        rows: []
+      - input: ref('int_futebol_corroboracao')
+        rows: []
+
+      - input: ref('int_futebol_premissas_ah')
+        format: sql
+        rows: |
+          SELECT 11 AS fixture_id, 'Home' AS outcome, 0.0 AS line_value,
+                 10 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts
+          UNION ALL SELECT 11, 'Away', 0.0, 10, 0, 0
+          UNION ALL SELECT 12, 'Home', 0.0, 10, 0, 0
+          UNION ALL SELECT 12, 'Away', 0.0, 10, 0, 0
+
+      - input: ref('futebol_p95_nota_contexto')
+        format: csv
+        fixture: p95_nota_contexto_sintetico
+
+      - input: ref('fact_fixtures')
+        rows: []
+
+    expect:
+      rows:
+        - {fixture_id: 11, outcome: 'Home', lado: 'Azarao',   nota_contexto: 10, score_normalizado: 50}
+        - {fixture_id: 11, outcome: 'Away', lado: 'Favorito', nota_contexto: 10, score_normalizado: 25}
+        - {fixture_id: 12, outcome: 'Home', lado: 'Favorito', nota_contexto: 10, score_normalizado: 25}
+        - {fixture_id: 12, outcome: 'Away', lado: 'Azarao',   nota_contexto: 10, score_normalizado: 50}
