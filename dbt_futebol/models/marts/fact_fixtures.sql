@@ -67,8 +67,10 @@ SELECT
     loaded_at           AS extracted_at,
     CURRENT_TIMESTAMP() AS dbt_loaded_at
 FROM {{ ref('stg_futebol_fixtures') }}
--- Defensivo: fixture_id já é único (backfill/current não sobrepõem liga-temporada).
--- Mantém o idioma de dedup de dim_players/dim_teams.
+-- NÃO é defensivo: fixture_id NÃO é único em stg_futebol_fixtures (o extractor
+-- re-busca jogo recente e a mesma fixture entra de novo com loaded_at maior — corrigido
+-- na description do modelo em 02/09/2026). Este QUALIFY é o dedup de verdade, latest-wins
+-- por loaded_at. Mantém o idioma de dedup de dim_players/dim_teams.
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY fixture_id
     ORDER BY loaded_at DESC

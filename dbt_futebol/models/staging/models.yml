@@ -334,13 +334,23 @@ models:
         description: "Timestamp ISO UTC do extractor"
 
   - name: stg_futebol_fixtures
-    description: "Flatten do raw_futebol_fixtures (espinha /fixtures). 1 linha por fixture (jogo). fact_fixtures deriva competition/date_utc (de timestamp_unix) e dedup por fixture_id. ⚠️ date_iso (ISO com offset) e league_season foram removidos por serem passthrough mortos (0 consumidores) — para data use timestamp_unix; para season use requested_season."
+    description: "Flatten do raw_futebol_fixtures (espinha /fixtures). ⚠️ NÃO é 1 linha por fixture — é 1 linha por EXTRAÇÃO: raw_futebol_fixtures é append-only e o extractor re-busca jogo recente pra pegar status/placar atualizado, então o mesmo fixture_id aparece de novo com loaded_at maior. fact_fixtures deriva competition/date_utc (de timestamp_unix) e faz o dedup de verdade (latest-wins por loaded_at) — é lá que mora o teste de unicidade por fixture_id. ⚠️ date_iso (ISO com offset) e league_season foram removidos por serem passthrough mortos (0 consumidores) — para data use timestamp_unix; para season use requested_season."
+    tests:
+      # A unicidade de VERDADE (1 linha por fixture) é testada em fact_fixtures, que já
+      # dedupa por loaded_at. Aqui a invariante mais fina que vale é "a mesma extração não
+      # se repete" — teve `unique` isolado em fixture_id até 02/09/2026, e vivia vermelho:
+      # 11 fixtures re-extraídos (dado idêntico, loaded_at diferente) reprovavam um teste
+      # que testava uma garantia que este modelo nunca teve.
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - loaded_at
     columns:
       - name: fixture_id
-        description: "ID do jogo na API-Football (PK; 1 linha por fixture)"
+        description: "ID do jogo na API-Football (FK p/ fact_fixtures; PODE repetir aqui — cada extração é uma linha nova, ver description do modelo)"
         tests:
           - not_null
-          - unique
       - name: requested_league_id
         description: "ID da liga requisitada (parâmetro `league` da chamada /fixtures)"
         tests:
