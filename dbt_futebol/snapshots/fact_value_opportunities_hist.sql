@@ -6,9 +6,9 @@
       strategy='check',
       invalidate_hard_deletes=True,
       check_cols=[
-        'janela_usada', 'edge', 'score', 'faixa', 'valor_fonte',
+        'janela_usada', 'edge', 'score', 'faixa', 'valor_fonte', 'score_versao',
         'best_odd', 'best_book', 'avg_odd', 'n_casas', 'prob_justa_fechamento',
-        'penalidades_globais_pts', 'penalidades_especificas_pts',
+        'penalidades_especificas_pts',
         'modelo_api_concorda', 'linha_sharp_confirma', 'pin_n_outcomes', 'is_half_line'
       ]
     )
@@ -39,11 +39,13 @@
 -- As quatro flags de penalidade (#87) — `pen_odd_outlier`, `pen_poucas_casas`,
 -- `pen_odd_longshot`, `pen_odd_juice` — ficam FORA do check_cols pelo MESMO motivo da
 -- `janela_deteccao`, e por mais um que é só delas: elas são função DETERMINÍSTICA de
--- `penalidades_globais_pts`, que já está no check_cols. Flag que muda sem mudar a soma não
--- existe (a identidade 30/12/15/10 é guardada por assert_penalidades_globais_decompostas), e
--- flag que muda mudando a soma já dispara o check pela soma. Incluí-las seria redundante e
--- cobraria o preço de sempre: um check sobre coluna nova fecha TODAS as linhas vivas no
--- primeiro run depois do deploy — pico de churn fabricado, bem no meio da medição da ADR 0009.
+-- `best_odd`, `avg_odd` e `n_casas`, que já estão no check_cols (AE#109 aposentou
+-- `penalidades_globais_pts` e a guarda `assert_penalidades_globais_decompostas` que a
+-- decompunha — as flags viraram porta de gate, não componente de nota, e não têm mais
+-- agregado próprio para comparar). Flag que muda sem que `best_odd`/`avg_odd`/`n_casas`
+-- mudem não existe. Incluí-las seria redundante e cobraria o preço de sempre: um check
+-- sobre coluna nova fecha TODAS as linhas vivas no primeiro run depois do deploy — pico de
+-- churn fabricado, bem no meio da medição da ADR 0009.
 -- Elas chegam ao histórico de graça, na primeira versão que a linha ganhar por preço, e é aí
 -- que o `avisos[]` deixa de ser reconstruído do presente e passa a ser point-in-time (#257).
 SELECT
