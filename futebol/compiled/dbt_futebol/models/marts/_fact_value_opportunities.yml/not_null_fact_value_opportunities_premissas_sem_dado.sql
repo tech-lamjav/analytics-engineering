@@ -1,0 +1,11 @@
+
+    
+    
+
+
+
+select premissas_sem_dado
+from `smartbetting-dados`.`futebol`.`fact_value_opportunities`
+where premissas_sem_dado is null
+
+

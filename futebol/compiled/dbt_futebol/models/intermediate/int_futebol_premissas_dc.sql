@@ -1,0 +1,222 @@
+
+
+WITH fixtures AS (
+    SELECT
+        fixture_id, competition, competition_id, season,
+        home_team_id, away_team_id, kickoff_utc
+    FROM `smartbetting-dados`.`futebol`.`fact_fixtures`
+),
+
+-- 2 outcomes: 1X (S=Home, O=Away) e X2 (S=Away, O=Home). s_1x2_outcome casa o lado S no 1X2.
+outcomes AS (
+    SELECT fixture_id, competition, competition_id, season, kickoff_utc,
+           '1X' AS outcome, home_team_id AS s_team_id, away_team_id AS o_team_id,
+           'Home' AS s_1x2_outcome
+    FROM fixtures
+    UNION ALL
+    SELECT fixture_id, competition, competition_id, season, kickoff_utc,
+           'X2', away_team_id, home_team_id, 'Away'
+    FROM fixtures
+),
+
+-- Reuso das premissas do 1X2 (do lado S): forca_mismatch + superioridade_tabela (lado_coberto_forte)
+-- e h2h_favoravel (adversario_limitado). Garante consistência com o ramo 1X2.
+reuse_1x2 AS (
+    SELECT fixture_id, outcome AS x1_outcome,
+           forca_mismatch, superioridade_tabela, h2h_favoravel,
+           -- a lista de premissas do 1X2 que não puderam ser avaliadas naquele jogo: é por ela
+           -- que a cegueira de lá deixa de morrer no FALSE ao atravessar para cá (#41).
+           premissas_cegas
+    FROM `smartbetting-dados`.`futebol`.`int_futebol_premissas_1x2`
+),
+
+-- Correção da Task 0 (look-ahead): agregados POINT-IN-TIME por (fixture, time), só com jogos
+-- anteriores ao kickoff, no lugar de fact_team_season_stats (1 snapshot por season).
+pit AS (
+    SELECT
+        fixture_id, team_id,
+        goals_against_avg_total,
+        wins_total, draws_total, played_total
+    FROM `smartbetting-dados`.`futebol`.`int_futebol_team_form_pit`
+),
+
+-- Jogos finalizados (mesma competição, MESMA season, anteriores) -> goleados (cedeu 3+) e
+-- resultado por time. O filtro de season (aplicado no team_hist) evita sangrar jogos da
+-- temporada passada pela pausa de off-season (consistente com tss/1X2/O/U/BTTS, season-scoped).
+finished AS (
+    SELECT competition_id, season, kickoff_utc, home_team_id, away_team_id,
+           score_fulltime_home, score_fulltime_away
+    FROM `smartbetting-dados`.`futebol`.`fact_fixtures`
+    WHERE 
+    status_short IN ('FT', 'AET', 'PEN')
+      AND score_fulltime_home IS NOT NULL
+      AND score_fulltime_away IS NOT NULL
+),
+team_results_long AS (
+    SELECT home_team_id AS team_id, competition_id, season, kickoff_utc,
+           score_fulltime_away AS conceded,
+           (score_fulltime_away > score_fulltime_home) AS lost FROM finished
+    UNION ALL
+    SELECT away_team_id, competition_id, season, kickoff_utc,
+           score_fulltime_home, (score_fulltime_home > score_fulltime_away) FROM finished
+),
+team_fixtures AS (
+    SELECT fixture_id, competition_id, season, kickoff_utc, home_team_id AS team_id FROM fixtures
+    UNION ALL
+    SELECT fixture_id, competition_id, season, kickoff_utc, away_team_id FROM fixtures
+),
+-- % de jogos cedendo 3+ (equilibrio_defensivo) e o array de derrotas dos últimos 5 (invicto_recente).
+-- MEDIÇÃO — recorte de contagem: os pares (jogo-alvo, time) × partida anterior são ranqueados e
+-- só os N mais recentes sobrevivem, ANTES da agregação. O corte mora num CTE à parte porque
+-- QUALIFY na mesma SELECT do GROUP BY filtraria depois de a conta estar feita. O desempate é
+-- pelos próprios valores: `kickoff_utc` é TIMESTAMP e empate real seria dado torto, mas com ele
+-- o conjunto sobrevivente é determinístico mesmo assim.
+hist_pares AS (
+    SELECT tf.fixture_id, tf.team_id, h.conceded, h.lost, h.kickoff_utc
+    FROM team_fixtures tf
+    JOIN team_results_long h
+        ON h.team_id        = tf.team_id
+       AND h.kickoff_utc    < tf.kickoff_utc
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY tf.fixture_id, tf.team_id
+        ORDER BY h.kickoff_utc DESC, h.conceded DESC, h.lost DESC
+    ) <= 10
+),
+team_hist AS (
+    SELECT
+        fixture_id, team_id,
+        SAFE_DIVIDE(COUNTIF(conceded >= 3), COUNT(*))                AS thrash_rate,
+        ARRAY_AGG(lost ORDER BY kickoff_utc DESC LIMIT 5)            AS last5_lost
+    FROM hist_pares
+    GROUP BY fixture_id, team_id
+),
+
+-- Métricas brutas derivadas (por outcome).
+metrics AS (
+    SELECT
+        o.fixture_id, o.competition, o.season, o.outcome,
+
+        -- gols sofridos no total dos dois (equilibrio_defensivo)
+        s.goals_against_avg_total  AS s_ga_total,
+        od.goals_against_avg_total AS o_ga_total,
+        -- % de jogos goleados dos dois
+        st.thrash_rate             AS s_thrash_rate,
+        ot.thrash_rate             AS o_thrash_rate,
+
+        -- aproveitamento do adversário descoberto O (total)
+        (od.wins_total * 3 + od.draws_total) / NULLIF(od.played_total * 3, 0) * 100 AS o_aproveitamento,
+
+        -- invicto de S nos últimos 5 (derrotas e nº de jogos com histórico). Lê last5_lost do
+        -- próprio st (team_hist já traz thrash_rate E last5_lost por (fixture,time)) — sem self-join extra.
+        -- O IF na frente é a classe (b) do mapa (#41): COUNT sobre array VAZIO devolve 0 sem
+        -- nenhum NULL para detectar, e "não perdeu nenhum dos últimos 5" é exatamente o que a
+        -- premissa procura — o zero forjado aqui é o disfarce mais perigoso dos três modelos.
+        -- (s_games_last5 já chega NULL sozinho: ARRAY_LENGTH(NULL) é NULL.)
+        IF(st.last5_lost IS NULL, NULL, (SELECT COUNT(*) FROM UNNEST(st.last5_lost) l WHERE l)) AS s_losses_last5,
+        ARRAY_LENGTH(st.last5_lost)                            AS s_games_last5,
+
+        -- Reuso 1X2 (lado S) — classe (c) do mapa (#41). Estas três chegavam COALESCEadas para
+        -- FALSE, e o FALSE do 1X2 já era o colapso de "avaliada e não acendeu" com "não pôde ser
+        -- avaliada": a cegueira atravessava dois modelos sem deixar rastro. Agora chega NULL
+        -- quando a premissa correspondente está na lista de cegas do 1X2 — ou quando não há
+        -- linha de 1X2 nenhuma para o lado S. A premissa segue FALSE nos dois casos, pelo
+        -- COALESCE da CTE `flags` logo abaixo.
+        IF(x.fixture_id IS NULL OR 'forca_mismatch' IN UNNEST(x.premissas_cegas),       NULL, x.forca_mismatch)       AS x_forca_mismatch,
+        IF(x.fixture_id IS NULL OR 'superioridade_tabela' IN UNNEST(x.premissas_cegas), NULL, x.superioridade_tabela) AS x_superioridade_tabela,
+        IF(x.fixture_id IS NULL OR 'h2h_favoravel' IN UNNEST(x.premissas_cegas),        NULL, x.h2h_favoravel)        AS x_h2h_favoravel
+    FROM outcomes o
+    LEFT JOIN pit s        ON s.fixture_id  = o.fixture_id AND s.team_id  = o.s_team_id
+    LEFT JOIN pit od       ON od.fixture_id = o.fixture_id AND od.team_id = o.o_team_id
+    LEFT JOIN team_hist st ON st.fixture_id = o.fixture_id AND st.team_id = o.s_team_id
+    LEFT JOIN team_hist ot ON ot.fixture_id = o.fixture_id AND ot.team_id = o.o_team_id
+    LEFT JOIN reuse_1x2 x  ON x.fixture_id  = o.fixture_id AND x.x1_outcome = o.s_1x2_outcome
+),
+
+-- Premissas (booleanos) e pesos.
+flags AS (
+    SELECT
+        m.*,
+        -- lado coberto forte: reusa forca_mismatch/superioridade_tabela do 1X2 (lado S)
+        COALESCE(m.x_forca_mismatch OR m.x_superioridade_tabela, FALSE)           AS lado_coberto_forte,
+        -- equilíbrio defensivo: os dois cedem pouco e quase não são goleados
+        ( COALESCE(m.s_ga_total <= 1.3 AND m.o_ga_total <= 1.3, FALSE)
+          AND COALESCE(m.s_thrash_rate < 0.30 AND m.o_thrash_rate < 0.30, FALSE) ) AS equilibrio_defensivo,
+        -- adversário limitado: O com baixo aproveitamento OU retrospecto ruim vs S (h2h)
+        ( COALESCE(m.o_aproveitamento < 45, FALSE)
+          OR COALESCE(m.x_h2h_favoravel, FALSE) )                                  AS adversario_limitado,
+        -- invicto recente: S sem derrota nos últimos 5 (exige >=3 jogos p/ não disparar sem dado)
+        ( COALESCE(m.s_games_last5 >= 3, FALSE) AND COALESCE(m.s_losses_last5 = 0, FALSE) ) AS invicto_recente
+    FROM metrics m
+),
+
+scored AS (
+    SELECT
+        f.*,
+        ( 12 * CAST(f.lado_coberto_forte   AS INT64)
+        +  8 * CAST(f.equilibrio_defensivo AS INT64)
+        +  8 * CAST(f.adversario_limitado  AS INT64)
+        +  6 * CAST(f.invicto_recente      AS INT64)
+        ) AS pts_premissas,
+        0 AS penalidades_dc_pts
+    FROM flags f
+),
+
+-- Cegueira (#41, ADR 0003): premissas que se aplicavam a esta linha, não acenderam, e não
+-- acenderam por FALTA DE INSUMO. Gerada do mapa futebol_insumos_premissa(), nunca escrita à
+-- mão. As quatro se aplicam às duas saídas (a Dupla Chance não tem premissa por lado), e duas
+-- delas herdam do 1X2 a cegueira das premissas reusadas.
+cegueira AS (
+    SELECT
+        s.*,
+        ARRAY(SELECT premissa FROM UNNEST([
+        IF(COALESCE((TRUE)
+           AND NOT COALESCE(lado_coberto_forte, FALSE)
+           AND (x_forca_mismatch IS NULL OR x_superioridade_tabela IS NULL), FALSE), 'lado_coberto_forte', NULL),
+        IF(COALESCE((TRUE)
+           AND NOT COALESCE(equilibrio_defensivo, FALSE)
+           AND (s_ga_total IS NULL OR o_ga_total IS NULL OR s_thrash_rate IS NULL OR o_thrash_rate IS NULL), FALSE), 'equilibrio_defensivo', NULL),
+        IF(COALESCE((TRUE)
+           AND NOT COALESCE(adversario_limitado, FALSE)
+           AND (o_aproveitamento IS NULL OR x_h2h_favoravel IS NULL), FALSE), 'adversario_limitado', NULL),
+        IF(COALESCE((TRUE)
+           AND NOT COALESCE(invicto_recente, FALSE)
+           AND (s_games_last5 IS NULL OR s_losses_last5 IS NULL), FALSE), 'invicto_recente', NULL)
+    ]) AS premissa WHERE premissa IS NOT NULL) AS premissas_cegas
+    FROM scored s
+)
+
+SELECT
+    fixture_id,
+    competition,
+    season,
+    outcome,
+    -- flags (transparência/debug)
+    lado_coberto_forte,
+    equilibrio_defensivo,
+    adversario_limitado,
+    invicto_recente,
+    -- agregados
+    pts_premissas,
+    penalidades_dc_pts,
+    -- cegueira: a lista é o que torna o número auditável.
+    premissas_cegas,
+    ARRAY_LENGTH(premissas_cegas) AS premissas_sem_dado,
+
+    -- "por quê": premissas que dispararam, ordenadas por peso.
+    ARRAY(SELECT e FROM UNNEST([
+        IF(lado_coberto_forte,
+           'o lado coberto (favorito + empate) é o mais forte do confronto', NULL),
+        IF(equilibrio_defensivo,
+           FORMAT('defesas equilibradas: os dois cedem pouco (%.1f e %.1f gols/jogo) e quase não são goleados',
+                  s_ga_total, o_ga_total), NULL),
+        IF(adversario_limitado,
+           'adversário descoberto é limitado (aproveitamento baixo ou retrospecto ruim no confronto)', NULL),
+        IF(invicto_recente,
+           FORMAT('sem derrota nos últimos %d jogos', s_games_last5), NULL)
+    ]) AS e WHERE e IS NOT NULL) AS evidencias,
+
+    -- avisos: a penalidade específica (odd_muito_baixa) é odds-based, anexada no mart.
+    CAST([] AS ARRAY<STRING>) AS avisos,
+
+    CURRENT_TIMESTAMP() AS dbt_loaded_at
+FROM cegueira
