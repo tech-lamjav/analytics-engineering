@@ -27,12 +27,13 @@ version: 2
 # produção de propósito, porque isolar uma porta às vezes exige quebrar a implicação
 # que a liga a outra. Onde isso acontece está dito na linha.
 #
-# ⚠️ O DENOMINADOR CONGELADO (#105) entra em TODO teste daqui, pelo mesmo motivo que o
-# `is_incremental`: o funil passou a `ref()` o seed `futebol_p95_nota_contexto`, e o dbt
-# exige fixture para todo `ref` do modelo. Os sete usam o MESMO arquivo sintético,
-# `tests/fixtures/p95_nota_contexto_sintetico.csv` — p95 40 nos lados com lado apostado, 20
-# no azarão do Handicap e os dois zeros estruturais (o empate do 1X2 e o `Pick` do
-# Handicap).
+# ⚠️ O DENOMINADOR CONGELADO (#105, teto do catálogo desde a PPP#365/ADR 0013) entra em
+# TODO teste daqui, pelo mesmo motivo que o `is_incremental`: o funil passou a `ref()` o
+# seed `futebol_teto_nota_contexto`, e o dbt exige fixture para todo `ref` do modelo. Os
+# testes usam o MESMO arquivo sintético, `tests/fixtures/teto_nota_contexto_sintetico.csv`
+# — teto 40 nos lados com lado apostado, 20 no azarão do Handicap e os dois zeros
+# estruturais (o empate do 1X2 e o `Pick` do Handicap). Os números são sintéticos, não os
+# valores reais do catálogo (que vivem no seed de produção).
 #
 # O 20 do azarão não é decoração: é ele que torna o eixo do LADO falsificável. Com 40 em
 # todos, dois candidatos de mesmos pontos e lados diferentes sairiam iguais e o teste ficaria
@@ -158,10 +159,10 @@ unit_tests:
 
       # O funil junta `fact_fixtures` SÓ pelo kickoff (ADR 0011, D10 — o status muda
       # depois do apito e uma linha congelada com o status de antes mentiria).
-      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
-      - input: ref('futebol_p95_nota_contexto')
+      # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
+      - input: ref('futebol_teto_nota_contexto')
         format: csv
-        fixture: p95_nota_contexto_sintetico
+        fixture: teto_nota_contexto_sintetico
       - input: ref('fact_fixtures')
         format: sql
         rows: |
@@ -252,10 +253,10 @@ unit_tests:
         rows: []
       - input: ref('int_futebol_corroboracao')
         rows: []
-      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
-      - input: ref('futebol_p95_nota_contexto')
+      # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
+      - input: ref('futebol_teto_nota_contexto')
         format: csv
-        fixture: p95_nota_contexto_sintetico
+        fixture: teto_nota_contexto_sintetico
       - input: ref('fact_fixtures')
         format: sql
         rows: |
@@ -322,10 +323,10 @@ unit_tests:
         rows: []
       - input: ref('int_futebol_corroboracao')
         rows: []
-      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
-      - input: ref('futebol_p95_nota_contexto')
+      # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
+      - input: ref('futebol_teto_nota_contexto')
         format: csv
-        fixture: p95_nota_contexto_sintetico
+        fixture: teto_nota_contexto_sintetico
       - input: ref('fact_fixtures')
         format: sql
         rows: |
@@ -417,10 +418,10 @@ unit_tests:
         rows: []
       - input: ref('int_futebol_corroboracao')
         rows: []
-      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
-      - input: ref('futebol_p95_nota_contexto')
+      # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
+      - input: ref('futebol_teto_nota_contexto')
         format: csv
-        fixture: p95_nota_contexto_sintetico
+        fixture: teto_nota_contexto_sintetico
       - input: ref('fact_fixtures')
         format: sql
         rows: |
@@ -508,10 +509,10 @@ unit_tests:
       - input: this
         rows: []
 
-      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
-      - input: ref('futebol_p95_nota_contexto')
+      # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
+      - input: ref('futebol_teto_nota_contexto')
         format: csv
-        fixture: p95_nota_contexto_sintetico
+        fixture: teto_nota_contexto_sintetico
 
       # O 32 NÃO tem linha aqui, de propósito: é o fixture ausente.
       - input: ref('fact_fixtures')
@@ -602,10 +603,10 @@ unit_tests:
                  CAST(NULL AS FLOAT64) AS line_value, 15 AS pts_corroboracao,
                  TRUE AS modelo_api_concorda, TRUE AS linha_sharp_confirma
 
-      # o denominador congelado (#105) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
-      - input: ref('futebol_p95_nota_contexto')
+      # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
+      - input: ref('futebol_teto_nota_contexto')
         format: csv
-        fixture: p95_nota_contexto_sintetico
+        fixture: teto_nota_contexto_sintetico
       - input: ref('fact_fixtures')
         format: sql
         rows: |
@@ -621,36 +622,45 @@ unit_tests:
         - {fixture_id: 5, market: 'goals_over_under', outcome: 'Over', score: 32, nota_contexto: 2}
 
   # ---------------------------------------------------------------------------
-  # 7. A ARITMÉTICA DA NOTA NORMALIZADA (#105, ADR 0005).
+  # 7. A ARITMÉTICA DA NOTA NORMALIZADA (#105, ADR 0005; teto do catálogo desde a
+  #    PPP#365, ADR 0013).
   #
   # É o teste que nenhuma contagem sobre produção conseguiria fazer. Num funil real,
   # "a nota nunca passa de 100" é compatível tanto com o clamp funcionando quanto com
-  # nenhuma linha ter chegado perto do p95; "a nota do empate é zero" é compatível
+  # nenhuma linha ter chegado perto do teto; "a nota do empate é zero" é compatível
   # tanto com o zero explícito antes da divisão quanto com um `SAFE_DIVIDE` devolvendo
   # NULL que ninguém leu. Só linha construída separa as duas.
   #
-  # Os cinco casos que o aceite da issue pede, mais três que a mesma aritmética exige:
-  #   1  pontos IGUAIS ao p95              -> 100
-  #   2  pontos na METADE do p95           -> 50
-  #   3  pontos ACIMA do p95               -> 100, e não 137 (clamp explícito)
+  # Os cinco casos que o aceite da issue #105 pedia, mais três que a mesma aritmética
+  # exige — a troca do denominador (PPP#365) não muda nenhum deles, é a MESMA divisão
+  # com clamp, só o nome e a origem do número mudam:
+  #   1  pontos IGUAIS ao teto             -> 100
+  #   2  pontos na METADE do teto          -> 50
+  #   3  pontos ACIMA do teto              -> 100, e não 137 (clamp explícito)
   #   4  arredondamento                    -> 25/40 = 62,5 -> 63, inteiro
   #   5  penalidade MAIOR que os pontos    -> 0, e não negativo
-  #   6  p95 = 0 com pontos = 0            -> 0, sem divisão por zero e sem NULL
-  #   7  p95 = 0 com pontos > 0            -> 0, e é o ramo do zero explícito sozinho
+  #   6  teto = 0 com pontos = 0           -> 0, sem divisão por zero e sem NULL
+  #   7  teto = 0 com pontos > 0           -> 0, e é o ramo do zero explícito sozinho
   #   8  sem premissa a avaliar            -> NULL, e não 0 (ADR 0003)
   #
   # O par 9/10 é o eixo do LADO, e é o que prova que a normalização não é por mercado:
   # dois candidatos do Handicap com os MESMOS 20 pontos e a mesma linha (−1.5), um pelo
-  # Home e outro pelo Away. O Home dá o handicap (Favorito, p95 40 -> 50) e o Away o
-  # recebe (Azarão, p95 20 -> 100). Sob um denominador por mercado os dois sairiam
+  # Home e outro pelo Away. O Home dá o handicap (Favorito, teto 40 -> 50) e o Away o
+  # recebe (Azarão, teto 20 -> 100). Sob um denominador por mercado os dois sairiam
   # iguais, e o teste ficaria verde com o eixo errado.
+  #
+  # ⚠️ O caso 3 usa um teto sintético (40) MENOR do que o real permitiria alcançar de
+  # propósito, só para exercitar o ramo "pontos acima do denominador": com o denominador
+  # DECLARADO (teto do catálogo) isso não deveria acontecer em produção — pontos nunca
+  # excedem a soma dos pesos do lado —, mas o `LEAST` protege mesmo assim contra erro de
+  # seed ou de catálogo desalinhados.
   #
   # ⚠️ O caso 7 é MOCK DELIBERADAMENTE IRREAL: em produção nenhuma premissa do Handicap
   # dispara com a linha 0 (todas são `is_favorito AND ...` ou `is_azarao AND ...`).
   # Ele existe para isolar o ramo do denominador zero do caso em que a nota já seria
   # zero de qualquer jeito — que é justamente o confundidor do caso 6.
   # ---------------------------------------------------------------------------
-  - name: funil_nota_normalizada_pelo_p95_congelado
+  - name: funil_nota_normalizada_pelo_teto_congelado
     model: fact_value_funnel
     overrides:
       macros:
@@ -663,12 +673,12 @@ unit_tests:
     given:
       - input: ref('int_futebol_odds_devig')
         rows:
-          # -- 1: pontos IGUAIS ao p95 do lado (40) -> 100.
+          # -- 1: pontos IGUAIS ao teto do lado (40) -> 100.
           - {fixture_id: 1, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          # -- 2: METADE do p95 -> 50.
+          # -- 2: METADE do teto -> 50.
           - {fixture_id: 2, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
-          # -- 3: ACIMA do p95 (55 de 40 = 137,5) -> 100. É o que ~5% das linhas de cada
-          # lado fazem POR CONSTRUÇÃO, porque o denominador é o quantil 95.
+          # -- 3: ACIMA do teto (55 de 40 = 137,5) -> 100. Ver o ⚠️ do caso 3 no
+          # cabeçalho — sintético de propósito, exercita o clamp.
           - {fixture_id: 3, competition: 'brasileirao', season: 2026, market_id: 1, outcome_side: 'Home', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 2.20, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 3, n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
           # -- 4: 25 de 40 = 62,5 -> 63, INTEIRO. Se o CAST saísse de dentro do LEAST a
           # coluna viraria FLOAT64 e sairia 62.5.
@@ -689,8 +699,8 @@ unit_tests:
           # -> normalizada NULL. Zero diria "foi avaliada e tirou zero" (ADR 0003).
           - {fixture_id: 8, competition: 'brasileirao', season: 2026, market_id: 12, outcome_side: '12', line_value: , janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.50, best_book: 'Bet365', avg_odd: 1.45, n_casas: 5, prob_justa_fechamento: 0.60, pin_n_outcomes: , n_outcomes_valor: 3, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
           # -- 9 e 10: O EIXO DO LADO. Mesmos 20 pontos, mesma linha (−1.5), lados
-          # opostos: o Home dá o handicap (Favorito, p95 40) e o Away o recebe (Azarão,
-          # p95 20). 50 contra 100.
+          # opostos: o Home dá o handicap (Favorito, teto 40) e o Away o recebe (Azarão,
+          # teto 20). 50 contra 100.
           - {fixture_id: 9, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Home', line_value: -1.5, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 2.10, best_book: 'Bet365', avg_odd: 2.00, n_casas: 5, prob_justa_fechamento: 0.48, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
           - {fixture_id: 10, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Away', line_value: -1.5, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.80, best_book: 'Bet365', avg_odd: 1.75, n_casas: 5, prob_justa_fechamento: 0.55, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
@@ -730,9 +740,9 @@ unit_tests:
       - input: ref('int_futebol_corroboracao')
         rows: []
 
-      - input: ref('futebol_p95_nota_contexto')
+      - input: ref('futebol_teto_nota_contexto')
         format: csv
-        fixture: p95_nota_contexto_sintetico
+        fixture: teto_nota_contexto_sintetico
 
       - input: ref('fact_fixtures')
         rows: []
@@ -792,9 +802,9 @@ unit_tests:
           UNION ALL SELECT 12, 'Home', 0.0, 10, 0, 0
           UNION ALL SELECT 12, 'Away', 0.0, 10, 0, 0
 
-      - input: ref('futebol_p95_nota_contexto')
+      - input: ref('futebol_teto_nota_contexto')
         format: csv
-        fixture: p95_nota_contexto_sintetico
+        fixture: teto_nota_contexto_sintetico
 
       - input: ref('fact_fixtures')
         rows: []

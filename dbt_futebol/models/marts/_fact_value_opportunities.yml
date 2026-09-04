@@ -11,9 +11,10 @@ models:
       (fixture_id, market, outcome, line_value) que passa no gate (n_casas>=4 E sem outlier
       de odd E best_odd na faixa do mercado E de-vig válido E conjunto da Pinnacle completo
       pro mercado E — p/ asian_handicap e goals_over_under — linha meia .5, sem push). Score
-      0-100 = nota de contexto (PTS_PREMISSAS − penalidades de contexto) normalizada pelo p95
-      congelado do lado — índice de CONFIABILIDADE, nunca de EV (ranqueie por `edge`); faixa
-      Alta(>=55)/Média(25-55)/Baixa(<25). Long por
+      0-100 = nota de contexto (PTS_PREMISSAS − penalidades de contexto) normalizada pelo teto
+      do catálogo congelado do lado (PPP#365, ADR 0013 — p95 até 03/09) — índice de
+      CONFIABILIDADE, nunca de EV (ranqueie por `edge`); faixa
+      Alta(>=60)/Média(30-60)/Baixa(<30). Long por
       `market` — v5: 1X2 (match_winner) + Gols O/U (goals_over_under) + Handicap asiático
       (asian_handicap) + Ambos Marcam/BTTS (btts, via de-vig de consenso) + Dupla Chance
       (double_chance, saídas 1X/X2, prob derivada do 1X2 da Pinnacle, gate próprio). valor_fonte distingue.
@@ -61,8 +62,9 @@ models:
       - name: score
         description: >
           ⚠️ #109: publica `score_normalizado` do funil — a nota de contexto (PTS_PREMISSAS
-          menos penalidades de contexto) dividida pelo p95 congelado do (mercado, lado),
-          0-100. Índice de CONFIABILIDADE, nunca de EV: preço não compõe mais o score (saiu
+          menos penalidades de contexto) dividida pelo teto do catálogo congelado do
+          (mercado, lado) (PPP#365, ADR 0013 — era o p95 congelado até 03/09), 0-100.
+          Índice de CONFIABILIDADE, nunca de EV: preço não compõe mais o score (saiu
           na #103/#109) — para ordenar por tamanho de vantagem, use `edge`. O gate não exige
           mais score mínimo (a régua saiu do gate na #109); a faixa é rótulo, não corte.
         tests:

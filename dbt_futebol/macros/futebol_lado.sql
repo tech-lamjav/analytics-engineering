@@ -29,10 +29,11 @@
   ⚠️ O `Pick` do Handicap (linha 0) FICOU DORMENTE NA #109/B3 (2026-09-01). Até então
   entrava na enumeração pelo mesmo motivo que o `Draw` do 1X2 — nenhuma premissa disparava,
   `is_favorito`/`is_azarao` eram as duas FALSE em handicap zero, e o seed carrega o lado
-  com p95 zero explícito. O achado da B3: ao contrário do empate (que é estrutural — não
-  existe "favorito no empate"), a linha 0 do Handicap TEM lado. O `Pick` segue no seed
-  (histórico, p95 zero) mas nenhum candidato vivo volta a produzi-lo — é dormente, não
-  removido, mesmo padrão de valor legado que este projeto já usa em `motivo_primario`.
+  com denominador zero explícito. O achado da B3: ao contrário do empate (que é
+  estrutural — não existe "favorito no empate"), a linha 0 do Handicap TEM lado. O `Pick`
+  segue no seed (zero explícito — p95 até 03/09, teto do catálogo desde a PPP#365/ADR
+  0013) mas nenhum candidato vivo volta a produzi-lo — é dormente, não removido, mesmo
+  padrão de valor legado que este projeto já usa em `motivo_primario`.
 
   ⚠️ QUEM DECIDE O LADO NA LINHA 0 É A ODD, NÃO O MANDO — decisão do Victor na B3
   (comentário de 25/08/2026, ClickUp `wdx6zev656`): "vamos pela menor odd, com desempate
@@ -44,11 +45,12 @@
   graciosa de quando não há odd pra essa linha (mesmo padrão do resto do projeto — dado
   ausente nunca propaga NULL pro veredito, decide pelo fallback mais simples). MESMA regra
   em `int_futebol_premissas_ah` (`is_favorito`/`is_azarao`), porque os dois têm de
-  concordar sobre qual lado é qual (é a chave do join com o p95).
+  concordar sobre qual lado é qual (é a chave do join com o denominador — o teto do
+  catálogo desde a PPP#365/ADR 0013).
 
   ⚠️ FAIL-CLOSED, igual ao `futebol_market_slug`: saída fora do catálogo resolve para NULL
   — a "12" da Dupla Chance, e qualquer `outcome` que o de-vig emita e o Motor não pontue.
-  NULL aqui é o que mantém a linha FORA da medição do p95 e fora da cobrança da guarda de
+  NULL aqui é o que mantém a linha FORA do denominador e fora da cobrança da guarda de
   cobertura, que é exatamente onde ela deve estar: a decisão de não pontuar a "12" é nossa
   e já está carimbada na `porta_saida_catalogada`. Um lado inventado por acidente casaria
   com nenhuma linha do seed, e o modelo o trataria como denominador ausente.

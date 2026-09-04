@@ -1,4 +1,17 @@
-{{ config(tags=['guarda'], severity='error') }}
+{{ config(severity='warn') }}
+-- ⚠️ APOSENTADA, NÃO APAGADA (PPP#365, ADR 0013, 2026-09-04). O `futebol_score_normalizado()`
+-- deixou de dividir pela `futebol_p95_nota_contexto` — divide pelo teto do catálogo
+-- (`futebol_teto_nota_contexto`). Esta guarda vigiava exatamente a coluna que saiu do
+-- caminho vivo: rodá-la em `severity='error'` sob `tag:guarda` pagaria custo de BigQuery
+-- todo dia por um número que não decide mais nada. Por isso o `tag:guarda` TAMBÉM saiu
+-- do config — ela não entra mais na fase agendada nem no resumo diário, e "warn" aqui é
+-- o "não é guarda de verdade" que o parágrafo original já dizia. Mantida (arquivo E seed
+-- E fixture) para quem quiser reconsiderar o p95 no futuro, e como registro de como o
+-- denominador era medido antes da PPP#365 — não é dead code por acidente, é decisão.
+--
+-- O texto abaixo descreve o que ela fazia QUANDO era guarda de produção; não editado,
+-- porque o valor dele agora é histórico.
+-- --------------------------------------------------------------------------------------
 -- GUARDA DO DENOMINADOR CONGELADO (#105, ADR 0005). Duas cobranças, uma tabela:
 --
 --   COBERTURA  todo (mercado, lado) que aparece no funil tem linha no seed;

@@ -308,16 +308,20 @@ models:
           deixaria a guarda vermelha por desenho.
       - name: score_normalizado
         description: >
-          A NOTA NORMALIZADA (#105, ADR 0005): a `nota_contexto` dividida pelo p95
-          OBSERVADO do `lado`, em 0–100 —
-          `LEAST(100, ROUND(nota_contexto / p95 × 100))`. O serviço dela é fazer o 100
+          A NOTA NORMALIZADA (#105, ADR 0005): a `nota_contexto` dividida pelo TETO DE
+          PONTOS DO CATÁLOGO do `lado` (PPP#365, ADR 0013), em 0–100 —
+          `LEAST(100, ROUND(nota_contexto / teto × 100))`. O serviço dela é fazer o 100
           significar a MESMA COISA nos onze lados: sem ela, a nota é dividida por uma soma
           de pesos que nunca ocorre, e quanto mais premissa um mercado tem, mais baixa é a
           nota dele — o mercado onde se investiu mais modelagem é o mais punido.
 
-          O denominador vem do seed versionado `futebol_p95_nota_contexto`, medido UMA VEZ
-          sobre uma janela declarada e congelado. Recalcular em runtime faria a régua
-          significar coisa diferente a cada dia e mataria toda comparação histórica.
+          O denominador vem do seed versionado `futebol_teto_nota_contexto`: a soma dos
+          pesos máximos de todas as premissas do lado, lida dos cinco modelos
+          `int_futebol_premissas_*.sql` — não é medido (não há janela nem data), é somado
+          à mão e conferido contra o código. Até 03/09 o denominador era o p95 OBSERVADO
+          (ADR 0005), congelado num seed medido sobre janela declarada; a PPP#365 trocou
+          para o declarado depois de medir que a mudança é segura (o seed do p95 continua
+          no repositório, sem alimentar mais esta coluna).
 
           ⚠️ A nota é ABSOLUTA — quanta evidência acendeu —, nunca percentil dentro do
           lado. A alternativa relativa foi rejeitada porque garante volume de publicação
@@ -325,8 +329,10 @@ models:
           rejeição passaria a ser X% por construção). O preço, declarado em voz alta: **os
           mercados publicam em taxas diferentes, e isso é consequência, não defeito.**
 
-          ⚠️ ~5% das linhas de cada lado batem em 100 POR CONSTRUÇÃO. O denominador é o
-          quantil 95; o `LEAST(100, ...)` as trava ali, e isso não é erro.
+          ⚠️ Bate em 100 só quando TODAS as premissas do lado acendem ao mesmo tempo —
+          raro na maioria dos lados (a PPP#365 mediu, por exemplo, 1X2/Home nunca
+          observado acima de 43 de um teto de 51). O `LEAST(100, ...)` segue explícito
+          porque nada no catálogo impede a coincidência.
 
           ⚠️ DENOMINADOR ZERO ⇒ ZERO EXPLÍCITO, nunca `SAFE_DIVIDE`. São os dois lados sem
           lado apostado — o empate do 1X2 e o `Pick` do Handicap. O `SAFE_DIVIDE`
@@ -345,7 +351,7 @@ models:
 
           A aritmética mora em `macros/futebol_score_normalizado.sql`, sem argumento, pela
           mesma razão do macro da nota de contexto; o unit test
-          `funil_nota_normalizada_pelo_p95_congelado` a percorre inteira.
+          `funil_nota_normalizada_pelo_teto_congelado` a percorre inteira.
       - name: pts_premissas
         description: "NULL, e não zero, onde não houve premissa a avaliar. Zero seria \"foi avaliada e tirou zero\", que é outra coisa (ADR 0003)."
       - name: premissas_sem_dado

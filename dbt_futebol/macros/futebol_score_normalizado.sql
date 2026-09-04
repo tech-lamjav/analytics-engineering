@@ -1,20 +1,21 @@
 {#-
-  A NOTA NORMALIZADA, declarada num lugar só (issue #105, ADR 0005).
+  A NOTA NORMALIZADA, declarada num lugar só (issue #105, ADR 0005; denominador trocado
+  para o teto do catálogo na PPP#365, ADR 0013).
 
   É a nota de contexto reescalada pelo denominador congelado do lado, em 0–100:
 
-      LEAST(100, ROUND(nota_contexto / p95 × 100))
+      LEAST(100, ROUND(nota_contexto / teto × 100))
 
   O serviço dela é fazer o 100 significar a MESMA COISA nos onze lados — o topo da escala
-  ancorado no mesmo quantil. Sem ela, a nota é dividida por uma soma de pesos que nunca
-  ocorre, e quanto mais premissa um mercado tem, mais baixa é a nota dele: o mercado onde
-  se investiu mais modelagem é o mais punido.
+  ancorado no mesmo teto. Sem ela, a nota é dividida por uma soma de pesos que nunca ocorre
+  na prática, e quanto mais premissa um mercado tem, mais baixa é a nota dele: o mercado
+  onde se investiu mais modelagem é o mais punido.
 
   ⚠️ SEM ARGUMENTO, pela mesma razão do `futebol_nota_contexto()`: argumento é porta de
   entrada. `futebol_score_normalizado('score')` devolveria a nota COM PREÇO reescalada sem
   que uma linha deste arquivo mudasse. As duas colunas de que ele depende chegam com nome
-  fixo — `nota_contexto`, que o funil grava, e `p95`, que vem do seed
-  `futebol_p95_nota_contexto`.
+  fixo — `nota_contexto`, que o funil grava, e `teto`, que vem do seed
+  `futebol_teto_nota_contexto`.
 
   ⚠️ A NOTA É ABSOLUTA, e nunca percentil dentro do lado (ADR 0005). Dividir por um número
   CONGELADO é o que a torna absoluta: o denominador não sabe quantas linhas boas o lado teve
@@ -38,9 +39,12 @@
      linha vira zero e reprova visivelmente, em vez de virar NULL e sumir — e quem acende
      nesse caso é a guarda de cobertura, não este `CASE`.
 
-  3. ⚠️ CLAMP EM 100 EXPLÍCITO. Com o p95 no denominador, ~5% das linhas de cada lado ficam
-     acima de 100 POR CONSTRUÇÃO — não é erro, é o quantil. Sem o `LEAST` a nota do topo do
-     Gols passaria de 100 e a régua deixaria de ser 0–100.
+  3. ⚠️ CLAMP EM 100 EXPLÍCITO. Diferente do p95 (onde ~5% das linhas de cada lado ficavam
+     acima de 100 POR CONSTRUÇÃO, por ser um quantil), com o teto do catálogo a nota só bate
+     em 100 quando TODAS as premissas do lado acendem ao mesmo tempo — o que a PPP#365 mediu
+     como raro na maioria dos lados (1X2/Home: 43 de 51 é o máximo já observado). O `LEAST`
+     continua EXPLÍCITO mesmo assim: é o mesmo predicado que fecha a régua em 0–100, e nada
+     no catálogo impede uma coincidência futura de todas as premissas acendendo juntas.
 
   ⚠️ O `CAST(... AS INT64)` fica DENTRO do `LEAST`, e não fora: `ROUND` devolve FLOAT64 no
   BigQuery, e `LEAST(100, <FLOAT64>)` promoveria o 100 a FLOAT64 — a coluna sairia
@@ -53,7 +57,7 @@
 {% macro futebol_score_normalizado() -%}
     CASE
         WHEN nota_contexto IS NULL      THEN NULL
-        WHEN p95 IS NULL OR p95 <= 0    THEN 0
-        ELSE LEAST(100, CAST(ROUND(nota_contexto / p95 * 100) AS INT64))
+        WHEN teto IS NULL OR teto <= 0  THEN 0
+        ELSE LEAST(100, CAST(ROUND(nota_contexto / teto * 100) AS INT64))
     END
 {%- endmacro %}

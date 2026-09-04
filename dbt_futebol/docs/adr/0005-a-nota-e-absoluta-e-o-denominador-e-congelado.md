@@ -153,3 +153,26 @@ distância, guarda vermelha, e nada de errado com o denominador. Por isso a meta
 só passa a cobrar quando a janela está cheia até o fundo: **ela fica dormente por ~30 dias
 depois do deploy**. A metade da COBERTURA — o lado que existe e não tem denominador — morde
 desde o primeiro build.
+
+## Emenda (2026-09-04, PPP#365): o denominador deixa de ser medido
+
+**A seção "Por que medido, e não declarado" está parcialmente superada pela ADR 0013.** Esta
+ADR rejeitou o teto estrutural na forma em que ele foi proposto então — a soma dos TRÊS
+MAIORES pesos, calibrada a olho, sem verificação contra dado real. A tabela da emenda acima
+mostrou por que essa forma era frágil: Gols Over tinha p95 44 contra top-3 de 30 (o
+observado passaria de 100), e o Handicap favorito tinha p95 26 contra top-3 de 30 (o teto
+nunca seria alcançado).
+
+O que a ADR 0013 declara é outra coisa: a soma de **TODOS** os pesos do lado — o mesmo
+número que já está na coluna "teto do catálogo" da tabela acima, e que já vinha sendo
+conferido contra o código desde a medição original do A6. A PPP#365 mediu o efeito de trocar
+para ele no board publicado e no funil inteiro e o Victor aceitou a consequência (a nota
+média cai, a taxa de 100 cai de 9,2% para 4,1%), preservando os cortes de faixa 30/60. A
+razão de existir do denominador — "fazer o 100 significar a mesma coisa nos onze lados" —
+não muda; muda só como o número chega: lido do código, não medido sobre uma janela.
+
+O restante desta ADR continua valendo sem alteração: a nota é ABSOLUTA (não percentil), o
+zero explícito dos dois lados sem lado apostado, e o argumento contra a alternativa
+relativa. O seed `futebol_p95_nota_contexto` e a guarda `assert_p95_nota_contexto_nao_derivou`
+continuam no repositório — aposentados, não apagados — como registro de como o denominador
+era medido até aqui.

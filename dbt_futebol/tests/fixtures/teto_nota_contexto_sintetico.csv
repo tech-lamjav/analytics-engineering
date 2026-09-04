@@ -1,0 +1,12 @@
+market,lado,teto
+match_winner,Home,40
+match_winner,Away,40
+match_winner,Draw,0
+goals_over_under,Over,40
+goals_over_under,Under,40
+asian_handicap,Favorito,40
+asian_handicap,Azarao,20
+asian_handicap,Pick,0
+btts,Yes,40
+btts,No,40
+double_chance,unico,40

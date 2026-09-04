@@ -23,8 +23,8 @@ _Avoid_: model (reserved for statistical models)
 
 **Score de Confiabilidade**:
 Since the virada (#109), the nota normalizada itself: premissa points minus the
-penalidades de contexto, divided by the (mercado, lado)'s frozen p95, 0–100. Price
-(edge, corroboração, penalidades de odd) no longer composes it — it stays published as
+penalidades de contexto, divided by the (mercado, lado)'s frozen teto alcançável, 0–100.
+Price (edge, corroboração, penalidades de odd) no longer composes it — it stays published as
 information and as gate (the safety bands, per mercado). It is an **absolute** measure —
 how much evidence fired — and never a rank within its peer group. So a régua on it means
 "this much evidence", not "the best of this mercado"; markets legitimately publish at
@@ -46,15 +46,21 @@ _Avoid_: "a nota" bare, while both live side by side; "nota sem preço" (the pri
 decides — at the portas, not in the nota)
 
 **Teto alcançável**:
-The denominator the pontos de premissa are normalised against, per (mercado, lado): the
-observed p95, measured once over a **declared window** and **frozen**. Its job is to make
-100 mean the same thing on every lado — the top of the scale anchored at a common
-quantile. It is deliberately not the sum of the weights, which never occurs, and not
-recomputed at runtime: a denominator that moves makes the régua mean a different thing
-each day and kills every historical comparison. Since #105 it is a concrete artefact: the
-seed `futebol_p95_nota_contexto`, eleven rows carrying the p95, the window it was measured
-over, the date of the measurement and where each number came from.
-_Avoid_: teto (bare — ambiguous with the sum of the pesos)
+The denominator the pontos de premissa are normalised against, per (mercado, lado). Since
+#105 (ADR 0005) through 2026-09-03 it was the observed p95, measured once over a declared
+window and frozen. Since PPP#365 (ADR 0013, 2026-09-04) it is **declared, not measured**:
+the sum of every premissa's weight for that lado — the catalog ceiling itself, read off the
+five `int_futebol_premissas_*.sql` models and checked against them, never recomputed from
+data. Its job is unchanged: make 100 mean the same thing on every lado. What changed is
+which number sits in the denominator — a fixed sum instead of a percentile, so the nota
+saturates only when every premissa of the lado fires at once (rare on most lados), not
+whenever ~5% of lines cross a quantile. Concrete artefact: the seed
+`futebol_teto_nota_contexto`, eleven rows carrying the teto and which model it was summed
+from. The old seed, `futebol_p95_nota_contexto`, and its drift guard stay in the repo
+(retired, not deleted) as a record of how the denominator used to be measured.
+_Avoid_: "teto" meaning a rough estimate of the three largest weights — that specific form
+was tried and rejected by ADR 0005 for being uncalibratable; the sum of ALL weights doesn't
+have the same failure mode and is what this term now means
 
 **Lado**:
 The side actually backed, and the axis the denominator is keyed on — eleven (mercado, lado)
@@ -67,12 +73,14 @@ _Avoid_: outcome/saída as a synonym (they coincide on three markets out of five
 exactly what makes the confusion survive)
 
 **Nota normalizada**:
-The nota de contexto divided by its lado's frozen p95, 0–100 (#105, ADR 0005):
-`score_normalizado` in `fact_value_funnel`. It exists so that 100 means the same thing on
-every lado. Absolute, never a percentile within the lado. ~5% of each lado's lines land on
-100 **by construction** — that is the quantile, not an error — and a zero denominator (the
-1X2 draw, the Handicap pick) resolves to an explicit zero, never a `SAFE_DIVIDE` NULL that
-would let the line leave without passing and without being marked.
+The nota de contexto divided by its lado's frozen teto alcançável, 0–100 (#105, ADR 0005;
+denominator source changed by PPP#365, ADR 0013): `score_normalizado` in
+`fact_value_funnel`. It exists so that 100 means the same thing on every lado. Absolute,
+never a percentile within the lado. Lands on 100 only when every premissa of the lado
+fires at once (rare on most lados, since ADR 0013 — before it, ~5% of each lado's lines
+landed on 100 by construction, being the quantile) — and a zero denominator (the 1X2 draw,
+the Handicap pick) resolves to an explicit zero, never a `SAFE_DIVIDE` NULL that would let
+the line leave without passing and without being marked.
 _Avoid_: calling it something other than the Score — since the virada (#109) the board's
 `score` **is** `score_normalizado`; the two names describe the same number, one in the
 funil and one on the board
