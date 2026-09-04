@@ -1,0 +1,12 @@
+market,lado,teto,fonte
+match_winner,Home,51,int_futebol_premissas_1x2.sql: 12+8+8+8+6+5+4
+match_winner,Away,47,int_futebol_premissas_1x2.sql: pts_mando do visitante vale 4
+match_winner,Draw,0,sem lado apostado — nenhuma premissa se aplica ao empate
+goals_over_under,Over,50,"int_futebol_premissas_ou.sql (pós-A1/#103, linha_subindo/linha_descendo saíram)"
+goals_over_under,Under,46,"int_futebol_premissas_ou.sql (pós-A1/#103, linha_subindo/linha_descendo saíram)"
+asian_handicap,Favorito,40,int_futebol_premissas_ah.sql: soma do lado Favorito
+asian_handicap,Azarao,30,"int_futebol_premissas_ah.sql: soma do lado Azarao (inclui favorito_irregular, B3/#109)"
+asian_handicap,Pick,0,"sem lado apostado — linha 0, nenhuma premissa de favorito/azarao se aplica"
+btts,Yes,34,int_futebol_premissas_btts.sql: soma do lado Yes
+btts,No,28,"int_futebol_premissas_btts.sql: soma do lado No (12+10+6)"
+double_chance,unico,34,int_futebol_premissas_dc.sql: as quatro premissas se aplicam a 1X e X2 igualmente

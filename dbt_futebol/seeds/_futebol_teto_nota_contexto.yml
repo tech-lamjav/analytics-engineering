@@ -1,0 +1,91 @@
+version: 2
+
+# ==============================================================================
+# O DENOMINADOR CONGELADO DA NOTA NORMALIZADA, versão DECLARADA (PPP#365, ADR 0013).
+#
+# Uma linha por (mercado, lado) — os ONZE pares que `futebol_lado()` enumera —, com o
+# TETO DE PONTOS DO CATÁLOGO: a soma dos pesos máximos de TODAS as premissas daquele
+# lado, lida à mão dos cinco modelos `int_futebol_premissas_*.sql` e conferida contra
+# eles em `analyses/taskA_a6_p95.sql` (coluna `teto_catalogo`) e
+# `analyses/taskA_ppp365_denominador_teto.sql`.
+#
+# ⚠️ ISTO SUBSTITUI O `futebol_p95_nota_contexto` COMO DENOMINADOR VIVO da
+# `futebol_score_normalizado()` (ADR 0013), mas o seed do p95 continua no repositório —
+# ele não vira lixo: é o registro de como o denominador era medido antes, ainda é lido
+# por duas análises históricas (`taskA_a4_fronteiras.sql`, `taskA_a4_reconciliacao.sql`)
+# e a guarda dele (`assert_p95_nota_contexto_nao_derivou`) foi rebaixada a `warn` — não
+# apagada — para quem quiser reconsiderar a medição no futuro.
+#
+# ⚠️ TETO ≠ MÁXIMO OBSERVADO, e a ADR 0005 tinha razão sobre a versão que rejeitou: a
+# soma dos TRÊS MAIORES pesos (o que a 0005 testou) erra pros dois lados, porque é uma
+# aproximação. A soma de TODOS os pesos do lado é o teto DE VERDADE — o número que o
+# catálogo, hoje, nunca deixa a nota ultrapassar — e por isso não tem o mesmo defeito:
+# ele não precisa ser calibrado, só somado. O preço, medido na PPP#365: alguns lados
+# (1X2/Home: 43 observado contra 51 declarado) não saturam porque as premissas raramente
+# coincidem todas — e por isso a NOTA MÉDIA cai (era o efeito que a #365 media e o Victor
+# aceitou), não porque o número esteja errado.
+#
+# ⚠️ ELE ENVELHECE EM SILÊNCIO DO MESMO JEITO QUE O P95 ENVELHECIA: toda mexida de peso
+# num modelo de premissa desalinha este CSV do catálogo real, e nada AQUI avisa sozinho.
+# Este PR não trouxe uma guarda de deriva estrutural para o teto (ficou fora do escopo
+# decidido na PPP#365, que pediu só a troca do denominador) — quem mexer em peso de
+# premissa PRECISA atualizar este seed no mesmo PR, e por ora isso é disciplina, não
+# guarda automática.
+# ==============================================================================
+seeds:
+  - name: futebol_teto_nota_contexto
+    description: >
+      O teto de pontos do catálogo por (mercado, lado) — o denominador vivo da
+      `score_normalizado` do `fact_value_funnel` desde a PPP#365 (ADR 0013). Onze
+      linhas, uma por par de mercado e lado, incluindo os dois lados sem lado apostado
+      (empate do 1X2 e Pick do Handicap) com zero explícito. Os números vêm de
+      `analyses/taskA_a6_p95.sql` (coluna `teto_catalogo`), conferidos ali contra os
+      pesos escritos nos cinco modelos `int_futebol_premissas_*.sql`.
+    config:
+      column_types:
+        market: STRING
+        lado: STRING
+        teto: INT64
+        fonte: STRING
+    columns:
+      - name: market
+        description: o nome público do mercado, o mesmo que `futebol_mercados_pontuados()` emite.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['match_winner', 'asian_handicap', 'goals_over_under', 'btts', 'double_chance']
+      - name: lado
+        description: >
+          o lado apostado, como `futebol_lado()` o deriva. No Handicap ele NÃO é o
+          `outcome` (Home/Away) e sim o sinal do handicap na ótica do lado —
+          Favorito/Azarao/Pick; na Dupla Chance 1X e X2 colapsam em `unico`, porque as
+          quatro premissas se aplicam às duas saídas.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Home', 'Draw', 'Away', 'Over', 'Under', 'Favorito', 'Azarao', 'Pick', 'Yes', 'No', 'unico']
+      - name: teto
+        description: >
+          a soma dos pesos máximos de TODAS as premissas do lado, em pontos — o número
+          que a nota de contexto NUNCA ultrapassa por construção do catálogo (diferente
+          do p95, que é um quantil OBSERVADO e que ~5% das linhas superam). Não é
+          medido: é somado à mão do código e conferido contra ele.
+        tests:
+          - not_null
+          - dbt_utils.expression_is_true:
+              arguments:
+                expression: ">= 0"
+      - name: fonte
+        description: >
+          de onde saiu o número — o modelo (e a conta) que o produz. Não é
+          procedência de MEDIÇÃO (não há janela nem data: teto não se mede, se soma),
+          é procedência de LEITURA — para quem duvidar do número, o caminho de conferir
+          é abrir o arquivo citado aqui, não remedir.
+        tests:
+          - not_null
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns: ['market', 'lado']

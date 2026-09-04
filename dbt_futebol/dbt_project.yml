@@ -32,7 +32,11 @@ vars:
   expurgo_carencia_horas: 24
 
   # ============================================================================
-  # A GUARDA DE DERIVA DO DENOMINADOR CONGELADO (#105, ADR 0005).
+  # A GUARDA DE DERIVA DO DENOMINADOR CONGELADO (#105, ADR 0005) — APOSENTADA (PPP#365,
+  # ADR 0013, 2026-09-04). O denominador vivo passou a ser o teto do catálogo, declarado
+  # e não medido; estes três parâmetros só governam mais `assert_p95_nota_contexto_nao_derivou`,
+  # que virou `severity='warn'` e saiu de `tag:guarda` pelo mesmo motivo. Mantidos aqui,
+  # não apagados, pela mesma razão que o teste continua no repo.
   #
   # O p95 por (mercado, lado) é medido uma vez e congelado em seed. Número congelado
   # ENVELHECE EM SILÊNCIO: toda mexida no catálogo de premissas, toda liga nova e toda
