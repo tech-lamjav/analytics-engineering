@@ -542,6 +542,72 @@ mover os dois cortes. Nada em produção muda: é `compile` + `bq query`, nunca 
 
 ---
 
+# Ticket data-engineering#67 — Remedir o churn 0–10 h pós-cadência de placar
+
+**Análise:** `dbt_futebol/analyses/taskA_churn_pos_apito.sql` (mesma query da AE#86, só os cortes)
+**Fonte:** `fact_value_opportunities_hist` × `fact_fixtures` (ADR 0009)
+**Deploy da cadência (DE#60, PR#66) em produção:** **2026-08-31 20:39:21 UTC** (poll de 15 min via
+`workflow-futebol-fixtures-live` / Cloud Scheduler `futebol-fixtures-live`)
+**Medição:** **2026-09-04 17:57:14 UTC** — **3,84 dias corridos** depois (a trava de relógio da
+issue exigia não antes de ~2026-09-04)
+
+## Veredito
+
+**Zero churn pós-apito nas três faixas, incluindo a 0–10 h que era o alvo desta remedição.**
+
+| Faixa após o apito | Baseline pré-cadência (AE#86, 7,83 dias) | **Janela pós-cadência (3,84 dias)** | Dono |
+|---|---|---|---|
+| 0–10 h — o status ainda não chegou | **43** | **0** | task **[C]**, agora fechada por este número |
+| 10–24 h — resíduo da carência | 2 | **0** | decisão de produto (`expurgo_carencia_horas`) |
+| **> 24 h — defeito** | 0 | **0** | — |
+| Versões pós-apito, total | 45 | **0** | — |
+| Chaves pós-apito | 9 | **0** | — |
+| Maior atraso observado (`max_h`) | 16,3 h | **−0,2 h** (nenhuma versão nasceu depois do apito) | — |
+
+A janela inteira: **14.350 versões**, **981 chaves**, **50 lotes de snapshot**, **0 sem kickoff**.
+Zero é o número em TODAS as chaves, não uma média que esconde resíduo — `faixa_0_10h`,
+`faixa_10_24h` e `faixa_acima_24h` saem `0` juntas, e `pos_apito = 0` na agregação inteira confirma
+que nenhuma linha do bloco 2 (o resíduo nomeado por fixture) tinha o que listar.
+
+## Por que a 0–10 h foi para zero
+
+O mecanismo da 0–10 h era conhecido desde a AE#86: `fact_fixtures` só reconstruía uma vez por dia
+(`workflow-futebol-daily`, `0 9 * * *`), então um jogo que terminava à noite continuava com status
+diferente de `FT` — e portanto elegível a receber preço novo — até a varredura da manhã seguinte.
+O DE#60 fechou exatamente essa lacuna: o poll de 15 min do `workflow-futebol-fixtures-live` atualiza
+o status de jogo ao vivo/recém-encerrado bem antes da varredura diária alcançá-lo, então quando o
+próximo ciclo de odds tenta gravar uma versão nova para aquele candidato, o status `FT` já chegou e
+o board (ou o próprio join do funil) já não o trata como corrente.
+
+Não é redução — é eliminação completa na janela observada. Contra as 43 do baseline (num intervalo
+quase o dobro, 7,83 dias), esperar-se-ia pelo menos uma amostra pequena por acaso; o zero limpo
+sugere que o mecanismo fecha a lacuna estruturalmente, não por sorte de calendário — mas 3,84 dias
+ainda é uma amostra, e vale reconferir depois de mais uma semana de jogo se algum caso de borda
+aparecer (fixture que muda de status fora do poll, remarcação, etc.).
+
+## O que isso fecha
+
+- **A dependência [A]→[C] que a AE#86/ADR 0009 pré-declarou está resolvida com número.** A #78
+  (churn D+7) já tinha fechado por outra causa (irreprodutibilidade do `AVG()`, não churn de
+  verdade); esta é a segunda e última perna aberta daquela investigação.
+- **DE#67 fecha.** O aceite pedia publicar a faixa 0–10h antes/depois — está acima, e o antes/depois
+  é 43 → 0.
+- Nenhuma ação nova sai daqui. Não há resíduo para virar ticket.
+
+## Como rerodar
+
+```bash
+cd dbt_futebol
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --select taskA_churn_pos_apito
+bq query --use_legacy_sql=false --format=csv \
+  < target/compiled/dbt_futebol/analyses/taskA_churn_pos_apito.sql
+```
+
+Os cortes desta remedição ficaram gravados no cabeçalho do arquivo (`corte_inicio` = deploy do
+DE#60, `corte_fim` = o instante desta medição). Mover `corte_fim` para remedir mais tarde.
+
+---
+
 # Issues #120 / #121 — Quando o Valencia × Betis foi publicado
 
 **Análise:** `dbt_futebol/analyses/board_reconstrucao_de_publicacao.sql`

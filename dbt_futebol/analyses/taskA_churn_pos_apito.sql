@@ -125,8 +125,8 @@
     ADR 0009: `dev` e `prod` apontam para o mesmo dataset).
 */
 
-{% set corte_inicio = "2026-08-20 16:41:25 UTC" %}   {# deploy do #85 em produção #}
-{% set corte_fim    = "2026-08-28 12:40:53 UTC" %}   {# o instante desta medição #}
+{% set corte_inicio = "2026-08-31 20:39:21 UTC" %}   {# DE#67: deploy do DE#60 (PR#66) — cadência de placar via poll de 15min #}
+{% set corte_fim    = "2026-09-04 17:57:14 UTC" %}   {# DE#67: o instante desta medição, D+3,89 do deploy #}
 {% set corte_25     = "2026-08-21 19:05:23 UTC" %}   {# conserto do .25 (#101) — história, não parâmetro #}
 
 WITH versoes AS (
