@@ -462,6 +462,24 @@ Shot-quality-based goal expectation; the strongest form signal. Rich in the Bras
 in Série B, with Copa do Brasil the extreme at ~10%. Where it is thin the xG premissas
 have no input at all — that is **premissas sem dado**, not a weak reading.
 
+**Estádio** (venue físico):
+The stadium a fixture is played at (`venue_id`/`venue_name`/`venue_city` in
+`fact_fixtures`) — display-only, read by zero premissas (confirmed against
+`futebol_insumos_premissa()`, issue #150). The API only populates it close to kickoff;
+1 in 3 upcoming fixtures arrived null (measured 05/09/2026). Filled with the mandante's
+last known estádio, strictly point-in-time (never a later fixture backfilling an
+earlier one) — same idiom `int_futebol_team_form_pit` already uses elsewhere, kept even
+though estádio isn't a score input, for consistency of principle. The three columns do
+not always arrive null together (measured: a fixture with `venue_name` populated and
+`venue_id` null on the same row), so the fallback runs per column, and `venue_inferido`
+is an OR of the three, not the nullity of one. Known, measured, non-blocking risk: a
+one-off mando-trocado fixture (campo neutro) can poison the chain for the *next* real
+home fixture — 56 of 6,021 consecutive known-venue pairs revert on the following
+fixture (the neutral-venue signature), spread across every competition including
+Brasileirão, so it isn't filterable by competition. See ADR 0015.
+_Avoid_: venue unqualified — the premissas already use "venue" for the goals-by-mando
+split (`s_gf_venue` etc.), an unrelated concept that happens to share the API's word.
+
 **Forma**:
 Recent results run (wins in last 5). Deliberately low-weight: it mostly duplicates
 underlying strength.

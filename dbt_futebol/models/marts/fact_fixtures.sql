@@ -2,9 +2,10 @@
     materialized='table',
     partition_by={'field': 'date_utc', 'data_type': 'date'},
     cluster_by=['competition', 'season', 'home_team_id'],
-    description='Tabela mãe de jogos (fixtures). 1 linha por fixture_id — chave que destrava stats/events/lineups/player_stats. Particionada por DATE(date_utc) UTC e clusterizada por (competition, season, home_team_id). Reconstruída full a cada run (snapshot do /fixtures), o que atualiza status/placar de jogos em andamento e finalizados.'
+    description='Tabela mãe de jogos (fixtures). 1 linha por fixture_id — chave que destrava stats/events/lineups/player_stats. Particionada por DATE(date_utc) UTC e clusterizada por (competition, season, home_team_id). Reconstruída full a cada run (snapshot do /fixtures), o que atualiza status/placar de jogos em andamento e finalizados. `venue_id`/`venue_name`/`venue_city` são preenchidos com o último conhecido do mandante quando a API ainda não mandou o local (issue #150, ADR 0015) — `venue_inferido` marca quando isso aconteceu.'
 ) }}
 
+WITH deduplicado AS (
 SELECT
     fixture_id,
     CASE requested_league_id
@@ -64,8 +65,7 @@ SELECT
     score_penalty_home,
     score_penalty_away,
 
-    loaded_at           AS extracted_at,
-    CURRENT_TIMESTAMP() AS dbt_loaded_at
+    loaded_at           AS extracted_at
 FROM {{ ref('stg_futebol_fixtures') }}
 -- NÃO é defensivo: fixture_id NÃO é único em stg_futebol_fixtures (o extractor
 -- re-busca jogo recente e a mesma fixture entra de novo com loaded_at maior — corrigido
@@ -75,3 +75,95 @@ QUALIFY ROW_NUMBER() OVER (
     PARTITION BY fixture_id
     ORDER BY loaded_at DESC
 ) = 1
+),
+
+-- FALLBACK DE ESTÁDIO (issue #150, ADR 0015): a API só manda o local perto do apito; antes
+-- disso vem NULL mesmo quando o mandante já jogou em casa antes na nossa base. Point-in-time
+-- por PRINCÍPIO, não por medo de look-ahead — o estádio não é insumo de premissa nenhuma
+-- (conferido contra futebol_insumos_premissa() antes de escrever isto) — mas o mesmo princípio
+-- de int_futebol_team_form_pit (só olhar estritamente pra trás no tempo) vale aqui por
+-- consistência. Mecanismo diferente do de lá, de propósito: team_form_pit é self-join com
+-- `l.kickoff_utc < a.kickoff_utc`; aqui é LAST_VALUE(... IGNORE NULLS) sobre uma janela — não
+-- é "o mesmo idioma", é o mesmo PRINCÍPIO com mecanismo mais barato para este caso (1 coluna
+-- por vez, sem cruzar a tabela consigo mesma).
+--
+-- ORDER BY kickoff_utc NULLS LAST + fixture_id como desempate: nem timestamp_unix nem
+-- home_team_id têm not_null hoje (a fonte nunca mandou nulo até 08/09/2026, medido), mas nada
+-- impede um dia mandar. Sem NULLS LAST, uma fixture de kickoff nulo ordenaria PRIMEIRO (default
+-- do BigQuery é NULLS FIRST) e poderia "vazar" seu venue pra trás, pra fixtures com kickoff
+-- real anterior — exatamente o que este fallback promete nunca fazer. fixture_id desempata
+-- kickoff empatado (hoje também não ocorre, medido) sem depender de ordem de leitura da tabela.
+--
+-- home_team_id NULO nunca CONSOME o fallback (ainda que participe da janela): sem isso, duas
+-- fixtures de times DIFERENTES que por acaso tenham home_team_id nulo cairiam na mesma partição
+-- e uma poderia herdar o estádio da outra. Hoje home_team_id nunca é nulo (medido), mas o
+-- COALESCE abaixo é condicionado a `home_team_id IS NOT NULL` para que isso continue verdade
+-- mesmo se a fonte mudar.
+--
+-- Os três campos NÃO viajam sempre juntos: medido (RB Bragantino, home_team_id 794) uma
+-- fixture com venue_name preenchido e venue_id nulo na mesma linha. Por isso o fallback é
+-- por coluna, não em bloco, e venue_inferido é um OR das três, não a nulidade de uma só.
+com_ultimo_venue_conhecido AS (
+    SELECT
+        fixture_id,
+        home_team_id,
+        venue_id,
+        venue_name,
+        venue_city,
+        LAST_VALUE(venue_id IGNORE NULLS) OVER (
+            PARTITION BY home_team_id ORDER BY kickoff_utc NULLS LAST, fixture_id
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS venue_id_ultimo_conhecido,
+        LAST_VALUE(venue_name IGNORE NULLS) OVER (
+            PARTITION BY home_team_id ORDER BY kickoff_utc NULLS LAST, fixture_id
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS venue_name_ultimo_conhecido,
+        LAST_VALUE(venue_city IGNORE NULLS) OVER (
+            PARTITION BY home_team_id ORDER BY kickoff_utc NULLS LAST, fixture_id
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        ) AS venue_city_ultimo_conhecido
+    FROM deduplicado
+)
+
+SELECT
+    d.fixture_id,
+    d.competition,
+    d.competition_id,
+    d.season,
+    d.round,
+    d.date_utc,
+    d.kickoff_utc,
+    d.timestamp_unix,
+    d.timezone,
+    d.status_long,
+    d.status_short,
+    d.status_elapsed,
+    d.referee,
+    COALESCE(d.venue_id, IF(d.home_team_id IS NOT NULL, v.venue_id_ultimo_conhecido, NULL))     AS venue_id,
+    COALESCE(d.venue_name, IF(d.home_team_id IS NOT NULL, v.venue_name_ultimo_conhecido, NULL)) AS venue_name,
+    COALESCE(d.venue_city, IF(d.home_team_id IS NOT NULL, v.venue_city_ultimo_conhecido, NULL)) AS venue_city,
+    d.home_team_id IS NOT NULL AND (
+        (d.venue_id IS NULL AND v.venue_id_ultimo_conhecido IS NOT NULL)
+        OR (d.venue_name IS NULL AND v.venue_name_ultimo_conhecido IS NOT NULL)
+        OR (d.venue_city IS NULL AND v.venue_city_ultimo_conhecido IS NOT NULL)
+    ) AS venue_inferido,
+    d.home_team_id,
+    d.home_team_name,
+    d.home_team_winner,
+    d.away_team_id,
+    d.away_team_name,
+    d.away_team_winner,
+    d.goals_home,
+    d.goals_away,
+    d.score_halftime_home,
+    d.score_halftime_away,
+    d.score_fulltime_home,
+    d.score_fulltime_away,
+    d.score_extratime_home,
+    d.score_extratime_away,
+    d.score_penalty_home,
+    d.score_penalty_away,
+    d.extracted_at,
+    CURRENT_TIMESTAMP() AS dbt_loaded_at
+FROM deduplicado d
+JOIN com_ultimo_venue_conhecido v USING (fixture_id)
