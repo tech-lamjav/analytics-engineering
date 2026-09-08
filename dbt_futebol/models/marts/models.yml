@@ -189,11 +189,15 @@ models:
       - name: referee
         description: "Árbitro. Pode ser nulo."
       - name: venue_id
-        description: "ID do estádio. Pode ser nulo."
+        description: "ID do estádio. Preenchido com o último estádio conhecido do mandante quando a API ainda não mandou o local (issue #150, ADR 0015) — pode continuar nulo se o mandante nunca jogou em casa antes na nossa base."
       - name: venue_name
-        description: "Nome do estádio"
+        description: "Nome do estádio — mesmo fallback de venue_id, aplicado por coluna (os dois nem sempre chegam nulos juntos da API)."
       - name: venue_city
-        description: "Cidade do estádio"
+        description: "Cidade do estádio — mesmo fallback de venue_id, aplicado por coluna."
+      - name: venue_inferido
+        description: "TRUE quando ao menos um de venue_id/venue_name/venue_city veio do fallback (último conhecido do mandante, point-in-time) em vez de direto da API nesta linha."
+        tests:
+          - not_null
       - name: home_team_id
         description: "ID do time mandante (cluster key; FK p/ dim_teams)"
         # ESTRITO de propósito. Esta é a invariante que de fato vale: todo time que
