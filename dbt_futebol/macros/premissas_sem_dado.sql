@@ -72,9 +72,9 @@
            AND NOT COALESCE({{ p.nome }}, FALSE)
            AND ({% for i in p.insumos -%}
                     {%- if i is mapping -%}
-                        (({{ i.quando }}) AND {{ i.col }} IS NULL)
+                        (({{ i.quando }}) AND {{ futebol_insumo_nome(i) }} IS NULL)
                     {%- else -%}
-                        {{ i }} IS NULL
+                        {{ futebol_insumo_nome(i) }} IS NULL
                     {%- endif -%}
                     {{ " OR " if not loop.last }}
                 {%- endfor %}), FALSE), '{{ p.nome }}', NULL){{ "," if not loop.last }}

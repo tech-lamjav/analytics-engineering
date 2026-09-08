@@ -297,6 +297,25 @@ The inputs a premissa depends on, declared per premissa in one place — the sam
 the conjunto de saídas. A premissa whose input is undeclared cannot be counted as missing,
 so the declaration is what makes **premissas sem dado** honest rather than optimistic.
 
+**Regime do insumo**:
+Which of four fixed answers a declared insumo gives to "does this value move if I flip
+pit_escopo/pit_recorte?" (issue #148, ADR 0014) — declared per insumo, in the same map as
+`insumo declarado`, never computed from data. `pit` (the majority: anything the eixo
+(escopo/recorte, below) reaches, team_form_pit-sourced or one of the models' own
+competition-scoped histories) also covers every "last 5"-shaped insumo — recorte saturates
+on it (5 is a subset of 10 either way) but escopo still moves the pool it is drawn from, so
+the test is "moves with *either* var", not "moves with both". `local_fixo` is temporal but
+answers no to both: only h2h_favoravel today, bounded by how many times these two specific
+teams have met, not by a var. `sempre_competicao` never lets go of the competition even
+under escopo=todas (superioridade_tabela, ADR 0008). `sem_recorte` is not temporal at all —
+presence/absence read off the pre-kickoff injury record, not a history window. Answers the
+half of "which window" that **insumo declarado** does not: knowing *which* columns a
+premissa reads says nothing about whether today's default (`todas`/`ultimos_10`) is the
+window that produced them, which is exactly how the front diverged from the model for 11
+days after the #91 default flip.
+_Avoid_: janela — reserved for the odds collection window; see **Escopo do PIT** /
+**Recorte do PIT** below for the axis this term classifies insumos against
+
 **Dado não perguntado**:
 An input absent because the source was never consulted — as opposed to consulted and
 answered "nothing". The two are indistinguishable downstream unless the asking itself is
@@ -539,7 +558,9 @@ Which stretch of past fixtures a PIT aggregate counts. Since #91 it is the last 
 until then it was season-to-date. A counting recorte ("the last N") crosses the season boundary
 by construction; a season recorte does not — which is why the pair was flipped together, and not
 the escopo alone (ADR 0010).
-_Avoid_: janela — that word is taken by the odds collection window, and the two are unrelated
+_Avoid_: janela — that word is taken by the odds collection window, and the two are unrelated.
+See **Regime do insumo** above for which premissa insumos this axis actually reaches — not
+all of them do (superioridade_tabela, h2h_favoravel).
 
 **Âncora da remedição**:
 The célula `ambos` measured again under the code that #91 made the default, over the frozen
