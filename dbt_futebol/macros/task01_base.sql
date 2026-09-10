@@ -25,9 +25,11 @@
                         aposta, com `acesa`. Insumo do Teste 2 e da nota ponderada.
       prem_n            grão de aposta — contagem de premissas acesas.
       pit               grão (fixture_id) — piso de amostra do jogo.
-      apostas           grão de aposta, JÁ recortado (escopo, janela, meia-linha).
-                        Traz melhor odd, edge, prob justa, benchmark, liquidação
-                        (`ganhou`), contagem de premissas e piso de amostra.
+      apostas           grão de aposta, JÁ recortado (escopo, janela, meia-linha,
+                        liquidez estrita, outlier, faixa de odd — os mesmos gates do
+                        board, ver ⚠️ de 2026-09-10 mais abaixo). Traz melhor odd,
+                        edge, prob justa, benchmark, liquidação (`ganhou`), contagem
+                        de premissas e piso de amostra.
 
     As duas que interessam ao consumidor comum são `apostas` e `prem_long`. As outras
     quatro ficam expostas de propósito: a guarda de descarte silencioso precisa enxergar
@@ -45,6 +47,25 @@
     ~0,4 ponto, e NENHUMA conclusão da [0.1] vira. As demais análises já filtravam o
     flag e devolvem número idêntico — re-rodá-las só misturaria o efeito da correção
     com a instabilidade conhecida do mercado de Gols entre builds.
+
+    ⚠️ GATES DO BOARD ENTRARAM em 2026-09-10 (ClickUp `wdx6zevnj0`, item 1). Até aqui
+    `apostas` media aposta que o board recusa — universo mais permissivo que o produto,
+    sem liquidez estrita, sem porta de outlier e sem faixa de odd. As TRÊS PORTAS DE
+    PREÇO da [A3+A5] (#104), postas em vigor pela virada (#109), entraram aqui como
+    WHERE, no mesmo predicado de `fact_value_funnel.sql`:
+    `n_casas >= liquidez_min_casas (4)`, `NOT pen_odd_outlier`, e `best_odd` dentro de
+    `[faixa_odd_min, faixa_odd_max]` (1,50-4,00; Dupla Chance usa
+    `[faixa_odd_dc_min, faixa_odd_dc_max]`, 1,25-2,00). Mesmos nomes de `var`, mesmos
+    defaults — sem isso as duas leituras do gate divergem em silêncio se alguém trocar
+    um limite só de um lado.
+
+    NÃO entrou o "gate de completude" que a task original de ClickUp citava: o Victor
+    confirmou em produção (09/09) que ele não existe no board hoje — dado faltante
+    diagnostica, não penaliza (ADR 0003) — e a "porta de premissas: 2+ acesas com
+    peso > 0" que ele citou como um dos quatro também NÃO está em `passou_no_gate`
+    (conferido em fact_value_funnel.sql/fact_value_opportunities.sql antes de
+    implementar). Os três gates acima são os que o board realmente aplica; ficou de
+    fora o que não corresponde a código em produção.
 #}
 
 
@@ -231,6 +252,7 @@ odds AS (
         prob_justa_fechamento,
         valor_fonte,
         penalidades_globais_pts,
+        pen_odd_outlier,
         CASE
             WHEN market_id = 12           THEN 'derivada'
             WHEN valor_fonte = 'pinnacle' THEN 'sharp'
@@ -429,6 +451,19 @@ apostas AS (
       -- ~3,6 mil linhas sumindo em silêncio na janela congelada.
       AND o.market_id IN ({{ task01_markets().keys() | join(', ') }})
       AND {{ task01_meia_linha('o.') }}
+      -- AS TRÊS PORTAS DE PREÇO DO BOARD (#104/#109) — ver ⚠️ "GATES DO BOARD" no
+      -- topo do macro. Mesmos `var`, mesmos defaults de fact_value_funnel.sql.
+      AND COALESCE(o.n_casas >= {{ var('liquidez_min_casas', 4) }}, FALSE)
+      AND COALESCE(NOT o.pen_odd_outlier, FALSE)
+      AND COALESCE(
+            o.best_odd >= CASE WHEN o.market_id = 12
+                               THEN {{ var('faixa_odd_dc_min', 1.25) }}
+                               ELSE {{ var('faixa_odd_min', 1.50) }} END
+            AND
+            o.best_odd <= CASE WHEN o.market_id = 12
+                               THEN {{ var('faixa_odd_dc_max', 2.00) }}
+                               ELSE {{ var('faixa_odd_max', 4.00) }} END,
+            FALSE)
 )
 
 {% endmacro %}
