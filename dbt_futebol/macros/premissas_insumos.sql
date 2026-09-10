@@ -142,6 +142,16 @@
     {{- i.col if i is mapping else i -}}
 {%- endmacro %}
 
+{#- ⚠️ CORRIGIDO na AE#153 (achado do code-review): `desfalque_proprio` (1X2) declarava
+    'aplicavel': 'TRUE' em vez de "outcome <> 'Draw'", como toda premissa/penalidade do
+    mercado que depende de lado apostado. Ficou inerte por builds porque nada checava
+    'aplicavel' de tipo='penalidade' — futebol_premissas_cegas() só lê tipo='premissa'
+    (ver macros/premissas_sem_dado.sql). futebol_insumos_medidos() (macros/
+    premissas_valores_medidos.sql, mesma entrega) é o primeiro consumidor, e com 'TRUE'
+    publicava desfalque_proprio/s_missing=0 num Draw — sem s_team_id, logo sem "próprio"
+    nenhum — sempre que a coleta pré-apito existia pro fixture: `cl`
+    (stg_futebol_injuries_coleta) casa só por fixture_id, não por time, em
+    int_futebol_premissas_1x2.sql. -#}
 {% macro futebol_insumos_premissa() %}
     {%- set ligas_pontos_corridos = 'competition IN ' ~ futebol_ligas_pontos_corridos_sql() %}
     {%- set regimes_validos = ['pit', 'local_fixo', 'sempre_competicao', 'sem_recorte'] %}
@@ -154,7 +164,7 @@
         {'modelo': 'int_futebol_premissas_1x2', 'nome': 'forma',                'tipo': 'premissa',   'aplicavel': "outcome <> 'Draw'", 'insumos': ['n_wins_last5'], 'regimes': {'n_wins_last5': 'pit'}},
         {'modelo': 'int_futebol_premissas_1x2', 'nome': 'h2h_favoravel',        'tipo': 'premissa',   'aplicavel': "outcome <> 'Draw'", 'insumos': ['h2h_total', 's_wins'], 'regimes': {'h2h_total': 'local_fixo', 's_wins': 'local_fixo'}},
         {'modelo': 'int_futebol_premissas_1x2', 'nome': 'pick_empate',          'tipo': 'penalidade', 'aplicavel': 'TRUE',              'insumos': []},
-        {'modelo': 'int_futebol_premissas_1x2', 'nome': 'desfalque_proprio',    'tipo': 'penalidade', 'aplicavel': 'TRUE',              'insumos': ['s_missing'], 'regimes': {'s_missing': 'sem_recorte'}},
+        {'modelo': 'int_futebol_premissas_1x2', 'nome': 'desfalque_proprio',    'tipo': 'penalidade', 'aplicavel': "outcome <> 'Draw'", 'insumos': ['s_missing'], 'regimes': {'s_missing': 'sem_recorte'}},
 
         {'modelo': 'int_futebol_premissas_ah',  'nome': 'is_favorito',            'tipo': 'marcador',   'aplicavel': 'TRUE',                          'insumos': []},
         {'modelo': 'int_futebol_premissas_ah',  'nome': 'is_azarao',              'tipo': 'marcador',   'aplicavel': 'TRUE',                          'insumos': []},
