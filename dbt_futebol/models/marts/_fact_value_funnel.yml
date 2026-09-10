@@ -356,6 +356,40 @@ models:
         description: "NULL, e não zero, onde não houve premissa a avaliar. Zero seria \"foi avaliada e tirou zero\", que é outra coisa (ADR 0003)."
       - name: premissas_sem_dado
         description: "Quantas premissas aplicáveis à linha não puderam ser avaliadas por falta de insumo (#41, ADR 0003). Não entra na nota: é o que a nota NÃO pôde levar em conta. NULL onde não houve premissa nenhuma."
+      - name: insumos_medidos
+        description: >
+          AE#153 (Entrega 2 da #147/#148, ADR 0014). O valor que cada insumo comparou —
+          `ARRAY<STRUCT<premissa, insumo, valor FLOAT64>>`, gerado do mesmo catálogo
+          `futebol_insumos_premissa()` da Entrega 1, uma entrada por insumo aplicável (o nome
+          é literalmente o mesmo do catálogo — é o que deixa cruzar "sob qual regime" com
+          "que valor teve" pela mesma chave). `valor` pode ser NULL: insumo aplicável sem
+          dado ainda gera entrada, porque a ausência também é informação.
+
+          ⚠️ SÓ O 1X2 NESTA ENTREGA. Os outros quatro mercados publicam ARRAY VAZIO (`[]`,
+          NUNCA NULL — BigQuery não guarda NULL em coluna ARRAY, nem em INSERT/MERGE nem
+          em ALTER TABLE ADD COLUMN sobre linha existente; medido contra o BigQuery real).
+          Vazio não é ausência de dado, é mercado fora do escopo decidido pelo Victor
+          (começar pelo 1X2, comentário de 09/09 na ClickUp `wdx6zevnj0`).
+
+          ⚠️ Chega por `append_new_columns` e fica `[]` PARA SEMPRE na linha de jogo já
+          apitado antes deste deploy — mesma razão do parágrafo acima, e aceito
+          explicitamente pelo Victor ("se linha antiga ficar sem o insumo para sempre,
+          tudo bem"). É o mesmo append-only de `nota_contexto`/`score_normalizado`, só que
+          a "ausência" desta coluna se lê como array vazio, nunca como NULL.
+
+          Protegida por `assert_funil_insumos_medidos_reconstroi` (a coluna gravada bate
+          com o que `int_futebol_premissas_1x2` diz hoje, em toda linha ainda gravável).
+      - name: insumo_escopo
+        description: >
+          AE#153. O `pit_escopo` (ADR 0007/0010) que estava em vigor QUANDO ESTA LINHA foi
+          gravada — não uma leitura do catálogo (que descreve o eixo em geral, sempre hoje).
+          Escalar do build inteiro: a mesma var vale pra toda linha de toda execução, então
+          publica nos CINCO mercados, mesmo `insumos_medidos` ficando só no 1X2. Fecha por
+          DADO a mesma classe de bug que a Entrega 1 só fechou por CÓDIGO — se o default
+          mudar de novo em silêncio, esta coluna continua dizendo qual valia naquele dia.
+          Chega por `append_new_columns`, mesma regra de `insumos_medidos`.
+      - name: insumo_recorte
+        description: "AE#153. O `pit_recorte` (ADR 0007/0010) em vigor quando esta linha foi gravada — o par de `insumo_escopo`, mesmo motivo, mesmas regras."
       - name: edge
         description: "EV/edge = best_odd * prob_justa − 1. Ao contrário do board, aqui ele NÃO é garantidamente positivo: o funil guarda o que a porta de edge rejeitou."
       - name: valor_fonte

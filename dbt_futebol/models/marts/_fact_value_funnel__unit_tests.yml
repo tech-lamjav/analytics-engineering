@@ -124,19 +124,25 @@ unit_tests:
       # format: sql porque `evidencias`/`avisos` são ARRAY<STRING> nos modelos de
       # premissa, e o formato de dicionário entrega todo valor como escalar. O funil não
       # lê esses arrays, então o mock traz só as colunas que ele lê.
+      # AE#153: insumos_medidos entra aditivo — CAST(NULL AS ARRAY<STRUCT<...>>) porque
+      # o funil só lê a coluna (cand_1x2), nunca o conteúdo, neste teste.
+      # ⚠️ Tipo por extenso, não futebol_insumos_medidos_tipo(): fixture de unit test em
+      # format: sql não tem o namespace de macros do projeto (testado — 'is undefined').
+      # Mudar o STRUCT exige atualizar as 8 ocorrências aqui à mão.
       - input: ref('int_futebol_premissas_1x2')
         format: sql
         rows: |
           SELECT 1 AS fixture_id, 'Home' AS outcome, 15 AS pts_premissas,
-                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
-          UNION ALL SELECT 3, 'Home', 15, 0, 0
-          UNION ALL SELECT 4, 'Home', 15, 0, 0
-          UNION ALL SELECT 5, 'Home', 15, 0, 0
-          UNION ALL SELECT 6, 'Home', 15, 0, 0
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          UNION ALL SELECT 3, 'Home', 15, 0, 0, NULL
+          UNION ALL SELECT 4, 'Home', 15, 0, 0, NULL
+          UNION ALL SELECT 5, 'Home', 15, 0, 0, NULL
+          UNION ALL SELECT 6, 'Home', 15, 0, 0, NULL
           -- fixture 7: a premissa não acendeu nada. É a ÚNICA diferença dele para o base.
-          UNION ALL SELECT 7, 'Home', 0, 0, 0
-          UNION ALL SELECT 10, 'Home', 15, 0, 0
-          UNION ALL SELECT 11, 'Home', 15, 0, 0
+          UNION ALL SELECT 7, 'Home', 0, 0, 0, NULL
+          UNION ALL SELECT 10, 'Home', 15, 0, 0, NULL
+          UNION ALL SELECT 11, 'Home', 15, 0, 0, NULL
 
       - input: ref('int_futebol_premissas_ou')
         format: sql
@@ -237,10 +243,11 @@ unit_tests:
         format: sql
         rows: |
           SELECT 10 AS fixture_id, 'Home' AS outcome, 15 AS pts_premissas,
-                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           -- O empate: zero ponto de premissa e os −10 do pick_empate.
-          UNION ALL SELECT 12, 'Draw', 0, 0, 10
-          UNION ALL SELECT 13, 'Home', 15, 0, 0
+          UNION ALL SELECT 12, 'Draw', 0, 0, 10, NULL
+          UNION ALL SELECT 13, 'Home', 15, 0, 0, NULL
 
       # A "12" da fixture 11 NÃO tem linha aqui — de propósito. É o estado real.
       - input: ref('int_futebol_premissas_dc')
@@ -311,7 +318,8 @@ unit_tests:
         format: sql
         rows: |
           SELECT 20 AS fixture_id, 'Home' AS outcome, 15 AS pts_premissas,
-                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
 
       - input: ref('int_futebol_premissas_ou')
         rows: []
@@ -410,7 +418,8 @@ unit_tests:
         format: sql
         rows: |
           SELECT 35 AS fixture_id, 'Home' AS outcome, 15 AS pts_premissas,
-                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
 
       - input: ref('int_futebol_premissas_btts')
         rows: []
@@ -488,9 +497,10 @@ unit_tests:
         format: sql
         rows: |
           SELECT 30 AS fixture_id, 'Home' AS outcome, 15 AS pts_premissas,
-                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
-          UNION ALL SELECT 31, 'Home', 15, 0, 0
-          UNION ALL SELECT 32, 'Home', 15, 0, 0
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          UNION ALL SELECT 31, 'Home', 15, 0, 0, NULL
+          UNION ALL SELECT 32, 'Home', 15, 0, 0, NULL
 
       - input: ref('int_futebol_premissas_ou')
         rows: []
@@ -575,10 +585,11 @@ unit_tests:
         format: sql
         rows: |
           SELECT 1 AS fixture_id, 'Home' AS outcome, 20 AS pts_premissas,
-                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
-          UNION ALL SELECT 2, 'Home', 20, 0, 0
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          UNION ALL SELECT 2, 'Home', 20, 0, 0, NULL
           -- o empate: zero de premissa e os −10 do `pick_empate`.
-          UNION ALL SELECT 3, 'Draw', 0, 0, 10
+          UNION ALL SELECT 3, 'Draw', 0, 0, 10, NULL
 
       - input: ref('int_futebol_premissas_ou')
         format: sql
@@ -708,15 +719,16 @@ unit_tests:
         format: sql
         rows: |
           SELECT 1 AS fixture_id, 'Home' AS outcome, 40 AS pts_premissas,
-                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts
-          UNION ALL SELECT 2, 'Home', 20, 0, 0
-          UNION ALL SELECT 3, 'Home', 55, 0, 0
-          UNION ALL SELECT 4, 'Home', 25, 0, 0
+                 0 AS premissas_sem_dado, 0 AS penalidades_1x2_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          UNION ALL SELECT 2, 'Home', 20, 0, 0, NULL
+          UNION ALL SELECT 3, 'Home', 55, 0, 0, NULL
+          UNION ALL SELECT 4, 'Home', 25, 0, 0, NULL
           -- o empate: zero de premissa e os −10 do `pick_empate`.
-          UNION ALL SELECT 6, 'Draw', 0, 0, 10
+          UNION ALL SELECT 6, 'Draw', 0, 0, 10, NULL
           -- fixture 7: empate FABRICADO com premissa (não acontece na vida real — isola
           -- o ramo do denominador zero com numerador > 0, ver comentário acima).
-          UNION ALL SELECT 7, 'Draw', 20, 0, 0
+          UNION ALL SELECT 7, 'Draw', 20, 0, 0, NULL
 
       - input: ref('int_futebol_premissas_ou')
         format: sql
@@ -782,8 +794,18 @@ unit_tests:
           - {fixture_id: 12, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Home', line_value: 0.0, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.90, best_book: 'Bet365', avg_odd: 1.88, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
           - {fixture_id: 12, competition: 'brasileirao', season: 2026, market_id: 4, outcome_side: 'Away', line_value: 0.0, janela_usada: 't15m', edge: 0.10, pts_valor: 0, best_odd: 1.90, best_book: 'Bet365', avg_odd: 1.88, n_casas: 5, prob_justa_fechamento: 0.50, pin_n_outcomes: 2, n_outcomes_valor: 2, valor_fonte: 'pinnacle', penalidades_globais_pts: 0, pen_odd_outlier: false, pen_poucas_casas: false, pen_odd_longshot: false, pen_odd_juice: false}
 
+      # AE#153: rows: [] (dict) não basta mais — sem insumos_medidos tipado, cand_1x2
+      # quebra ao selecionar a coluna de um mock sem schema pra ela. format: sql com
+      # WHERE FALSE mantém "zero linhas" e ainda declara o tipo certo.
       - input: ref('int_futebol_premissas_1x2')
-        rows: []
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_1x2_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_ou')
         rows: []
       - input: ref('int_futebol_premissas_dc')

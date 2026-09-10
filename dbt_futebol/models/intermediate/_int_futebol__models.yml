@@ -364,6 +364,17 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
+      - name: insumos_medidos
+        description: >
+          AE#153 (Entrega 2 da #147/#148, ADR 0014). `ARRAY<STRUCT<premissa, insumo,
+          valor FLOAT64>>`, uma entrada por (premissa-ou-penalidade, insumo) aplicável à
+          linha — gerado do mesmo catálogo `futebol_insumos_premissa()` que
+          `premissas_cegas` já lê (macro `futebol_insumos_medidos()`,
+          `macros/premissas_valores_medidos.sql`). `valor` pode ser NULL (insumo aplicável
+          sem dado); insumo condicional (`mando`) só entra do lado que se aplicou. Nome do
+          insumo é literalmente o do catálogo, de propósito — é a chave que cruza "sob
+          qual regime" (Entrega 1) com "que valor teve" (esta). ARRAY, então o sync
+          BQ->Postgres a pula, como `evidencias`/`avisos`/`premissas_cegas`.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
