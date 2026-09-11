@@ -1,0 +1,84 @@
+version: 2
+
+# ==============================================================================
+# Unit tests da ENTRADA DE ESCANTEIOS no fact_odds_snapshot (ClickUp
+# wdx6zf1gzh — "Escanteios: ligar o mercado no mart").
+#
+# Por que unit test e não data test: o achado do ticket é que o raw JÁ TEM os cinco
+# market_id de escanteio desde 2026-06-16 (confirmado em produção via BigQuery),
+# então uma contagem sobre produção não prova nada sobre O QUE MUDOU no modelo — ela
+# é compatível tanto com "o WHERE passou a deixar entrar" quanto com "sempre entrou".
+# Só linha construída, com um market_id de fora do WHERE antigo, separa as duas.
+#
+# Regra de construção: um fixture por market_id novo, cada um isolando o formato de
+# outcome_label que a API usa PARA AQUELE mercado (linha cheia vs. meia linha,
+# Over/Under vs. Home/Away). Um fixture de regressão prova que os 8 mercados
+# antigos continuam intactos. Dois fixtures de exclusão provam que o WHERE não virou
+# um passa-tudo: um market_id de escanteio DELIBERADAMENTE fora do escopo (55,
+# Corners 1x2 — cota em só 3 casas, abaixo do piso de 4) e uma odd inválida (<=1.0,
+# a mesma guarda que já protegia os 8 mercados antigos).
+# ==============================================================================
+unit_tests:
+  - name: fact_odds_snapshot_escanteios_entram_e_parseiam
+    model: fact_odds_snapshot
+    description: >
+      Os cinco market_id de escanteio (45, 56, 57, 58, 77) passam pelo WHERE e têm
+      outcome_side/line_value parseados pela MESMA regex dos 8 mercados antigos —
+      nenhuma mudança de parse foi necessária, só o filtro. O 45 (Corners Over Under)
+      emite as duas formas, linha cheia ('Over 10') e meia linha ('Under 10.5'); o 56
+      (Corners Asian Handicap) usa Home/Away com sinal, igual ao Asian Handicap (4).
+      Regressão: um market_id antigo (1) e as duas guardas que já existiam (odd<=1.0
+      descartada; market_id fora da lista descartado) continuam valendo. O 77 também
+      emite 'Exactly N' (achado fora do ticket, amostrado contra produção) — cai em
+      NULL pelo mesmo desenho do Exact Score, sem quebrar.
+    given:
+      - input: ref('stg_futebol_odds')
+        rows:
+          # -- fixture 1: regressão — mercado antigo (1, Match Winner) intocado. ------
+          - {fixture_id: 1, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 1, market_name: 'Match Winner', outcome_label: 'Home', odd_decimal: 2.10}
+
+          # -- fixture 2: market_id 45, Corners Over Under, LINHA CHEIA. --------------
+          - {fixture_id: 2, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 45, market_name: 'Corners Over Under', outcome_label: 'Over 10', odd_decimal: 1.90}
+
+          # -- fixture 3: market_id 45, Corners Over Under, MEIA LINHA. ---------------
+          - {fixture_id: 3, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 45, market_name: 'Corners Over Under', outcome_label: 'Under 10.5', odd_decimal: 1.95}
+
+          # -- fixture 4: market_id 56, Corners Asian Handicap, os dois lados. --------
+          - {fixture_id: 4, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 56, market_name: 'Corners Asian Handicap', outcome_label: 'Home -1.5', odd_decimal: 1.85}
+          - {fixture_id: 4, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 56, market_name: 'Corners Asian Handicap', outcome_label: 'Away -1.5', odd_decimal: 2.05}
+
+          # -- fixture 5: market_id 57, Home Corners Over/Under. ----------------------
+          - {fixture_id: 5, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 57, market_name: 'Home Corners Over/Under', outcome_label: 'Over 5.5', odd_decimal: 1.90}
+
+          # -- fixture 6: market_id 58, Away Corners Over/Under. ----------------------
+          - {fixture_id: 6, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 58, market_name: 'Away Corners Over/Under', outcome_label: 'Over 3.5', odd_decimal: 1.90}
+
+          # -- fixture 7: market_id 77, Total Corners (1st Half). ---------------------
+          - {fixture_id: 7, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 77, market_name: 'Total Corners (1st Half)', outcome_label: 'Over 4.5', odd_decimal: 1.90}
+
+          # -- fixture 8: EXCLUSÃO — market_id 55 (Corners 1x2), de propósito fora do
+          # escopo desta entrega (cota em só 3 casas, abaixo do piso de 4). Não deve
+          # aparecer no expect.
+          - {fixture_id: 8, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 55, market_name: 'Corners 1x2', outcome_label: 'Home', odd_decimal: 2.50}
+
+          # -- fixture 9: EXCLUSÃO — market_id 45 válido, mas odd_decimal <= 1.0 (a
+          # MESMA guarda que já existia p/ os 8 mercados antigos). Não deve aparecer.
+          - {fixture_id: 9, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 45, market_name: 'Corners Over Under', outcome_label: 'Over 10', odd_decimal: 1.0}
+
+          # -- fixture 10: market_id 77 TAMBÉM emite 'Exactly N' (achado fora do ticket,
+          # confirmado contra produção: 6.583 linhas, ~3% do mercado). Fica em fact_odds_
+          # snapshot (não é exclusão) com outcome_side/line_value NULL — mesmo desenho já
+          # usado pro Exact Score (10), composto sem par. Prova que não quebra o parse.
+          - {fixture_id: 10, league_id: 71, season: 2026, collection_window: 't15m', collection_timestamp: '2026-09-11 12:00:00', kickoff_utc: '2026-09-11 20:00:00', api_update: '2026-09-11 11:00:00', loaded_at: '2026-09-11 12:00:00', bookmaker_id: 4, bookmaker_name: 'Pinnacle', market_id: 77, market_name: 'Total Corners (1st Half)', outcome_label: 'Exactly 4', odd_decimal: 4.50}
+
+    expect:
+      rows:
+        - {fixture_id: 1, market_id: 1, outcome_label: 'Home', outcome_side: 'Home', line_value: }
+        - {fixture_id: 2, market_id: 45, outcome_label: 'Over 10', outcome_side: 'Over', line_value: 10.0}
+        - {fixture_id: 3, market_id: 45, outcome_label: 'Under 10.5', outcome_side: 'Under', line_value: 10.5}
+        - {fixture_id: 4, market_id: 56, outcome_label: 'Home -1.5', outcome_side: 'Home', line_value: -1.5}
+        - {fixture_id: 4, market_id: 56, outcome_label: 'Away -1.5', outcome_side: 'Away', line_value: -1.5}
+        - {fixture_id: 5, market_id: 57, outcome_label: 'Over 5.5', outcome_side: 'Over', line_value: 5.5}
+        - {fixture_id: 6, market_id: 58, outcome_label: 'Over 3.5', outcome_side: 'Over', line_value: 3.5}
+        - {fixture_id: 7, market_id: 77, outcome_label: 'Over 4.5', outcome_side: 'Over', line_value: 4.5}
+        - {fixture_id: 10, market_id: 77, outcome_label: 'Exactly 4', outcome_side: , line_value: }
