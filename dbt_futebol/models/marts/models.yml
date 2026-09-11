@@ -1128,8 +1128,10 @@ models:
       o raw acumula no GCS (1 arquivo por fixture×janela) e o rebuild full lê tudo.
       Self-contained: competition vem de league_id, sem joins. Particionada por
       collection_date (=DATE(collection_timestamp)) e clusterizada por (fixture_id,
-      bookmaker_name). Afunila p/ os 8 mercados-alvo (market_id IN 1,4,5,6,7,8,10,12)
-      mantendo TODAS as casas — Pinnacle (id=4) é a sharp de referência. minutes_to_kickoff
+      bookmaker_name). Afunila p/ 13 mercados-alvo (market_id IN
+      1,4,5,6,7,8,10,12,45,56,57,58,77 — os 5 últimos são escanteio, adicionados
+      2026-09-11, raw já guardava desde 2026-06-16) mantendo TODAS as casas —
+      Pinnacle (id=4) é a sharp de referência. minutes_to_kickoff
       é o lead exato da captura (a janela é só rótulo). Dedup latest-wins por (fixture_id,
       bookmaker_id, market_id, outcome_label, collection_window). Brasileirão (71) + Copa do
       Mundo (1) + Série B (72) 2026 (todos coverage.odds=TRUE) + Copa do Brasil (73) e
@@ -1205,7 +1207,7 @@ models:
         tests:
           - not_null
       - name: market_id
-        description: "ID do mercado (1=Match Winner, 4=Asian Handicap, 5=Goals O/U, 6=Goals O/U 1st Half, 7=HT/FT, 8=BTTS, 10=Exact Score, 12=Double Chance)"
+        description: "ID do mercado (1=Match Winner, 4=Asian Handicap, 5=Goals O/U, 6=Goals O/U 1st Half, 7=HT/FT, 8=BTTS, 10=Exact Score, 12=Double Chance, 45=Corners O/U, 56=Corners Asian Handicap, 57=Home Corners O/U, 58=Away Corners O/U, 77=Total Corners 1st Half)"
         tests:
           - not_null
       - name: market_name
@@ -1216,11 +1218,13 @@ models:
           - not_null
       - name: outcome_side
         description: >
-          Lado/seleção canônica destrinchada do outcome_label: 'Over'/'Under' (O/U),
-          'Home'/'Away' (Asian Handicap), 'Home'/'Draw'/'Away' (Match Winner), 'Yes'/'No'
-          (BTTS), '1X'/'12'/'X2' (Double Chance — S5 mapeia explícito p/ o de-vig derivar do
-          1X2 da Pinnacle). NULL p/ HT/FT ('Home/Away') e Exact Score ('1:0') — sem lado
-          pareável. Com line_value torna O/U e Asian Handicap pareáveis sem parse no app.
+          Lado/seleção canônica destrinchada do outcome_label: 'Over'/'Under' (O/U — inclui
+          os 4 mercados de escanteio O/U: 45/56/57/58/77), 'Home'/'Away' (Asian Handicap,
+          inclui o 56 de escanteio), 'Home'/'Draw'/'Away' (Match Winner), 'Yes'/'No' (BTTS),
+          '1X'/'12'/'X2' (Double Chance — S5 mapeia explícito p/ o de-vig derivar do 1X2 da
+          Pinnacle). NULL p/ HT/FT ('Home/Away'), Exact Score ('1:0') e o resíduo 'Exactly N'
+          do 77 (Total Corners 1st Half, ~3% das linhas do mercado) — sem lado pareável. Com
+          line_value torna O/U e Asian Handicap pareáveis sem parse no app.
         tests:
           - accepted_values:
               arguments:
@@ -1231,8 +1235,10 @@ models:
           ('Over 2.5' → 2.5). Asian Handicap (market 4): handicap na ÓTICA DO MANDANTE — MESMO
           sinal/valor p/ Home e Away ('Home -1.5' → -1.5; 'Away -1.5' → -1.5), então o par
           complementar compartilha a mesma line_value/partição de de-vig (confirmado vs. dados
-          reais da Pinnacle 2026-06-26). NULL p/ mercados sem linha (Match Winner, BTTS, HT/FT,
-          Double Chance, Exact Score). FLOAT64.
+          reais da Pinnacle 2026-06-26). Mesmo padrão nos 5 mercados de escanteio (45/56/57/
+          58/77) — nenhum parse novo, só o market_id novo passando pelo WHERE. NULL p/
+          mercados sem linha (Match Winner, BTTS, HT/FT, Double Chance, Exact Score) e p/ o
+          resíduo 'Exactly N' do 77 (~3% das linhas do mercado). FLOAT64.
       - name: odd_decimal
         description: "Odd em formato decimal (> 1.0). Cast de STRING no stg; linhas com odd não-numérica são descartadas."
         tests:

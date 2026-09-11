@@ -2,7 +2,7 @@
     materialized='table',
     partition_by={'field': 'collection_date', 'data_type': 'date'},
     cluster_by=['fixture_id', 'bookmaker_name'],
-    description='Coração do value betting: odds pré-jogo de TODAS as casas em 3 janelas por jogo (collection_window t24h = abertura ~24h antes; t1h = intermediária ~1h antes; t15m = fechamento ~15min antes, habilita CLV real) — permite CLV (Closing Line Value), EV e detecção de movimento de linha. outcome_side + line_value destrincham o outcome_label (O/U e Asian Handicap viram pareáveis por linha, sem parse frágil no app). FORWARD-ONLY (não dá pra reconstruir as janelas de jogos passados): o raw acumula no GCS (1 arquivo por fixture×janela) e o rebuild full lê tudo. Self-contained: competition vem de league_id, sem joins. Particionada por collection_date (=DATE(collection_timestamp)) e clusterizada por (fixture_id, bookmaker_name). Afunila p/ os 8 mercados-alvo (market_id IN 1,4,5,6,7,8,10,12) mantendo TODAS as casas — Pinnacle (4) é a sharp de referência p/ CLV. minutes_to_kickoff registra o lead exato da captura (a janela é só rótulo). Dedup latest-wins por (fixture_id, bookmaker_id, market_id, outcome_label, collection_window) — skip-if-exists no GCS já garante 1 captura/janela; o QUALIFY segura resíduo. Brasileirão (71) + Copa do Mundo (1) + Série B (72) 2026 (todos coverage.odds=TRUE). Copa do Brasil (73) e CONMEBOL Libertadores (13): ARMADAS em 2026-07-13, CONMEBOL Sudamericana (11) em 2026-07-14, todas no FUTEBOL_ODDS_LEAGUE_IDS (sem Fase 2 futura — decisão de não depender de deploy depois); coverage.odds é SAZONAL (mata-mata), então ficam dormentes até os jogos entrarem na banda t24h — Sudamericana ~20/07 (R32 ida 21–24/07, volta 28–31/07; oitavas 11–13/08 e 18–20/08), CdB ~31/07 (oitavas 01/08), Libertadores 10/08 (ida das oitavas 11/08, volta 18/08). Verificar Pinnacle no feed na 1ª coleta de cada uma.'
+    description='Coração do value betting: odds pré-jogo de TODAS as casas em 3 janelas por jogo (collection_window t24h = abertura ~24h antes; t1h = intermediária ~1h antes; t15m = fechamento ~15min antes, habilita CLV real) — permite CLV (Closing Line Value), EV e detecção de movimento de linha. outcome_side + line_value destrincham o outcome_label (O/U e Asian Handicap viram pareáveis por linha, sem parse frágil no app). FORWARD-ONLY (não dá pra reconstruir as janelas de jogos passados): o raw acumula no GCS (1 arquivo por fixture×janela) e o rebuild full lê tudo. Self-contained: competition vem de league_id, sem joins. Particionada por collection_date (=DATE(collection_timestamp)) e clusterizada por (fixture_id, bookmaker_name). Afunila p/ 13 mercados-alvo (market_id IN 1,4,5,6,7,8,10,12,45,56,57,58,77 — os 5 últimos são escanteio, adicionados 2026-09-11; raw já guardava desde 2026-06-16, só o WHERE não deixava passar) mantendo TODAS as casas — Pinnacle (4) é a sharp de referência p/ CLV. minutes_to_kickoff registra o lead exato da captura (a janela é só rótulo). Dedup latest-wins por (fixture_id, bookmaker_id, market_id, outcome_label, collection_window) — skip-if-exists no GCS já garante 1 captura/janela; o QUALIFY segura resíduo. Brasileirão (71) + Copa do Mundo (1) + Série B (72) 2026 (todos coverage.odds=TRUE). Copa do Brasil (73) e CONMEBOL Libertadores (13): ARMADAS em 2026-07-13, CONMEBOL Sudamericana (11) em 2026-07-14, todas no FUTEBOL_ODDS_LEAGUE_IDS (sem Fase 2 futura — decisão de não depender de deploy depois); coverage.odds é SAZONAL (mata-mata), então ficam dormentes até os jogos entrarem na banda t24h — Sudamericana ~20/07 (R32 ida 21–24/07, volta 28–31/07; oitavas 11–13/08 e 18–20/08), CdB ~31/07 (oitavas 01/08), Libertadores 10/08 (ida das oitavas 11/08, volta 18/08). Verificar Pinnacle no feed na 1ª coleta de cada uma.'
 ) }}
 
 WITH odds AS (
@@ -43,7 +43,7 @@ SELECT
     market_name,
     outcome_label,
     -- Linha + lado destrinchados do outcome_label (parse validado vs. dados reais dos 8
-    -- mercados): O/U (5,6) 'Over 2.5'→(Over, 2.5); Asian Handicap (4) 'Home -1.5'/'Away -1.5'
+    -- mercados originais): O/U (5,6) 'Over 2.5'→(Over, 2.5); Asian Handicap (4) 'Home -1.5'/'Away -1.5'
     -- →(Home/Away, handicap na ÓTICA DO MANDANTE — MESMO sinal/valor p/ Home e Away, então o par
     -- complementar cai na MESMA line_value/partição de de-vig; confirmado vs. dados reais da
     -- Pinnacle 2026-06-26: a API NÃO inverte o sinal no lado visitante); Match Winner (1)/BTTS (8)
@@ -51,6 +51,13 @@ SELECT
     -- →(1X/12/X2, line NULL — S5 mapeia explícito p/ o de-vig derivar do 1X2 da Pinnacle);
     -- HT/FT (7) 'Home/Away', Exact Score (10) '1:0' → ambos NULL (composto/placar, sem par).
     -- Torna O/U e Asian Handicap pareáveis via (market_id, line_value, outcome_side).
+    -- Escanteio (45,56,57,58,77) usa os MESMOS formatos Over/Under e Home/Away — nenhuma
+    -- ramificação nova no parse, só o WHERE abaixo deixando o market_id passar (conferido
+    -- em unit test, _fact_odds_snapshot__unit_tests.yml, e amostrado contra produção).
+    -- ⚠️ O 77 (Total Corners 1st Half) TAMBÉM emite 'Exactly N' (3-way, ~3% do mercado,
+    -- 6.583 linhas em 2026-09-11) — cai em outcome_side/line_value NULL pelo mesmo motivo
+    -- do Exact Score (10) acima: composto, sem par. Não é falha de parse, é o mesmo
+    -- desenho já em uso; a linha continua em fact_odds_snapshot, só não é pareável.
     CASE
         WHEN market_id = 12 THEN CASE outcome_label
             WHEN 'Home/Draw' THEN '1X'
@@ -66,13 +73,22 @@ SELECT
     loaded_at           AS extracted_at,
     CURRENT_TIMESTAMP() AS dbt_loaded_at
 FROM odds
--- Afunila p/ os 8 mercados-alvo (IDs validados na API-Football 2026-06-16):
+-- Afunila p/ 13 mercados-alvo (IDs validados na API-Football 2026-06-16):
 -- 1=Match Winner, 4=Asian Handicap, 5=Goals O/U, 6=Goals O/U 1st Half,
 -- 7=HT/FT Double, 8=Both Teams Score, 10=Exact (Correct) Score, 12=Double Chance.
+-- Escanteio, adicionado 2026-09-11 (ClickUp wdx6zf1gzh) — o raw já guardava desde
+-- 2026-06-16, só o WHERE não deixava passar: 45=Corners O/U (emite linha cheia e
+-- meia linha), 56=Corners Asian Handicap, 57=Home Corners O/U, 58=Away Corners O/U,
+-- 77=Total Corners 1st Half (~97% Over/Under normal, ~3% 'Exactly N' — ver ressalva
+-- na CASE de outcome_side acima). De propósito FORA: 55 (Corners 1x2, só 3 casas,
+-- abaixo do piso de 4) e 85 (Total Corners 3-way) — não conferido contra produção
+-- (nunca entrou no WHERE), mas pela ficha do ticket é 'Exactly N'/'Over N'/'Under N'
+-- por desenho (mercado 3-way), não um resíduo raro como o do 77; tratar como o 77
+-- exigiria medir o 85 primeiro, o que é outra entrega.
 -- Guarda TODAS as casas. odd_decimal > 1.0 (invariante de odds decimais — odd ≤ 1.0 é
 -- lixo p/ value betting: não paga lucro/placeholder de mercado indisponível; descarta
 -- também odd não-numérica que vira NULL no SAFE_CAST).
-WHERE market_id IN (1, 4, 5, 6, 7, 8, 10, 12)
+WHERE market_id IN (1, 4, 5, 6, 7, 8, 10, 12, 45, 56, 57, 58, 77)
   AND odd_decimal > 1.0
 QUALIFY ROW_NUMBER() OVER (
     PARTITION BY fixture_id, bookmaker_id, market_id, outcome_label, collection_window
