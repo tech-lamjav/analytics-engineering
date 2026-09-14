@@ -28,7 +28,8 @@
         5:  2,
         6:  2,
         8:  2,
-        12: 3
+        12: 3,
+        56: 2
     }) }}
 {% endmacro %}
 
@@ -49,4 +50,10 @@
          derivada (P(1X)=P(Home)+P(Draw) etc., ver dc_devig no modelo). As saídas da própria
          DC não são exaustivas (somam ~2) e por isso ela nunca cai no consenso. São duas
          coisas diferentes que calham de ser iguais: não "consertar" para outro número.
+    56 — Handicap de escanteios (AE#158): mesma regra do 4 (Handicap Asiático de gols) e
+         pelo mesmo motivo — a API-Football traz line_value na ótica do MANDANTE, igual p/
+         Home e Away, então "Home -4.5"/"Away -4.5" caem na mesma partição (fixture, market,
+         line_key) e o conjunto exaustivo é o par complementar, 2. Fora do escopo do Motor de
+         Score (não está em futebol_mercados_pontuados_ids()): alimenta só
+         dbt_futebol/analyses/ da spec #157, nunca o funil nem o mart.
 -#}
