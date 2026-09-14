@@ -13,9 +13,35 @@
 -- linha legitimamente incompleta é o caso NORMAL que a correção trata — usar a contagem por
 -- linha faria esta guarda vermelha permanente, que é como uma guarda morre ignorada.
 --
+-- Mercado ausente do declarado NÃO acende sozinho se estiver em
+-- futebol_mercados_mudos_confirmados() — decisão registrada de ficar mudo (AE#164), não
+-- esquecimento. Ver o comentário ao lado do macro pra cada motivo.
+--
+-- ⚠️ A supressão do "mudo confirmado" só vale pro diagnóstico 1 (órfão). Se um mercado
+-- ESTIVER declarado (tem conjunto_esperado) e AINDA ASSIM sobrar na lista de mudos por
+-- alguém esquecer de tirá-lo de lá, o diagnóstico 2 (mapa envelhecido) continua rodando
+-- pra ele — as duas listas não são mutuamente exclusivas por dbt, então a checagem abaixo
+-- que impede a sobreposição de existir em silêncio é obrigatória (achado do code-review).
+--
 -- ⚠️ VERDE POR VACUIDADE hoje: não há mercado órfão nem mapa desatualizado na base. Ela é
 -- infalsificável em produção até o dia em que disparar — que é exatamente o dia em que
--- precisamos confiar nela. Por isso existe o unit test de linhas forjadas ao lado.
+-- precisamos confiar nela.
+
+{%- set _sobreposicao = [] -%}
+{%- for mid in futebol_mercados_mudos_confirmados().keys() -%}
+    {%- if mid in futebol_conjunto_saidas().keys() -%}
+        {%- set _ = _sobreposicao.append(mid) -%}
+    {%- endif -%}
+{%- endfor -%}
+{%- if _sobreposicao | length > 0 -%}
+    {{ exceptions.raise_compiler_error(
+        "futebol_conjunto_saidas() e futebol_mercados_mudos_confirmados() têm mercado(s) em comum: "
+        ~ _sobreposicao
+        ~ " — um mercado declarado não pode também estar marcado como mudo por decisão "
+        ~ "(isso silenciaria pra sempre a checagem de mapa envelhecido pra ele). Tire o(s) "
+        ~ "mercado(s) de um dos dois dicts."
+    ) }}
+{%- endif %}
 
 WITH declarado AS (
     SELECT * FROM UNNEST([
@@ -23,6 +49,14 @@ WITH declarado AS (
         STRUCT({{ mid }} AS market_id, {{ n }} AS conjunto_esperado){{ "," if not loop.last }}
         {%- endfor %}
     ])
+),
+
+mudo_confirmado AS (
+    SELECT * FROM UNNEST([
+        {%- for mid, motivo in futebol_mercados_mudos_confirmados().items() %}
+        {{ mid }}{{ "," if not loop.last }}
+        {%- endfor %}
+    ]) AS market_id
 ),
 
 observado AS (
@@ -45,6 +79,7 @@ SELECT
     END AS diagnostico
 FROM observado o
 LEFT JOIN declarado d ON d.market_id = o.market_id
-WHERE d.conjunto_esperado IS NULL
-   OR o.conjunto_maximo_observado <> d.conjunto_esperado
+LEFT JOIN mudo_confirmado m ON m.market_id = o.market_id
+WHERE (d.conjunto_esperado IS NULL AND m.market_id IS NULL)
+   OR (d.conjunto_esperado IS NOT NULL AND o.conjunto_maximo_observado <> d.conjunto_esperado)
 ORDER BY o.linhas DESC

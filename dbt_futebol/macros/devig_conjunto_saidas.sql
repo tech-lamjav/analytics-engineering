@@ -29,7 +29,23 @@
         6:  2,
         8:  2,
         12: 3,
-        56: 2
+        45: 2,
+        56: 2,
+        57: 2,
+        58: 2
+    }) }}
+{% endmacro %}
+
+
+{#- Mercados que ficam MUDOS de propósito — decisão registrada, não esquecimento. Existem
+    só pra guarda assert_devig_conjunto_declarado saber diferenciar "órfão" (bug: mercado
+    novo na base, ninguém declarou) de "decisão tomada" (o mercado É conhecido e a escolha
+    foi não declarar). Mesma separação de perguntas do comentário sobre o mercado 6 em
+    futebol_funil.sql: "qual conjunto de saídas" (aqui) é diferente de "por que ficou mudo"
+    (lá embaixo) — só que aqui a resposta pra "qual conjunto" é "nenhum, de propósito". -#}
+{% macro futebol_mercados_mudos_confirmados() %}
+    {{ return({
+        77: 'Total de escanteios do 1º tempo (AE#164): fica mudo por decisão, não por mercado novo não-declarado. Causa técnica verificada em models/staging/stg_futebol_fixture_statistics.sql: corner_kicks vem de ANY_VALUE(statistics.value) sobre o type "Corner Kicks" da API-Football, que só traz o total do jogo inteiro — não há granularidade por tempo na fonte, então não dá pra modelar corners de 1º tempo com o insumo que a base tem hoje.'
     }) }}
 {% endmacro %}
 
@@ -50,10 +66,18 @@
          derivada (P(1X)=P(Home)+P(Draw) etc., ver dc_devig no modelo). As saídas da própria
          DC não são exaustivas (somam ~2) e por isso ela nunca cai no consenso. São duas
          coisas diferentes que calham de ser iguais: não "consertar" para outro número.
+    45 — Total de escanteios: Over / Under na mesma linha, mesma regra do 5. Coletado desde
+         11/09 (commit 2a2540c) mas só declarado aqui em AE#164 — ficou órfão 3 dias, achado
+         como efeito colateral do AE#158 (#164). Tem spec irmã própria (ClickUp wdx6zf1v4m),
+         ainda não iniciada; declarar aqui só destrava o de-vig, não publica nada em mart.
     56 — Handicap de escanteios (AE#158): mesma regra do 4 (Handicap Asiático de gols) e
          pelo mesmo motivo — a API-Football traz line_value na ótica do MANDANTE, igual p/
          Home e Away, então "Home -4.5"/"Away -4.5" caem na mesma partição (fixture, market,
          line_key) e o conjunto exaustivo é o par complementar, 2. Fora do escopo do Motor de
          Score (não está em futebol_mercados_pontuados_ids()): alimenta só
          dbt_futebol/analyses/ da spec #157, nunca o funil nem o mart.
+    57 — Escanteios do mandante: Over / Under na mesma linha, mesma regra do 5/45. Mesma
+         história do 45 (órfão desde 11/09, declarado em AE#164). Mencionado no documento de
+         metodologia como "depois do 56" — sem spec própria ainda.
+    58 — Escanteios do visitante: idem ao 57, lado visitante.
 -#}
