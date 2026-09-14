@@ -33,7 +33,11 @@ premissas_por_lado AS (
         fixture_id, outcome_side, line_value,
         '{{ p.premissa }}'      AS premissa,
         {{ p.peso }}            AS peso_original,
-        COALESCE({{ p.sql }}, FALSE) AS acesa
+        -- Piso do catálogo (ClickUp wdx6zf1tt8, "Definições comuns"): "time com menos de 10
+        -- jogos não acende premissa NENHUMA" — vale p/ TODA premissa, não só as de avg10. Sem
+        -- este piso, forca_escanteio_mando (que só olha played_mando5>=5) deixava 5-7% das
+        -- linhas acesas com min_jogos<10 acenderem por engano (achado do review desta issue).
+        (COALESCE({{ p.sql }}, FALSE) AND min_jogos >= 10) AS acesa
     FROM apostas
     WHERE outcome_side = '{{ lado }}'
     {%- endfor %}
