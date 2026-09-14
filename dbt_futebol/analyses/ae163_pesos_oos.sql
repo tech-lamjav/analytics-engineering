@@ -21,6 +21,13 @@
         dos pesos medidos = teto de 50 (reportado, não testado — o teto é definição, não
         resultado).
 
+    Saída em 3 blocos (`bloco`): 'faixa' (ROI por direção/lado/faixa), 'checagem_unica'
+    (item 3 da régua, checado sobre `apostas_unica` — não sobre uma CTE já agrupada por
+    fixture/lado, que seria tautológica), 'pesos' (item 4, a tabela de pesos candidata por
+    direção/lado/premissa contra o teto declarado de 50 — corrigido pós-review: v1 só
+    calculava isso internamente para o score, sem expor; a versão publicada no comentário
+    de resultados vinha de uma query ad-hoc fora deste arquivo).
+
     Rodar com:
       dbt compile --select ae163_pesos_oos
       bq query --use_legacy_sql=false < target/compiled/dbt_futebol/analyses/ae163_pesos_oos.sql
@@ -153,24 +160,37 @@ resultado AS (
     GROUP BY 1, 2, 3
 ),
 
--- Diagnóstico da régua (item 3, "uma oportunidade por jogo/lado"): tem que dar 1,0 nas duas
--- direções — cada (fixture, lado) aparece EXATAMENTE uma vez por direção.
+-- Diagnóstico da régua (item 3, "uma oportunidade por jogo/lado"): checa a REGRA de
+-- deduplicação em si (apostas_unica), não uma CTE já agrupada por (fixture,lado) — checar
+-- em `faixado`/`score` seria tautológico, porque o GROUP BY de `score` já força unicidade
+-- por construção independente da regra de seleção ter funcionado (achado do code-review).
 checagem_unicidade AS (
-    SELECT direcao, COUNT(*) AS linhas,
+    SELECT COUNT(*) AS linhas,
            COUNT(DISTINCT CONCAT(CAST(fixture_id AS STRING), '|', outcome_side)) AS chaves_distintas
-    FROM faixado GROUP BY 1
+    FROM apostas_unica
 )
 
 SELECT
     'faixa' AS bloco, direcao, lado, faixa, n, roi_pct,
-    NULL AS linhas_check, NULL AS chaves_check
+    CAST(NULL AS FLOAT64) AS linhas_check, CAST(NULL AS FLOAT64) AS chaves_check
 FROM resultado
 
 UNION ALL
 
 SELECT
-    'checagem_unica' AS bloco, direcao, NULL, NULL, NULL, NULL,
-    linhas, chaves_distintas
+    'checagem_unica' AS bloco, CAST(NULL AS STRING), CAST(NULL AS STRING), CAST(NULL AS STRING),
+    CAST(NULL AS INT64), CAST(NULL AS FLOAT64),
+    CAST(linhas AS FLOAT64), CAST(chaves_distintas AS FLOAT64)
 FROM checagem_unicidade
+
+UNION ALL
+
+-- Item 4 da régua (soma dos pesos medidos contra o teto de 50) — antes só existia numa
+-- query ad-hoc fora do arquivo versionado (achado do code-review: o compilado não
+-- reproduzia sozinho a tabela postada no comentário de resultados).
+SELECT
+    'pesos' AS bloco, direcao, lado, premissa, n, diferenca_pp,
+    peso AS linhas_check, CAST(NULL AS FLOAT64) AS chaves_check
+FROM pesos
 
 ORDER BY bloco, direcao, lado, faixa
