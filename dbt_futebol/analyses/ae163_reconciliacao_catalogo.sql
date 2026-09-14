@@ -48,40 +48,12 @@ apostas_unica AS (
     ) = 1
 ),
 
-{%- set combos = [] -%}
-{%- for p in ae161_premissas_home() -%}
-    {%- set _ = combos.append(('Home', p)) -%}
-{%- endfor -%}
-{%- for p in ae161_premissas_away(incluir_decisao=true) -%}
-    {%- set _ = combos.append(('Away', p)) -%}
-{%- endfor -%}
-
 premissas_linha AS (
-    {%- for lado, p in combos %}
-    {%- if not loop.first %}
-    UNION ALL
-    {%- endif %}
-    SELECT
-        fixture_id, outcome_side, line_value,
-        '{{ p.premissa }}' AS premissa,
-        (COALESCE({{ p.sql }}, FALSE) AND min_jogos >= 10) AS acesa
-    FROM apostas
-    WHERE outcome_side = '{{ lado }}'
-    {%- endfor %}
+    {{ ae161_premissas_escanteios(tabela='apostas', incluir_decisao=true) }}
 ),
 
 premissas_jogo AS (
-    {%- for lado, p in combos %}
-    {%- if not loop.first %}
-    UNION ALL
-    {%- endif %}
-    SELECT
-        fixture_id, outcome_side, line_value,
-        '{{ p.premissa }}' AS premissa,
-        COALESCE({{ p.sql }}, FALSE) AS acesa
-    FROM apostas_unica
-    WHERE outcome_side = '{{ lado }}'
-    {%- endfor %}
+    {{ ae161_premissas_escanteios(tabela='apostas_unica', incluir_decisao=true) }}
 ),
 
 agregado_linha AS (
