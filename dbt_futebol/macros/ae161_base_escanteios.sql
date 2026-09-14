@@ -226,3 +226,53 @@ apostas AS (
     {%- endif -%}
     {{ return(base) }}
 {% endmacro %}
+
+{#- AE#172 (achado do code-review da spec #157) — o bloco Jinja que materializa o catálogo
+    (loop sobre ae161_premissas_home()/ae161_premissas_away(), UNION ALL de
+    fixture_id/outcome_side/premissa/acesa) estava copiado quase verbatim em 5 lugares de
+    analyses/ (ae161_teste2, ae162_teste2_decisao, ae163_pesos_oos, e as duas CTEs de
+    ae163_reconciliacao_catalogo). A AE#163 chegou a subir sem o piso de min_jogos>=10 numa
+    dessas cópias — só uma revisão pegou. Um catálogo, uma fonte.
+
+    Parâmetros:
+      tabela                 — nome da CTE de origem já materializada no WITH do arquivo
+                                chamador ('apostas' ou 'apostas_unica' — nunca ref(), isso é
+                                sempre uma CTE local, não um model). Precisa expor
+                                fixture_id/outcome_side/line_value/min_jogos e as colunas que
+                                as premissas leem (ver apostas em ae161_base_escanteios()).
+      incluir_decisao         — repassado direto pra ae161_premissas_away() (ver lá). Default
+                                false só porque é o default daquele macro; os 4 chamadores
+                                pós-#162 passam true.
+      incluir_peso_original   — expõe peso_original (o peso do catálogo do ClickUp, ANTES do
+                                Teste 2 medir) na saída. Só ae161_teste2/ae162_teste2_decisao
+                                usam essa coluna hoje.
+
+    O piso "time com menos de 10 jogos não acende premissa nenhuma" (ClickUp wdx6zf1tt8,
+    "Definições comuns") é aplicado SEMPRE aqui dentro, incondicional — é justamente o piso
+    que uma cópia esqueceu. Rodar sobre `apostas_unica` (que já filtra min_jogos>=10 antes de
+    chegar aqui) faz a checagem virar redundante-e-inofensiva, não errada: não existe chamador
+    que precise do piso DESLIGADO, então não vale a pena expor isso como parâmetro — um
+    parâmetro a mais é mais uma chance de outra omissão como a que abriu esta issue. -#}
+{% macro ae161_premissas_escanteios(tabela, incluir_decisao=false, incluir_peso_original=false) %}
+    {%- set combos = [] -%}
+    {%- for p in ae161_premissas_home() -%}
+        {%- set _ = combos.append(('Home', p)) -%}
+    {%- endfor -%}
+    {%- for p in ae161_premissas_away(incluir_decisao=incluir_decisao) -%}
+        {%- set _ = combos.append(('Away', p)) -%}
+    {%- endfor -%}
+    {%- for lado, p in combos %}
+    {%- if not loop.first %}
+    UNION ALL
+    {%- endif %}
+    SELECT
+        fixture_id, outcome_side, line_value,
+        '{{ p.premissa }}'      AS premissa,
+        {%- if incluir_peso_original %}
+        {{ p.peso }}            AS peso_original,
+        {%- endif %}
+        (COALESCE({{ p.sql }}, FALSE) AND min_jogos >= 10) AS acesa
+    FROM {{ tabela }}
+    WHERE outcome_side = '{{ lado }}'
+    {%- endfor %}
+{% endmacro %}

@@ -24,25 +24,7 @@
 WITH {{ ae161_base_escanteios(cutoff=none, janela_fixa=none, gates_do_board=true) }},
 
 premissas_por_lado AS (
-    {%- set combos = [] -%}
-    {%- for p in ae161_premissas_home() -%}
-        {%- set _ = combos.append(('Home', p)) -%}
-    {%- endfor -%}
-    {%- for p in ae161_premissas_away(incluir_decisao=true) -%}
-        {%- set _ = combos.append(('Away', p)) -%}
-    {%- endfor -%}
-    {%- for lado, p in combos %}
-    {%- if not loop.first %}
-    UNION ALL
-    {%- endif %}
-    SELECT
-        fixture_id, outcome_side, line_value,
-        '{{ p.premissa }}'      AS premissa,
-        {{ p.peso }}            AS peso_original,
-        (COALESCE({{ p.sql }}, FALSE) AND min_jogos >= 10) AS acesa
-    FROM apostas
-    WHERE outcome_side = '{{ lado }}'
-    {%- endfor %}
+    {{ ae161_premissas_escanteios(tabela='apostas', incluir_decisao=true, incluir_peso_original=true) }}
 ),
 
 janela AS (
