@@ -37,14 +37,52 @@
 {%- set _liq = liquidez_min_casas if liquidez_min_casas is not none else (4 if gates_do_board else 3) -%}
 
 jogos_encerrados AS (
-    SELECT fixture_id, competition, season, home_team_id, away_team_id, kickoff_utc,
-           goals_home, goals_away
+    SELECT fixture_id, competition, competition_id, season, round, home_team_id, away_team_id,
+           kickoff_utc, goals_home, goals_away
     FROM {{ ref('fact_fixtures') }}
     WHERE status_short = 'FT'
       AND goals_home IS NOT NULL
       {%- if cutoff is not none %}
       AND DATE(kickoff_utc) <= DATE('{{ cutoff }}')
       {%- endif %}
+),
+
+-- AE#162 — total de rodadas da fase de pontos corridos de cada (competition_id, season).
+-- Informação de CALENDÁRIO (o chaveamento inteiro já existe em fact_fixtures antes da
+-- temporada acabar — conferido: temporada em andamento tem o MESMO MAX(round) das já
+-- encerradas), não medição — usar não é look-ahead, mesmo raciocínio do group_name em
+-- int_futebol_team_form_pit.
+total_rodadas AS (
+    SELECT competition_id, season,
+           MAX(CAST(REGEXP_EXTRACT(round, r'(\d+)$') AS INT64)) AS total_rodadas
+    FROM {{ ref('fact_fixtures') }}
+    WHERE round LIKE 'Regular Season%'
+    GROUP BY 1, 2
+),
+
+-- AE#162 — zona de tabela do VISITANTE e reta final, na leitura de standings mais recente
+-- ANTES do apito (nunca a mais recente disponível hoje — ver
+-- reference_dbt_snapshot_idade_artefato). O histórico de standings só começa em 11/06/2026:
+-- jogo mais antigo que isso não tem snapshot anterior e as duas colunas saem NULL
+-- (degradação graciosa, documentada no pré-registro). `s.played_total` é a campanha do
+-- visitante ATÉ aquele snapshot — mesma fonte que dá o rank/zona, sem join extra.
+zona_visitante AS (
+    SELECT
+        j.fixture_id,
+        {{ futebol_zona_tabela_em_disputa('s.rank_description') }}      AS zona_em_disputa,
+        SAFE_DIVIDE(s.played_total, tr.total_rodadas) >= 0.80            AS reta_final
+    FROM jogos_encerrados j
+    JOIN {{ ref('fact_standings_snapshot') }} s
+      ON  s.league_id       = j.competition_id
+      AND s.season          = j.season
+      AND s.team_id         = j.away_team_id
+      AND s.snapshot_date   < DATE(j.kickoff_utc)
+    LEFT JOIN total_rodadas tr
+      ON  tr.competition_id = j.competition_id
+      AND tr.season         = j.season
+    QUALIFY ROW_NUMBER() OVER (
+        PARTITION BY j.fixture_id ORDER BY s.snapshot_date DESC
+    ) = 1
 ),
 
 odds_56 AS (
@@ -88,6 +126,15 @@ apostas AS (
         j.kickoff_utc,
         LEAST(COALESCE(ph.played_total_disponivel, 0), COALESCE(pa.played_total_disponivel, 0)) AS min_jogos,
 
+        -- AE#162 — insumo da premissa "Decisão" (lado de baixo, Away). mata_mata é
+        -- propriedade do JOGO (não depende de lado); reta_final/zona_em_disputa são do
+        -- VISITANTE especificamente (ver pré-registro da issue #162).
+        (j.round NOT LIKE 'Regular Season%'
+         AND j.round NOT LIKE 'Group Stage%'
+         AND j.round NOT LIKE 'League Stage%')                                         AS mata_mata,
+        COALESCE(zv.reta_final, FALSE)                                                 AS reta_final_visitante,
+        COALESCE(zv.zona_em_disputa, FALSE)                                            AS zona_em_disputa_visitante,
+
         -- Liquidação: PAR COMPLEMENTAR, line_value na ótica do MANDANTE (AE#158) — mesma
         -- fórmula algébrica de task01_liquidacao() p/ o market_id 4, com corner_kicks no
         -- lugar de goals.
@@ -122,6 +169,8 @@ apostas AS (
       ON ph.fixture_id = o.fixture_id AND ph.team_id = j.home_team_id
     LEFT JOIN pit_away pa
       ON pa.fixture_id = o.fixture_id AND pa.team_id = j.away_team_id
+    LEFT JOIN zona_visitante zv
+      ON zv.fixture_id = o.fixture_id
     WHERE o.best_odd                IS NOT NULL
       AND o.prob_justa_fechamento   IS NOT NULL   -- só linhas que o de-vig realmente emitiu (AE#158)
       AND r.corners_home IS NOT NULL AND r.corners_away IS NOT NULL  -- resultado real existe p/ liquidar
@@ -139,9 +188,13 @@ apostas AS (
 {% endmacro %}
 
 
-{#- Catálogo do handicap de escanteios (ClickUp wdx6zf1tt8), MENOS "Decisão" (AE#162, depende
-    do #160). Colunas por premissa: nome, peso do catálogo original, expressão SQL booleana
-    (lida sobre as colunas que ae161_base_escanteios() expõe em `apostas`).
+{#- Catálogo do handicap de escanteios (ClickUp wdx6zf1tt8). Colunas por premissa: nome, peso
+    do catálogo original, expressão SQL booleana (lida sobre as colunas que
+    ae161_base_escanteios() expõe em `apostas`).
+
+    "Decisão" (lado Away, AE#162) só entra em ae161_premissas_away() com
+    incluir_decisao=true — o default (false) preserva o catálogo exatamente como a AE#161 o
+    mediu, sem "Decisão", que dependia do #160 e ainda não existia naquele momento.
 
     "Força mais escanteio" e "Força escanteio no mando" aparecem nos DOIS lados com o MESMO
     nome — é a mesma premissa medida em cada lado (o catálogo original já documenta os dois
@@ -159,10 +212,17 @@ apostas AS (
     ]) }}
 {% endmacro %}
 
-{% macro ae161_premissas_away() %}
-    {{ return([
+{% macro ae161_premissas_away(incluir_decisao=false) %}
+    {%- set base = [
         {'premissa': 'jogo_pouco_escanteio',   'peso': 12, 'sql': 'escanteio_previsto <= 9.05'},
         {'premissa': 'forca_mais_escanteio',   'peso': 9,  'sql': '(a_corner_for - h_corner_for) >= 1.0'},
         {'premissa': 'forca_escanteio_mando',  'peso': 7,  'sql': 'a_mando5 >= 5.2'}
-    ]) }}
+    ] -%}
+    {%- if incluir_decisao -%}
+        {%- set base = base + [
+            {'premissa': 'decisao', 'peso': 4,
+             'sql': '(mata_mata OR (reta_final_visitante AND zona_em_disputa_visitante))'}
+        ] -%}
+    {%- endif -%}
+    {{ return(base) }}
 {% endmacro %}
