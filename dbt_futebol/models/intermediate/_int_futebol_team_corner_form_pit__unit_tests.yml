@@ -1,0 +1,159 @@
+version: 2
+
+# ==============================================================================
+# Unit tests do int_futebol_team_corner_form_pit (AE#159, spec #157).
+#
+# Um cenário só, desenhado para provar as quatro coisas que a AE#159 pede juntas:
+#
+#   1. TIME SEM HISTÓRICO — team_id 30 não tem nenhum jogo anterior: played_total=0,
+#      played_mando5=0, as dez médias saem NULL. Degradação graciosa, não zero, não erro.
+#
+#   2. PONTO-NO-TEMPO CORTANDO CERTO — team_id 10 tem 12 jogos anteriores ao alvo (fixture
+#      800 a 810, mais um "futuro" 900 com kickoff DEPOIS do alvo). A janela de 10 usa só os
+#      dez mais recentes ANTES do apito: fixture 800 (o 11º mais recente) fica de fora — se
+#      entrasse, o corner_kicks=99 dele apareceria na média — e a 900 (kickoff depois do
+#      alvo) tem que ficar de fora mesmo sendo "passado" no calendário dos fixture_id.
+#      played_total_disponivel=11 (conta os 11 anteriores ao alvo, sem o teto) prova que o
+#      corte é do played_total (=10), não da fonte.
+#
+#   3. SELF-JOIN NÃO DUPLICA — os valores de corners_for e corners_against do time 10 vêm
+#      de LINHAS DIFERENTES (a própria e a do adversário, time 20) e são distintos por
+#      desenho (7 contra 2 em casa, 3 contra 5 fora). Se o self-join casasse a linha consigo
+#      mesma, corners_against sairia igual a corners_for.
+#
+#   4. JANELA DE MANDO FILTRA O MANDO CERTO — dos 10 jogos de team_id 10, 5 são em casa
+#      (corner_kicks=7) e 5 fora (corner_kicks=3). O alvo tem team_id 10 jogando em CASA, e
+#      corners_for_avg_mando5 sai EXATAMENTE 7,0 — só os 5 jogos em casa — enquanto
+#      corners_for_avg10 sai 5,0 (a média dos 10, casa e fora misturados). Os dois números
+#      diferentes provam que o mando filtrou.
+# ==============================================================================
+unit_tests:
+  - name: corner_pit_ponto_no_tempo_self_join_e_mando
+    model: int_futebol_team_corner_form_pit
+    description: >
+      Time sem histórico degrada graciosamente para NULL; a janela de 10 corta no ponto-no-
+      -tempo certo (nem o 11º jogo mais antigo, nem um jogo "futuro" entram); o self-join de
+      escanteios sofridos não duplica (for != against); e a janela de mando isola só os jogos
+      no mesmo lado do alvo.
+    given:
+      - input: ref('fact_fixtures')
+        rows:
+          # O 11º jogo mais recente de team_id 10 — tem que FICAR DE FORA da janela de 10.
+          - {fixture_id: 800, competition_id: 1, season: 2026, kickoff_utc: '2026-01-01 12:00:00', home_team_id: 10, away_team_id: 20, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          # Os 10 jogos que FORMAM a janela — 5 em casa, 5 fora, intercalados.
+          - {fixture_id: 801, competition_id: 1, season: 2026, kickoff_utc: '2026-02-01 12:00:00', home_team_id: 10, away_team_id: 20, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 802, competition_id: 1, season: 2026, kickoff_utc: '2026-02-02 12:00:00', home_team_id: 20, away_team_id: 10, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 803, competition_id: 1, season: 2026, kickoff_utc: '2026-02-03 12:00:00', home_team_id: 10, away_team_id: 20, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 804, competition_id: 1, season: 2026, kickoff_utc: '2026-02-04 12:00:00', home_team_id: 20, away_team_id: 10, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 805, competition_id: 1, season: 2026, kickoff_utc: '2026-02-05 12:00:00', home_team_id: 10, away_team_id: 20, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 806, competition_id: 1, season: 2026, kickoff_utc: '2026-02-06 12:00:00', home_team_id: 20, away_team_id: 10, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 807, competition_id: 1, season: 2026, kickoff_utc: '2026-02-07 12:00:00', home_team_id: 10, away_team_id: 20, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 808, competition_id: 1, season: 2026, kickoff_utc: '2026-02-08 12:00:00', home_team_id: 20, away_team_id: 10, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 809, competition_id: 1, season: 2026, kickoff_utc: '2026-02-09 12:00:00', home_team_id: 10, away_team_id: 20, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          - {fixture_id: 810, competition_id: 1, season: 2026, kickoff_utc: '2026-02-10 12:00:00', home_team_id: 20, away_team_id: 10, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+          # O ALVO: team_id 10 em casa contra team_id 30 (sem histórico nenhum).
+          - {fixture_id: 1, competition_id: 1, season: 2026, kickoff_utc: '2026-03-01 12:00:00', home_team_id: 10, away_team_id: 30, status_short: 'NS'}
+          # "Futuro" relativo ao alvo — kickoff DEPOIS de 2026-03-01. Tem que ficar de fora.
+          - {fixture_id: 900, competition_id: 1, season: 2026, kickoff_utc: '2026-04-01 12:00:00', home_team_id: 10, away_team_id: 20, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1}
+
+      - input: ref('fact_fixture_stats')
+        rows:
+          # fixture 800 — fora da janela: valores extremos (99/1) para denunciar se vazar.
+          - {fixture_id: 800, team_id: 10, team_side: 'home', corner_kicks: 99, ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5}
+          - {fixture_id: 800, team_id: 20, team_side: 'away', corner_kicks: 1,  ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5}
+          # fixture 801 (team 10 EM CASA): 7 a favor, 2 sofridos.
+          - {fixture_id: 801, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
+          - {fixture_id: 801, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          # fixture 802 (team 10 FORA): 3 a favor, 5 sofridos.
+          - {fixture_id: 802, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
+          - {fixture_id: 802, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          # fixture 803 (casa) — repete o padrão de 801.
+          - {fixture_id: 803, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
+          - {fixture_id: 803, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          # fixture 804 (fora) — repete o padrão de 802.
+          - {fixture_id: 804, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
+          - {fixture_id: 804, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          # fixture 805 (casa).
+          - {fixture_id: 805, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
+          - {fixture_id: 805, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          # fixture 806 (fora).
+          - {fixture_id: 806, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
+          - {fixture_id: 806, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          # fixture 807 (casa).
+          - {fixture_id: 807, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
+          - {fixture_id: 807, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          # fixture 808 (fora).
+          - {fixture_id: 808, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
+          - {fixture_id: 808, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          # fixture 809 (casa).
+          - {fixture_id: 809, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
+          - {fixture_id: 809, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          # fixture 810 (fora).
+          - {fixture_id: 810, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
+          - {fixture_id: 810, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          # fixture 900 — "futuro" relativo ao alvo: valores extremos p/ denunciar se vazar.
+          - {fixture_id: 900, team_id: 10, team_side: 'home', corner_kicks: 50, ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5}
+          - {fixture_id: 900, team_id: 20, team_side: 'away', corner_kicks: 1,  ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5}
+
+    expect:
+      rows:
+        # ⚠️ Cada fixture do `given` também é o seu PRÓPRIO alvo (o modelo calcula PIT p/
+        # TODOS os fixtures, não só o "1") — por isso a lista abaixo tem uma linha por
+        # (fixture, team) de TODO o cenário, não só do fixture 1. É o preço de testar contra
+        # o modelo real em vez de um fixture-alvo isolado, e é também outra demonstração da
+        # degradação graciosa: quase todas as linhas intermediárias têm played_total < 10 (ou
+        # played_mando5 < 5) e por isso saem NULL — só as que cruzam o piso mostram número.
+
+        # ---- O ALVO (fixture 1): a comparação que prova o mando ---------------------------
+        # team_id 10: 10 jogos na janela de 10 (800 fica de fora, 11 disponíveis). avg10
+        # mistura casa (7/2) e fora (3/5) -> (5*7+5*3)/10=5.0 for, (5*2+5*5)/10=3.5 against.
+        # mando5 (o alvo é EM CASA) isola só os 5 jogos de casa -> 7.0 for, 2.0 against exatos
+        # — diferente do avg10, prova que o mando filtrou.
+        - {fixture_id: 1, team_id: 10, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 5.0, corners_against_avg10: 3.5, played_mando5: 5, corners_for_avg_mando5: 7.0, corners_against_avg_mando5: 2.0}
+        # team_id 30: SEM HISTÓRICO — zero nas duas contagens, NULL nas médias das duas janelas.
+        - {fixture_id: 1, team_id: 30, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+
+        # ---- fixture 800 (o mais antigo — sem histórico ANTES dele) ------------------------
+        - {fixture_id: 800, team_id: 10, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 800, team_id: 20, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+
+        # ---- fixtures 801..808: cada uma tem < 10 jogos anteriores -> avg10 sempre NULL;
+        # a maioria também tem < 5 no mando -> mando também NULL. Só a contagem muda.
+        - {fixture_id: 801, team_id: 10, played_total: 1, played_total_disponivel: 1, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 801, team_id: 20, played_total: 1, played_total_disponivel: 1, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 802, team_id: 10, played_total: 2, played_total_disponivel: 2, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 802, team_id: 20, played_total: 2, played_total_disponivel: 2, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 803, team_id: 10, played_total: 3, played_total_disponivel: 3, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 803, team_id: 20, played_total: 3, played_total_disponivel: 3, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 804, team_id: 10, played_total: 4, played_total_disponivel: 4, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 804, team_id: 20, played_total: 4, played_total_disponivel: 4, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 805, team_id: 10, played_total: 5, played_total_disponivel: 5, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 805, team_id: 20, played_total: 5, played_total_disponivel: 5, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 806, team_id: 10, played_total: 6, played_total_disponivel: 6, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 806, team_id: 20, played_total: 6, played_total_disponivel: 6, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 807, team_id: 10, played_total: 7, played_total_disponivel: 7, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 807, team_id: 20, played_total: 7, played_total_disponivel: 7, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 808, team_id: 10, played_total: 8, played_total_disponivel: 8, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 808, team_id: 20, played_total: 8, played_total_disponivel: 8, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+
+        # ---- fixture 809: cruza o piso do MANDO (5º jogo em casa do time 10) --------------
+        # corners_for_avg_mando5=25.4 (contamina com o outlier 99 do fixture 800, que ainda
+        # cabe nesta janela de 5 porque só há 5 jogos em casa até aqui) != corners_for_avg10
+        # (ainda NULL, só 9 jogos) — SELF-JOIN: for (25.4) != against (1.8), nunca colapsam.
+        - {fixture_id: 809, team_id: 10, played_total: 9, played_total_disponivel: 9, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 5, corners_for_avg_mando5: 25.4, corners_against_avg_mando5: 1.8}
+        - {fixture_id: 809, team_id: 20, played_total: 9, played_total_disponivel: 9, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 5, corners_for_avg_mando5: 1.8, corners_against_avg_mando5: 25.4}
+
+        # ---- fixture 810: cruza o piso do AVG10 (10º jogo, o mais recente ANTES do alvo) --
+        # corners_for_avg10=14.6 ainda carrega o outlier do fixture 800 (só há exatamente 10
+        # jogos anteriores até aqui — 800 é o mais antigo dos 10, não o 11º). against=3.1 !=
+        # for=14.6: SELF-JOIN correto. mando volta a NULL (só 4 jogos fora até aqui).
+        - {fixture_id: 810, team_id: 10, played_total: 10, played_total_disponivel: 10, corners_for_avg10: 14.6, corners_against_avg10: 3.1, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 810, team_id: 20, played_total: 10, played_total_disponivel: 10, corners_for_avg10: 3.1, corners_against_avg10: 14.6, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+
+        # ---- fixture 900: "futuro" relativo ao alvo (kickoff depois de 2026-03-01) --------
+        # Mesmo estado de 10 jogos que o alvo enxerga (800 já saiu da janela de 10, que agora
+        # tem 11 disponíveis) — prova que o CORTE é pelo kickoff de CADA alvo, não uma janela
+        # global fixa. Valores extremos do próprio 900 (corner=50) não vazam para si mesmo
+        # (o PIT nunca inclui o próprio jogo — `kickoff_utc < t.kickoff_utc` é estrito).
+        - {fixture_id: 900, team_id: 10, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 5.0, corners_against_avg10: 3.5, played_mando5: 5, corners_for_avg_mando5: 7.0, corners_against_avg_mando5: 2.0}
+        - {fixture_id: 900, team_id: 20, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 3.5, corners_against_avg10: 5.0, played_mando5: 5, corners_for_avg_mando5: 2.0, corners_against_avg_mando5: 7.0}

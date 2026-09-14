@@ -238,6 +238,56 @@ models:
               - fixture_id
               - team_id
 
+  - name: int_futebol_team_corner_form_pit
+    description: >
+      AE#159 (spec #157) — insumos de escanteio POINT-IN-TIME por (fixture_id, team_id),
+      paralelo a int_futebol_team_form_pit (não o substitui). Não alimenta nenhum mart/funil
+      hoje — publica só o que a medição do handicap de escanteios (dbt_futebol/analyses/) e uma
+      futura implementação vão consumir. Janela de 10 jogos anteriores, qualquer competição,
+      point-in-time (kickoff estritamente anterior ao do jogo-alvo); janela de mando com os 5
+      jogos anteriores do time no MESMO mando. Cinco insumos de fact_fixture_stats: escanteios a
+      favor, escanteios sofridos (do adversário na mesma partida, via self-join por fixture_id),
+      posse, xG e finalizações na área. Degradação graciosa por PISO DE JOGOS: menos de 10 jogos
+      no escopo (played_total) ou menos de 5 no mando (played_mando5) produz NULL nas médias da
+      janela correspondente, nunca zero.
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: team_id
+        tests: [not_null]
+      - name: played_total
+        description: "Jogos do time (qualquer competição) ANTES do kickoff, capado em 10. 0 na estreia -> médias da janela de 10 NULL."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 10
+                inclusive: true
+      - name: played_total_disponivel
+        description: "Quantos jogos anteriores EXISTEM no escopo, sem o teto de 10. Mesma semântica de int_futebol_team_form_pit."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                inclusive: true
+      - name: played_mando5
+        description: "Jogos do time no MESMO mando ANTES do kickoff, capado em 5. Menos de 5 -> médias da janela de mando NULL."
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 5
+                inclusive: true
+    tests:
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - team_id
+
   - name: int_futebol_player_importance
     description: >
       S7 — proxy de IMPORTÂNCIA de jogador (minutos x titularidade) p/ pesar desfalques no
