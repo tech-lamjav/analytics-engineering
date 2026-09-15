@@ -27,9 +27,10 @@ roda em produção sem quebrar).
 ## Por que `market`/`line_value` entram já, com o escopo ainda travado no 1X2
 
 O ticket cobre só o 1X2 — os outros 4 mercados ficam de fora do modelo de dados por enquanto.
-Mas as colunas `market` (constante `'1X2'`, pela mesma `futebol_mercados_pontuados()` que
-`fact_value_opportunities` já usa) e `line_value` (`NULL` — o 1X2 não tem linha) entram desde a
-primeira versão da tabela, não só quando o próximo mercado chegar.
+Mas as colunas `market` (constante `'match_winner'`, resolvida pela mesma
+`futebol_mercados_pontuados()[1]` que `fact_value_opportunities` já usa — não o literal "1X2")
+e `line_value` (`NULL` — o 1X2 não tem linha) entram desde a primeira versão da tabela, não só
+quando o próximo mercado chegar.
 
 O motivo é o mesmo que já mordeu este repo quatro vezes (ver o contrato de serving das RPCs):
 mudar o grão de uma tabela sincronizada depois que ela já está em produção exige coordenar DDL

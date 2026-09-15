@@ -1,0 +1,39 @@
+version: 2
+
+# ==============================================================================
+# Unit test do fact_insumos_medidos (AE#175, ADR 0016).
+#
+# Prova três coisas juntas:
+#   1. UNNEST vira uma linha por entrada do array, com market/line_value constantes.
+#   2. valor NULL (insumo existia, sem dado) sobrevive ao achatamento — não vira 0, não
+#      some (Insumo medido, CONTEXT.md).
+#   3. outcome sem nenhum insumo aplicável (array vazio, ex. Draw no 1X2) não gera linha
+#      nenhuma — não é bug, é o WHERE premissa IS NOT NULL de futebol_insumos_medidos()
+#      já tendo descartado o não-aplicável antes do UNNEST existir.
+# ==============================================================================
+unit_tests:
+  - name: fact_insumos_medidos_achata_um_array_por_linha
+    model: fact_insumos_medidos
+    description: >
+      UNNEST produz uma linha por (premissa, insumo), preserva valor NULL, e outcome com
+      array vazio não gera linha nenhuma.
+    given:
+      # format: sql porque insumos_medidos é ARRAY<STRUCT<...>>, e o formato de dicionário
+      # entrega todo valor como escalar (mesmo motivo do premissas_cegas ser ARRAY<STRING>
+      # em _int_futebol__unit_tests.yml).
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT 1 AS fixture_id, 'Home' AS outcome, [
+            STRUCT('forca_mismatch' AS premissa, 's_gf_venue' AS insumo, 1.8 AS valor),
+            STRUCT('superioridade_xg' AS premissa, 's_xg_for' AS insumo, 1.49 AS valor),
+            STRUCT('mando' AS premissa, 'pct_pts_home' AS insumo, CAST(NULL AS FLOAT64) AS valor)
+          ] AS insumos_medidos
+          UNION ALL
+          SELECT 1, 'Draw', CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>)
+    expect:
+      rows:
+        - {fixture_id: 1, outcome: 'Home', market: 'match_winner', line_value: , premissa: 'forca_mismatch', insumo: 's_gf_venue', valor: 1.8}
+        - {fixture_id: 1, outcome: 'Home', market: 'match_winner', line_value: , premissa: 'superioridade_xg', insumo: 's_xg_for', valor: 1.49}
+        - {fixture_id: 1, outcome: 'Home', market: 'match_winner', line_value: , premissa: 'mando', insumo: 'pct_pts_home', valor: }
+        # fixture 1 / Draw: zero linhas — de propósito, não listadas aqui.
