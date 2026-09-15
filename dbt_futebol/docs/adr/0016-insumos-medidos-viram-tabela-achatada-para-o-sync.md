@@ -57,8 +57,8 @@ separado, repo separado.
 **Não cria a tabela de destino no Postgres.** `check_schema_parity` não faz
 `CREATE TABLE` — ele compara o schema das duas pontas e falha se a tabela não existir do lado
 de cá. A migration em `prop-play-predictor` tem de existir **antes** do allowlist entrar em
-produção, não depois, ou a primeira passada do sync já acusa toda coluna como
-`missing_in_pg`.
+produção, não depois, ou a primeira passada do sync já acusa a tabela INTEIRA como ausente
+(um drift `missing_in_pg` só, "tabela não existe em {schema}" — não um por coluna).
 
 **Não cria a RPC de leitura.** Igual à Entrega 2: o mart publica, o front lê — é o próximo
 ticket, na quadra do Victor.
