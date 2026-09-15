@@ -433,6 +433,19 @@ Handicap Asiático, BTTS (Ambos Marcam), Dupla Chance.
 **S / O**:
 Playbook convention: S is the side being bet, O is the opponent.
 
+**Linha principal**:
+In an Over/Under-shaped market quoted in a ladder (many lines per fixture, e.g.
+Total de escanteios at ~16 lines/game), the one line any measurement or
+publication decision is made against: the line whose odd is closest to 2.00, per
+side. Measuring the whole ladder inflates every gain figure — it counts the same
+game many times and over-weights the extreme-odd lines nobody would publish
+anyway (`prop-play-predictor` docs/futebol-metodologia-escanteios-total.md,
+2026-09-13: 6.512 ladder lines vs 812 linha-principal lines on the same 406
+games). Not the same axis as **Janela** below — this picks *which line*, janela
+picks *which collection window*.
+_Avoid_: melhor linha (ambiguous with best-odd across bookmakers, a different
+axis entirely)
+
 **Mando**:
 Home advantage — playing at home with a strong home record. A declining, per-league
 signal.
