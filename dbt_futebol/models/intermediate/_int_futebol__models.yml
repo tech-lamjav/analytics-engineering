@@ -247,9 +247,12 @@ models:
       point-in-time (kickoff estritamente anterior ao do jogo-alvo); janela de mando com os 5
       jogos anteriores do time no MESMO mando. Cinco insumos de fact_fixture_stats: escanteios a
       favor, escanteios sofridos (do adversário na mesma partida, via self-join por fixture_id),
-      posse, xG e finalizações na área. Degradação graciosa por PISO DE JOGOS: menos de 10 jogos
-      no escopo (played_total) ou menos de 5 no mando (played_mando5) produz NULL nas médias da
-      janela correspondente, nunca zero.
+      posse, xG e finalizações na área. AE#181 (spec #181) adiciona mais cinco, sem self-join
+      (estatística própria do time): finalizações totais (total_shots), finalizações de fora da
+      área (shots_outsidebox), finalizações bloqueadas (blocked_shots), defesas do goleiro
+      (goalkeeper_saves) e faltas cometidas (fouls). Degradação graciosa por PISO DE JOGOS: menos
+      de 10 jogos no escopo (played_total) ou menos de 5 no mando (played_mando5) produz NULL nas
+      médias da janela correspondente, nunca zero — mesmo piso para os dez insumos.
     columns:
       - name: fixture_id
         tests: [not_null]
