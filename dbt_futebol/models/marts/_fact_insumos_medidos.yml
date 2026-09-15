@@ -1,0 +1,59 @@
+version: 2
+
+models:
+  - name: fact_insumos_medidos
+    description: >
+      Entrega 3 do #147/#148 (AE#175, ADR 0016). Cópia achatada, escalar, de
+      `int_futebol_premissas_1x2.insumos_medidos` — o ARRAY<STRUCT> que a Entrega 2 (AE#153,
+      ADR 0014) publica não atravessa o sync BQ->Postgres (pula toda coluna
+      REPEATED/RECORD). 1 linha por (fixture_id, outcome, premissa, insumo) aplicável à
+      linha. `market`/`line_value` já estão no grão, mesmo com o escopo travado no 1X2 —
+      ver ADR 0016 para o porquê.
+    columns:
+      - name: fixture_id
+        tests: [not_null]
+      - name: outcome
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['Home', 'Draw', 'Away']
+      - name: market
+        description: "Constante 'match_winner' (futebol_mercados_pontuados()[1]) enquanto o escopo for só o 1X2 — não um literal '1X2'."
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['match_winner']
+      - name: line_value
+        description: "NULL — o 1X2 não tem linha. Populado de verdade quando Over/Under e Handicap entrarem no escopo."
+      - name: premissa
+        description: "Slug do catálogo futebol_insumos_premissa() — mesmo nome de int_futebol_premissas_1x2 e de fact_value_opportunities.evidencias."
+        tests: [not_null]
+      - name: insumo
+        description: "Nome do insumo, literalmente o mesmo de Insumo declarado/Regime do insumo (CONTEXT.md) — a chave que cruza esta linha com o regime declarado no catálogo."
+        tests: [not_null]
+      - name: valor
+        description: "O número que a premissa comparou. Pode ser NULL — insumo existia e não tinha dado, não que o insumo não exista (Insumo medido, CONTEXT.md)."
+    tests:
+      # Grão completo — os SEIS campos que a ADR 0016 declara como o grão congelado, não só
+      # os quatro que o 1X2 hoje varia. market/line_value entram aqui mesmo constantes: é
+      # exatamente a garantia que a ADR promete (grão pronto pro segundo mercado) — sem eles
+      # na combinação, uma futura linha que difira só em market/line_value pro mesmo
+      # (fixture, outcome, premissa, insumo) passaria batido.
+      #
+      # ⚠️ SEM tag:guarda de propósito, por enquanto — ver aviso no topo do model.sql: a
+      # tabela ainda não está no `--select` de workflow_futebol_odds.yml (data-engineering,
+      # ticket separado). Marcá-la guarda agora faria a fase agendada de
+      # `dbt test --select tag:guarda` do PRD quebrar contra uma tabela que o `dbt run`
+      # daquele workflow nunca constrói. Adicionar a tag junto do PR que adicionar o modelo
+      # ao selector, não antes.
+      - dbt_utils.unique_combination_of_columns:
+          arguments:
+            combination_of_columns:
+              - fixture_id
+              - outcome
+              - market
+              - line_value
+              - premissa
+              - insumo
