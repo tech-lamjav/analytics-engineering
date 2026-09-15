@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     cluster_by=['fixture_id', 'team_id'],
-    description='AE#159 (spec #157) — insumos de escanteio POINT-IN-TIME por (fixture_id, team_id), paralelo a int_futebol_team_form_pit e sem substituí-lo. Não alimenta nenhum mart/funil hoje — publica só o que a medição do handicap de escanteios (dbt_futebol/analyses/) e uma futura implementação vão consumir. JANELA DE 10: os 10 jogos anteriores do time, QUALQUER competição, kickoff estritamente anterior ao do jogo-alvo (`l.kickoff_utc < t.kickoff_utc` é o point-in-time — sem ele a medição vira a task [0] de novo). JANELA DE MANDO: os 5 jogos anteriores do time no MESMO mando (partição por team_side). Cinco insumos, todos de fact_fixture_stats: escanteios a favor, escanteios sofridos (do ADVERSÁRIO na mesma partida — self-join por fixture_id, nunca uma coluna própria do time), posse de bola, gols esperados (xG) e finalizações dentro da área. Média é SAFE_DIVIDE(SUM, COUNTIF(... IS NOT NULL)), nunca AVG (R6 do método de premissas — AVG muda de casa decimal entre execuções paralelas do BigQuery) — e ignora individualmente o insumo que faltar num jogo do recorte (xG falta em ~16% das linhas de fact_fixture_stats), sem descartar o jogo inteiro. Degradação graciosa por PISO DE JOGOS, não por insumo: com menos de 10 jogos no escopo (played_total) ou menos de 5 no mando (played_mando5), as médias da janela saem NULL — nunca zero, nunca erro. played_total/played_total_disponivel na mesma semântica de int_futebol_team_form_pit: a primeira é a contagem USADA (satura em 10), a segunda é quantos jogos anteriores EXISTEM sem teto.'
+    description='AE#159 (spec #157) — insumos de escanteio POINT-IN-TIME por (fixture_id, team_id), paralelo a int_futebol_team_form_pit e sem substituí-lo. Não alimenta nenhum mart/funil hoje — publica só o que a medição do handicap de escanteios (dbt_futebol/analyses/) e uma futura implementação vão consumir. JANELA DE 10: os 10 jogos anteriores do time, QUALQUER competição, kickoff estritamente anterior ao do jogo-alvo (`l.kickoff_utc < t.kickoff_utc` é o point-in-time — sem ele a medição vira a task [0] de novo). JANELA DE MANDO: os 5 jogos anteriores do time no MESMO mando (partição por team_side). Cinco insumos, todos de fact_fixture_stats: escanteios a favor, escanteios sofridos (do ADVERSÁRIO na mesma partida — self-join por fixture_id, nunca uma coluna própria do time), posse de bola, gols esperados (xG) e finalizações dentro da área. AE#181 (spec #181) adiciona mais cinco, todos SEM self-join (estatística própria do time na partida, não do adversário): finalizações totais (total_shots), finalizações de fora da área (shots_outsidebox), finalizações bloqueadas (blocked_shots), defesas do goleiro (goalkeeper_saves) e faltas cometidas (fouls) — mesmas duas janelas, mesmo piso, mesma degradação. Média é SAFE_DIVIDE(SUM, COUNTIF(... IS NOT NULL)), nunca AVG (R6 do método de premissas — AVG muda de casa decimal entre execuções paralelas do BigQuery) — e ignora individualmente o insumo que faltar num jogo do recorte (xG falta em ~16% das linhas de fact_fixture_stats), sem descartar o jogo inteiro. Degradação graciosa por PISO DE JOGOS, não por insumo: com menos de 10 jogos no escopo (played_total) ou menos de 5 no mando (played_mando5), as médias da janela saem NULL — nunca zero, nunca erro. played_total/played_total_disponivel na mesma semântica de int_futebol_team_form_pit: a primeira é a contagem USADA (satura em 10), a segunda é quantos jogos anteriores EXISTEM sem teto.'
 ) }}
 
 WITH fixtures AS (
@@ -36,7 +36,12 @@ corner_log AS (
         b.corner_kicks    AS corners_against,
         a.ball_possession AS possession,
         a.expected_goals  AS xg,
-        a.shots_insidebox AS shots_insidebox
+        a.shots_insidebox AS shots_insidebox,
+        a.total_shots      AS total_shots,
+        a.shots_outsidebox AS shots_outsidebox,
+        a.blocked_shots    AS blocked_shots,
+        a.goalkeeper_saves AS goalkeeper_saves,
+        a.fouls            AS fouls
     FROM {{ ref('fact_fixture_stats') }} a
     JOIN {{ ref('fact_fixture_stats') }} b
         ON  b.fixture_id = a.fixture_id
@@ -59,6 +64,11 @@ pares10 AS (
         l.possession,
         l.xg,
         l.shots_insidebox,
+        l.total_shots,
+        l.shots_outsidebox,
+        l.blocked_shots,
+        l.goalkeeper_saves,
+        l.fouls,
         COUNT(l.kickoff_utc) OVER (PARTITION BY t.fixture_id, t.team_id) AS played_total_disponivel
     FROM targets t
     LEFT JOIN corner_log l
@@ -79,7 +89,12 @@ pit10 AS (
         SAFE_DIVIDE(SUM(corners_against), COUNTIF(corners_against IS NOT NULL)) AS corners_against_avg10,
         SAFE_DIVIDE(SUM(possession),      COUNTIF(possession      IS NOT NULL)) AS possession_avg10,
         SAFE_DIVIDE(SUM(xg),              COUNTIF(xg              IS NOT NULL)) AS xg_avg10,
-        SAFE_DIVIDE(SUM(shots_insidebox), COUNTIF(shots_insidebox IS NOT NULL)) AS shots_insidebox_avg10
+        SAFE_DIVIDE(SUM(shots_insidebox), COUNTIF(shots_insidebox IS NOT NULL)) AS shots_insidebox_avg10,
+        SAFE_DIVIDE(SUM(total_shots),      COUNTIF(total_shots      IS NOT NULL)) AS total_shots_avg10,
+        SAFE_DIVIDE(SUM(shots_outsidebox), COUNTIF(shots_outsidebox IS NOT NULL)) AS shots_outsidebox_avg10,
+        SAFE_DIVIDE(SUM(blocked_shots),    COUNTIF(blocked_shots    IS NOT NULL)) AS blocked_shots_avg10,
+        SAFE_DIVIDE(SUM(goalkeeper_saves), COUNTIF(goalkeeper_saves IS NOT NULL)) AS goalkeeper_saves_avg10,
+        SAFE_DIVIDE(SUM(fouls),            COUNTIF(fouls            IS NOT NULL)) AS fouls_avg10
     FROM pares10
     GROUP BY fixture_id, team_id
 ),
@@ -96,7 +111,12 @@ pares_mando5 AS (
         l.corners_against,
         l.possession,
         l.xg,
-        l.shots_insidebox
+        l.shots_insidebox,
+        l.total_shots,
+        l.shots_outsidebox,
+        l.blocked_shots,
+        l.goalkeeper_saves,
+        l.fouls
     FROM targets t
     LEFT JOIN corner_log l
         ON  l.team_id     = t.team_id
@@ -116,7 +136,12 @@ mando5 AS (
         SAFE_DIVIDE(SUM(corners_against), COUNTIF(corners_against IS NOT NULL)) AS corners_against_avg_mando5,
         SAFE_DIVIDE(SUM(possession),      COUNTIF(possession      IS NOT NULL)) AS possession_avg_mando5,
         SAFE_DIVIDE(SUM(xg),              COUNTIF(xg              IS NOT NULL)) AS xg_avg_mando5,
-        SAFE_DIVIDE(SUM(shots_insidebox), COUNTIF(shots_insidebox IS NOT NULL)) AS shots_insidebox_avg_mando5
+        SAFE_DIVIDE(SUM(shots_insidebox), COUNTIF(shots_insidebox IS NOT NULL)) AS shots_insidebox_avg_mando5,
+        SAFE_DIVIDE(SUM(total_shots),      COUNTIF(total_shots      IS NOT NULL)) AS total_shots_avg_mando5,
+        SAFE_DIVIDE(SUM(shots_outsidebox), COUNTIF(shots_outsidebox IS NOT NULL)) AS shots_outsidebox_avg_mando5,
+        SAFE_DIVIDE(SUM(blocked_shots),    COUNTIF(blocked_shots    IS NOT NULL)) AS blocked_shots_avg_mando5,
+        SAFE_DIVIDE(SUM(goalkeeper_saves), COUNTIF(goalkeeper_saves IS NOT NULL)) AS goalkeeper_saves_avg_mando5,
+        SAFE_DIVIDE(SUM(fouls),            COUNTIF(fouls            IS NOT NULL)) AS fouls_avg_mando5
     FROM pares_mando5
     GROUP BY fixture_id, team_id
 )
@@ -136,6 +161,11 @@ SELECT
     IF(p10.played_total < 10, NULL, p10.possession_avg10)      AS possession_avg10,
     IF(p10.played_total < 10, NULL, p10.xg_avg10)              AS xg_avg10,
     IF(p10.played_total < 10, NULL, p10.shots_insidebox_avg10) AS shots_insidebox_avg10,
+    IF(p10.played_total < 10, NULL, p10.total_shots_avg10)      AS total_shots_avg10,
+    IF(p10.played_total < 10, NULL, p10.shots_outsidebox_avg10) AS shots_outsidebox_avg10,
+    IF(p10.played_total < 10, NULL, p10.blocked_shots_avg10)    AS blocked_shots_avg10,
+    IF(p10.played_total < 10, NULL, p10.goalkeeper_saves_avg10) AS goalkeeper_saves_avg10,
+    IF(p10.played_total < 10, NULL, p10.fouls_avg10)            AS fouls_avg10,
 
     m5.played_mando5,
     IF(m5.played_mando5 < 5, NULL, m5.corners_for_avg_mando5)     AS corners_for_avg_mando5,
@@ -143,6 +173,11 @@ SELECT
     IF(m5.played_mando5 < 5, NULL, m5.possession_avg_mando5)      AS possession_avg_mando5,
     IF(m5.played_mando5 < 5, NULL, m5.xg_avg_mando5)              AS xg_avg_mando5,
     IF(m5.played_mando5 < 5, NULL, m5.shots_insidebox_avg_mando5) AS shots_insidebox_avg_mando5,
+    IF(m5.played_mando5 < 5, NULL, m5.total_shots_avg_mando5)      AS total_shots_avg_mando5,
+    IF(m5.played_mando5 < 5, NULL, m5.shots_outsidebox_avg_mando5) AS shots_outsidebox_avg_mando5,
+    IF(m5.played_mando5 < 5, NULL, m5.blocked_shots_avg_mando5)    AS blocked_shots_avg_mando5,
+    IF(m5.played_mando5 < 5, NULL, m5.goalkeeper_saves_avg_mando5) AS goalkeeper_saves_avg_mando5,
+    IF(m5.played_mando5 < 5, NULL, m5.fouls_avg_mando5)            AS fouls_avg_mando5,
 
     CURRENT_TIMESTAMP() AS dbt_loaded_at
 FROM targets t

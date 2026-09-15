@@ -26,6 +26,16 @@ version: 2
 #      corners_for_avg_mando5 sai EXATAMENTE 7,0 — só os 5 jogos em casa — enquanto
 #      corners_for_avg10 sai 5,0 (a média dos 10, casa e fora misturados). Os dois números
 #      diferentes provam que o mando filtrou.
+#
+# AE#181 estende o MESMO cenário com os 5 insumos que faltavam (total_shots,
+# shots_outsidebox, blocked_shots, goalkeeper_saves, fouls) — sem self-join, cada linha
+# usa só a própria estatística do time. Valores por papel (casa/fora) de team_id 10 e 20:
+#   team10 casa=(ts14,ob5,bs6,gs8,fl10)   team10 fora=(ts6,ob1,bs2,gs2,fl16)
+#   team20 casa=(ts9,ob2,bs3,gs4,fl14)    team20 fora=(ts11,ob4,bs5,gs6,fl12)
+# fixture 800 (o 11º jogo, fora da janela de 10) usa valores OUTLIER — se vazassem na janela
+# de 10 ou na de mando eles contaminariam as médias em 809/810, então cruzar o piso ali com
+# o número exato provado (nunca o outlier isolado) é o mesmo teste de vazamento que os
+# escanteios já fazem com corner_kicks=99/1.
 # ==============================================================================
 unit_tests:
   - name: corner_pit_ponto_no_tempo_self_join_e_mando
@@ -34,7 +44,8 @@ unit_tests:
       Time sem histórico degrada graciosamente para NULL; a janela de 10 corta no ponto-no-
       -tempo certo (nem o 11º jogo mais antigo, nem um jogo "futuro" entram); o self-join de
       escanteios sofridos não duplica (for != against); e a janela de mando isola só os jogos
-      no mesmo lado do alvo.
+      no mesmo lado do alvo. Estende com os 5 insumos sem self-join da AE#181 (total_shots,
+      shots_outsidebox, blocked_shots, goalkeeper_saves, fouls), mesmo piso e mesmo corte.
     given:
       - input: ref('fact_fixtures')
         rows:
@@ -58,42 +69,44 @@ unit_tests:
 
       - input: ref('fact_fixture_stats')
         rows:
-          # fixture 800 — fora da janela: valores extremos (99/1) para denunciar se vazar.
-          - {fixture_id: 800, team_id: 10, team_side: 'home', corner_kicks: 99, ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5}
-          - {fixture_id: 800, team_id: 20, team_side: 'away', corner_kicks: 1,  ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5}
+          # fixture 800 — fora da janela: valores extremos (99/1 nos escanteios; AE#181:
+          # ts/ob/bs/gs/fl também em outlier) para denunciar se vazarem em 809 (mando) ou
+          # 810 (avg10), os dois pontos que cruzam o piso com 800 ainda dentro do escopo.
+          - {fixture_id: 800, team_id: 10, team_side: 'home', corner_kicks: 99, ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5, total_shots: 39, shots_outsidebox: 30, blocked_shots: 31, goalkeeper_saves: 33, fouls: 35}
+          - {fixture_id: 800, team_id: 20, team_side: 'away', corner_kicks: 1,  ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5, total_shots: 36, shots_outsidebox: 29, blocked_shots: 30, goalkeeper_saves: 31, fouls: 37}
           # fixture 801 (team 10 EM CASA): 7 a favor, 2 sofridos.
-          - {fixture_id: 801, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
-          - {fixture_id: 801, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          - {fixture_id: 801, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6, total_shots: 14, shots_outsidebox: 5, blocked_shots: 6, goalkeeper_saves: 8, fouls: 10}
+          - {fixture_id: 801, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3, total_shots: 11, shots_outsidebox: 4, blocked_shots: 5, goalkeeper_saves: 6, fouls: 12}
           # fixture 802 (team 10 FORA): 3 a favor, 5 sofridos.
-          - {fixture_id: 802, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
-          - {fixture_id: 802, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          - {fixture_id: 802, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5, total_shots: 9, shots_outsidebox: 2, blocked_shots: 3, goalkeeper_saves: 4, fouls: 14}
+          - {fixture_id: 802, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4, total_shots: 6, shots_outsidebox: 1, blocked_shots: 2, goalkeeper_saves: 2, fouls: 16}
           # fixture 803 (casa) — repete o padrão de 801.
-          - {fixture_id: 803, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
-          - {fixture_id: 803, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          - {fixture_id: 803, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6, total_shots: 14, shots_outsidebox: 5, blocked_shots: 6, goalkeeper_saves: 8, fouls: 10}
+          - {fixture_id: 803, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3, total_shots: 11, shots_outsidebox: 4, blocked_shots: 5, goalkeeper_saves: 6, fouls: 12}
           # fixture 804 (fora) — repete o padrão de 802.
-          - {fixture_id: 804, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
-          - {fixture_id: 804, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          - {fixture_id: 804, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5, total_shots: 9, shots_outsidebox: 2, blocked_shots: 3, goalkeeper_saves: 4, fouls: 14}
+          - {fixture_id: 804, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4, total_shots: 6, shots_outsidebox: 1, blocked_shots: 2, goalkeeper_saves: 2, fouls: 16}
           # fixture 805 (casa).
-          - {fixture_id: 805, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
-          - {fixture_id: 805, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          - {fixture_id: 805, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6, total_shots: 14, shots_outsidebox: 5, blocked_shots: 6, goalkeeper_saves: 8, fouls: 10}
+          - {fixture_id: 805, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3, total_shots: 11, shots_outsidebox: 4, blocked_shots: 5, goalkeeper_saves: 6, fouls: 12}
           # fixture 806 (fora).
-          - {fixture_id: 806, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
-          - {fixture_id: 806, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          - {fixture_id: 806, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5, total_shots: 9, shots_outsidebox: 2, blocked_shots: 3, goalkeeper_saves: 4, fouls: 14}
+          - {fixture_id: 806, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4, total_shots: 6, shots_outsidebox: 1, blocked_shots: 2, goalkeeper_saves: 2, fouls: 16}
           # fixture 807 (casa).
-          - {fixture_id: 807, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
-          - {fixture_id: 807, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          - {fixture_id: 807, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6, total_shots: 14, shots_outsidebox: 5, blocked_shots: 6, goalkeeper_saves: 8, fouls: 10}
+          - {fixture_id: 807, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3, total_shots: 11, shots_outsidebox: 4, blocked_shots: 5, goalkeeper_saves: 6, fouls: 12}
           # fixture 808 (fora).
-          - {fixture_id: 808, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
-          - {fixture_id: 808, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          - {fixture_id: 808, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5, total_shots: 9, shots_outsidebox: 2, blocked_shots: 3, goalkeeper_saves: 4, fouls: 14}
+          - {fixture_id: 808, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4, total_shots: 6, shots_outsidebox: 1, blocked_shots: 2, goalkeeper_saves: 2, fouls: 16}
           # fixture 809 (casa).
-          - {fixture_id: 809, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6}
-          - {fixture_id: 809, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3}
+          - {fixture_id: 809, team_id: 10, team_side: 'home', corner_kicks: 7, ball_possession: 60, expected_goals: 1.5, shots_insidebox: 6, total_shots: 14, shots_outsidebox: 5, blocked_shots: 6, goalkeeper_saves: 8, fouls: 10}
+          - {fixture_id: 809, team_id: 20, team_side: 'away', corner_kicks: 2, ball_possession: 40, expected_goals: 0.5, shots_insidebox: 3, total_shots: 11, shots_outsidebox: 4, blocked_shots: 5, goalkeeper_saves: 6, fouls: 12}
           # fixture 810 (fora).
-          - {fixture_id: 810, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5}
-          - {fixture_id: 810, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4}
+          - {fixture_id: 810, team_id: 20, team_side: 'home', corner_kicks: 5, ball_possession: 55, expected_goals: 1.2, shots_insidebox: 5, total_shots: 9, shots_outsidebox: 2, blocked_shots: 3, goalkeeper_saves: 4, fouls: 14}
+          - {fixture_id: 810, team_id: 10, team_side: 'away', corner_kicks: 3, ball_possession: 45, expected_goals: 1.0, shots_insidebox: 4, total_shots: 6, shots_outsidebox: 1, blocked_shots: 2, goalkeeper_saves: 2, fouls: 16}
           # fixture 900 — "futuro" relativo ao alvo: valores extremos p/ denunciar se vazar.
-          - {fixture_id: 900, team_id: 10, team_side: 'home', corner_kicks: 50, ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5}
-          - {fixture_id: 900, team_id: 20, team_side: 'away', corner_kicks: 1,  ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5}
+          - {fixture_id: 900, team_id: 10, team_side: 'home', corner_kicks: 50, ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5, total_shots: 14, shots_outsidebox: 5, blocked_shots: 6, goalkeeper_saves: 8, fouls: 10}
+          - {fixture_id: 900, team_id: 20, team_side: 'away', corner_kicks: 1,  ball_possession: 50, expected_goals: 1.0, shots_insidebox: 5, total_shots: 11, shots_outsidebox: 4, blocked_shots: 5, goalkeeper_saves: 6, fouls: 12}
 
     expect:
       rows:
@@ -103,57 +116,76 @@ unit_tests:
         # o modelo real em vez de um fixture-alvo isolado, e é também outra demonstração da
         # degradação graciosa: quase todas as linhas intermediárias têm played_total < 10 (ou
         # played_mando5 < 5) e por isso saem NULL — só as que cruzam o piso mostram número.
+        #
+        # AE#181: toda linha de `expect` precisa ter o MESMO conjunto de chaves (o
+        # materialization de unit test do dbt monta um UNION ALL por linha usando as chaves
+        # da própria linha — colunas divergentes entre linhas quebram a comparação). Por isso
+        # as 10 colunas novas (5 insumos x 2 janelas) aparecem em TODAS as linhas abaixo, NULL
+        # nas que não cruzam piso, número exato nas que cruzam.
 
         # ---- O ALVO (fixture 1): a comparação que prova o mando ---------------------------
         # team_id 10: 10 jogos na janela de 10 (800 fica de fora, 11 disponíveis). avg10
         # mistura casa (7/2) e fora (3/5) -> (5*7+5*3)/10=5.0 for, (5*2+5*5)/10=3.5 against.
         # mando5 (o alvo é EM CASA) isola só os 5 jogos de casa -> 7.0 for, 2.0 against exatos
-        # — diferente do avg10, prova que o mando filtrou.
-        - {fixture_id: 1, team_id: 10, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 5.0, corners_against_avg10: 3.5, played_mando5: 5, corners_for_avg_mando5: 7.0, corners_against_avg_mando5: 2.0}
-        # team_id 30: SEM HISTÓRICO — zero nas duas contagens, NULL nas médias das duas janelas.
-        - {fixture_id: 1, team_id: 30, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        # — diferente do avg10, prova que o mando filtrou. Os 5 insumos novos (sem self-join,
+        # só estatística própria): avg10 mistura casa/fora dos valores próprios do time 10
+        # (ts 14/6 -> 10.0, ob 5/1 -> 3.0, bs 6/2 -> 4.0, gs 8/2 -> 5.0, fl 10/16 -> 13.0);
+        # avg_mando5 isola só os 5 jogos de casa (ts 14.0, ob 5.0, bs 6.0, gs 8.0, fl 10.0).
+        - {fixture_id: 1, team_id: 10, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 5.0, corners_against_avg10: 3.5, played_mando5: 5, corners_for_avg_mando5: 7.0, corners_against_avg_mando5: 2.0, total_shots_avg10: 10.0, total_shots_avg_mando5: 14.0, shots_outsidebox_avg10: 3.0, shots_outsidebox_avg_mando5: 5.0, blocked_shots_avg10: 4.0, blocked_shots_avg_mando5: 6.0, goalkeeper_saves_avg10: 5.0, goalkeeper_saves_avg_mando5: 8.0, fouls_avg10: 13.0, fouls_avg_mando5: 10.0}
+        # team_id 30: SEM HISTÓRICO — zero nas duas contagens, NULL nas médias das duas janelas
+        # (as 5 antigas E as 5 novas: degradação graciosa não distingue insumo antigo de novo).
+        - {fixture_id: 1, team_id: 30, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
 
         # ---- fixture 800 (o mais antigo — sem histórico ANTES dele) ------------------------
-        - {fixture_id: 800, team_id: 10, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 800, team_id: 20, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 800, team_id: 10, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 800, team_id: 20, played_total: 0, played_total_disponivel: 0, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
 
         # ---- fixtures 801..808: cada uma tem < 10 jogos anteriores -> avg10 sempre NULL;
         # a maioria também tem < 5 no mando -> mando também NULL. Só a contagem muda.
-        - {fixture_id: 801, team_id: 10, played_total: 1, played_total_disponivel: 1, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 801, team_id: 20, played_total: 1, played_total_disponivel: 1, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 802, team_id: 10, played_total: 2, played_total_disponivel: 2, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 802, team_id: 20, played_total: 2, played_total_disponivel: 2, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 803, team_id: 10, played_total: 3, played_total_disponivel: 3, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 803, team_id: 20, played_total: 3, played_total_disponivel: 3, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 804, team_id: 10, played_total: 4, played_total_disponivel: 4, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 804, team_id: 20, played_total: 4, played_total_disponivel: 4, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 805, team_id: 10, played_total: 5, played_total_disponivel: 5, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 805, team_id: 20, played_total: 5, played_total_disponivel: 5, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 806, team_id: 10, played_total: 6, played_total_disponivel: 6, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 806, team_id: 20, played_total: 6, played_total_disponivel: 6, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 807, team_id: 10, played_total: 7, played_total_disponivel: 7, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 807, team_id: 20, played_total: 7, played_total_disponivel: 7, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 808, team_id: 10, played_total: 8, played_total_disponivel: 8, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 808, team_id: 20, played_total: 8, played_total_disponivel: 8, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        - {fixture_id: 801, team_id: 10, played_total: 1, played_total_disponivel: 1, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 801, team_id: 20, played_total: 1, played_total_disponivel: 1, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 802, team_id: 10, played_total: 2, played_total_disponivel: 2, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 802, team_id: 20, played_total: 2, played_total_disponivel: 2, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 0, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 803, team_id: 10, played_total: 3, played_total_disponivel: 3, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 803, team_id: 20, played_total: 3, played_total_disponivel: 3, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 804, team_id: 10, played_total: 4, played_total_disponivel: 4, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 804, team_id: 20, played_total: 4, played_total_disponivel: 4, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 1, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 805, team_id: 10, played_total: 5, played_total_disponivel: 5, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 805, team_id: 20, played_total: 5, played_total_disponivel: 5, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 806, team_id: 10, played_total: 6, played_total_disponivel: 6, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 806, team_id: 20, played_total: 6, played_total_disponivel: 6, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 2, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 807, team_id: 10, played_total: 7, played_total_disponivel: 7, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 807, team_id: 20, played_total: 7, played_total_disponivel: 7, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 808, team_id: 10, played_total: 8, played_total_disponivel: 8, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
+        - {fixture_id: 808, team_id: 20, played_total: 8, played_total_disponivel: 8, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 3, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: null, total_shots_avg_mando5: null, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: null, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: null, fouls_avg10: null, fouls_avg_mando5: null}
 
         # ---- fixture 809: cruza o piso do MANDO (5º jogo em casa do time 10) --------------
         # corners_for_avg_mando5=25.4 (contamina com o outlier 99 do fixture 800, que ainda
         # cabe nesta janela de 5 porque só há 5 jogos em casa até aqui) != corners_for_avg10
         # (ainda NULL, só 9 jogos) — SELF-JOIN: for (25.4) != against (1.8), nunca colapsam.
-        - {fixture_id: 809, team_id: 10, played_total: 9, played_total_disponivel: 9, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 5, corners_for_avg_mando5: 25.4, corners_against_avg_mando5: 1.8}
-        - {fixture_id: 809, team_id: 20, played_total: 9, played_total_disponivel: 9, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 5, corners_for_avg_mando5: 1.8, corners_against_avg_mando5: 25.4}
+        # AE#181: avg_mando5 dos 5 insumos novos também contamina com o outlier de 800
+        # (team10: ts19.0, ob10.0, bs11.0, gs13.0, fl15.0; team20 — mando é FORA aqui, mesmo
+        # outlier de 800 do lado do adversário: ts16.0, ob9.0, bs10.0, gs11.0, fl17.0) —
+        # avg10 continua NULL (9 jogos), mesmo piso das colunas antigas.
+        - {fixture_id: 809, team_id: 10, played_total: 9, played_total_disponivel: 9, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 5, corners_for_avg_mando5: 25.4, corners_against_avg_mando5: 1.8, total_shots_avg10: null, total_shots_avg_mando5: 19.0, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: 10.0, blocked_shots_avg10: null, blocked_shots_avg_mando5: 11.0, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: 13.0, fouls_avg10: null, fouls_avg_mando5: 15.0}
+        - {fixture_id: 809, team_id: 20, played_total: 9, played_total_disponivel: 9, corners_for_avg10: null, corners_against_avg10: null, played_mando5: 5, corners_for_avg_mando5: 1.8, corners_against_avg_mando5: 25.4, total_shots_avg10: null, total_shots_avg_mando5: 16.0, shots_outsidebox_avg10: null, shots_outsidebox_avg_mando5: 9.0, blocked_shots_avg10: null, blocked_shots_avg_mando5: 10.0, goalkeeper_saves_avg10: null, goalkeeper_saves_avg_mando5: 11.0, fouls_avg10: null, fouls_avg_mando5: 17.0}
 
         # ---- fixture 810: cruza o piso do AVG10 (10º jogo, o mais recente ANTES do alvo) --
         # corners_for_avg10=14.6 ainda carrega o outlier do fixture 800 (só há exatamente 10
         # jogos anteriores até aqui — 800 é o mais antigo dos 10, não o 11º). against=3.1 !=
         # for=14.6: SELF-JOIN correto. mando volta a NULL (só 4 jogos fora até aqui).
-        - {fixture_id: 810, team_id: 10, played_total: 10, played_total_disponivel: 10, corners_for_avg10: 14.6, corners_against_avg10: 3.1, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
-        - {fixture_id: 810, team_id: 20, played_total: 10, played_total_disponivel: 10, corners_for_avg10: 3.1, corners_against_avg10: 14.6, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null}
+        # AE#181: avg10 dos 5 insumos novos carrega o mesmo outlier de 800 (team10: ts13.3,
+        # ob5.9, bs6.9, gs8.1, fl14.9; team20: ts12.7, ob5.7, bs6.7, gs7.7, fl15.3) —
+        # avg_mando5 volta a NULL (mesmo piso, só 4 jogos no mando até aqui).
+        - {fixture_id: 810, team_id: 10, played_total: 10, played_total_disponivel: 10, corners_for_avg10: 14.6, corners_against_avg10: 3.1, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: 13.3, total_shots_avg_mando5: null, shots_outsidebox_avg10: 5.9, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: 6.9, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: 8.1, goalkeeper_saves_avg_mando5: null, fouls_avg10: 14.9, fouls_avg_mando5: null}
+        - {fixture_id: 810, team_id: 20, played_total: 10, played_total_disponivel: 10, corners_for_avg10: 3.1, corners_against_avg10: 14.6, played_mando5: 4, corners_for_avg_mando5: null, corners_against_avg_mando5: null, total_shots_avg10: 12.7, total_shots_avg_mando5: null, shots_outsidebox_avg10: 5.7, shots_outsidebox_avg_mando5: null, blocked_shots_avg10: 6.7, blocked_shots_avg_mando5: null, goalkeeper_saves_avg10: 7.7, goalkeeper_saves_avg_mando5: null, fouls_avg10: 15.3, fouls_avg_mando5: null}
 
         # ---- fixture 900: "futuro" relativo ao alvo (kickoff depois de 2026-03-01) --------
         # Mesmo estado de 10 jogos que o alvo enxerga (800 já saiu da janela de 10, que agora
         # tem 11 disponíveis) — prova que o CORTE é pelo kickoff de CADA alvo, não uma janela
         # global fixa. Valores extremos do próprio 900 (corner=50) não vazam para si mesmo
         # (o PIT nunca inclui o próprio jogo — `kickoff_utc < t.kickoff_utc` é estrito).
-        - {fixture_id: 900, team_id: 10, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 5.0, corners_against_avg10: 3.5, played_mando5: 5, corners_for_avg_mando5: 7.0, corners_against_avg_mando5: 2.0}
-        - {fixture_id: 900, team_id: 20, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 3.5, corners_against_avg10: 5.0, played_mando5: 5, corners_for_avg_mando5: 2.0, corners_against_avg_mando5: 7.0}
+        # AE#181: os 5 insumos novos repetem os mesmos números do fixture 1 (mesma janela
+        # 801..810, sem 800) para os dois times, provando de novo que o corte é por alvo.
+        - {fixture_id: 900, team_id: 10, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 5.0, corners_against_avg10: 3.5, played_mando5: 5, corners_for_avg_mando5: 7.0, corners_against_avg_mando5: 2.0, total_shots_avg10: 10.0, total_shots_avg_mando5: 14.0, shots_outsidebox_avg10: 3.0, shots_outsidebox_avg_mando5: 5.0, blocked_shots_avg10: 4.0, blocked_shots_avg_mando5: 6.0, goalkeeper_saves_avg10: 5.0, goalkeeper_saves_avg_mando5: 8.0, fouls_avg10: 13.0, fouls_avg_mando5: 10.0}
+        - {fixture_id: 900, team_id: 20, played_total: 10, played_total_disponivel: 11, corners_for_avg10: 3.5, corners_against_avg10: 5.0, played_mando5: 5, corners_for_avg_mando5: 2.0, corners_against_avg_mando5: 7.0, total_shots_avg10: 10.0, total_shots_avg_mando5: 11.0, shots_outsidebox_avg10: 3.0, shots_outsidebox_avg_mando5: 4.0, blocked_shots_avg10: 4.0, blocked_shots_avg_mando5: 5.0, goalkeeper_saves_avg10: 5.0, goalkeeper_saves_avg_mando5: 6.0, fouls_avg10: 13.0, fouls_avg_mando5: 12.0}
