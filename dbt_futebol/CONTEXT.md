@@ -316,6 +316,20 @@ days after the #91 default flip.
 _Avoid_: janela — reserved for the odds collection window; see **Escopo do PIT** /
 **Recorte do PIT** below for the axis this term classifies insumos against
 
+**Insumo medido**:
+The actual value a premissa/penalidade compared, not just whether it fired —
+`insumos_medidos` in the 5 premissa models (Entrega 2, AE#153, ADR 0014), one entry per
+(premissa, insumo) that applies to the row, keyed by the same insumo name as **Insumo
+declarado** so regime and value cross without a translation table. Lives as `ARRAY<STRUCT>`
+in BigQuery; the Postgres sync skips every `REPEATED`/`RECORD` column, so this never reaches
+the app on its own — `fact_insumos_medidos` (ADR 0016) is the flattened, synced copy, one row
+per (fixture, outcome, premissa, insumo), with `market`/`line_value` already in the grain even
+while only the 1X2 populates them.
+_Avoid_: confusing with **Insumo declarado** (declares WHICH columns feed a premissa, never a
+number) or **Regime do insumo** (declares under WHICH window, never a number) — only insumo
+medido carries an actual value, and it can be NULL (the insumo existed and had no data, not
+that it does not exist)
+
 **Dado não perguntado**:
 An input absent because the source was never consulted — as opposed to consulted and
 answered "nothing". The two are indistinguishable downstream unless the asking itself is
