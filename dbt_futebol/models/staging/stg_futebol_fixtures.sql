@@ -27,10 +27,10 @@ SELECT
     src.league.round            AS round,
 
     -- teams
-    src.teams.home.id           AS home_team_id,
+    {{ futebol_team_id_canonico('src.teams.home.id') }} AS home_team_id,
     src.teams.home.name         AS home_team_name,
     src.teams.home.winner       AS home_team_winner,
-    src.teams.away.id           AS away_team_id,
+    {{ futebol_team_id_canonico('src.teams.away.id') }} AS away_team_id,
     src.teams.away.name         AS away_team_name,
     src.teams.away.winner       AS away_team_winner,
 

@@ -1,0 +1,56 @@
+version: 2
+
+# ==============================================================================
+# CROSSWALK DE team_id TROCADO PELA API-FOOTBALL (AE#189).
+#
+# A API-Football troca o team_id de um clube por alguns dias e depois volta sozinha,
+# sem alarme e sem mudar contagem de linha (caso medido em 14/08/2026 no
+# fact_standings_snapshot: 132 "Chapecoense-sc" virou 22722 "Chapecoense B" de 28/07 a
+# 04/08). Em 12/09/2026 apareceu de novo, desta vez em fact_fixture_player_stats
+# (fixture 1492373, Chapecoense-sc x Internacional) — 22722 não bate com home_team_id
+# nem away_team_id do fixture, e nem está cadastrado em dim_teams.
+#
+# Este seed é o registro manual de cada troca observada. `futebol_team_id_canonico()`
+# (macros/futebol_team_id_canonico.sql) resolve team_id_observado -> team_id_canonico
+# na camada de staging, antes de qualquer join por team_id nos facts de jogo. Uma linha
+# nova aqui por PR, com a data em que a troca foi observada — não um serviço automático:
+# a troca é rara e cada uma merece revisão de quem é o clube certo.
+# ==============================================================================
+seeds:
+  - name: team_id_aliases
+    description: >
+      Crosswalk de team_id observado -> team_id canônico, para quando a API-Football
+      troca temporariamente o id de um clube (ver AE#189 e memória
+      reference_futebol_team_id_troca_identidade). Usado só nos facts de jogo
+      (fixtures, player_stats, lineups, events, statistics, standings,
+      team_season_stats, injuries, predictions) — NÃO em stg_futebol_teams/dim_teams,
+      que precisa continuar catalogando 22722 como o time real que ele é.
+    config:
+      column_types:
+        team_id_observado: INT64
+        team_id_canonico: INT64
+        clube: STRING
+        observado_em: DATE
+        origem: STRING
+    columns:
+      - name: team_id_observado
+        description: o team_id que apareceu nos dados brutos (o id "errado"/temporário).
+        tests:
+          - not_null
+          - unique
+      - name: team_id_canonico
+        description: o team_id correto do clube, o mesmo que aparece em dim_teams.
+        tests:
+          - not_null
+      - name: clube
+        description: nome do clube afetado, para leitura humana do seed.
+        tests:
+          - not_null
+      - name: observado_em
+        description: data em que a troca foi detectada (não necessariamente o início dela).
+        tests:
+          - not_null
+      - name: origem
+        description: onde a troca foi flagrada (issue/tabela), para rastrear o achado original.
+        tests:
+          - not_null

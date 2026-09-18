@@ -16,7 +16,7 @@ SELECT
     src.loaded_at,
 
     -- predictions: vencedor previsto, conselho (texto) e linhas de gol (STRING "-1.5")
-    src.predictions.winner.id      AS predicted_winner_team_id,
+    {{ futebol_team_id_canonico('src.predictions.winner.id') }} AS predicted_winner_team_id,
     src.predictions.winner.name    AS predicted_winner_name,
     src.predictions.winner.comment AS predicted_winner_comment,
     src.predictions.win_or_draw    AS predicted_win_or_draw,

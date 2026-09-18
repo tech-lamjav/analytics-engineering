@@ -10,7 +10,7 @@ SELECT
     src.fixture_id,
     src.loaded_at,
 
-    src.team.id   AS team_id,
+    {{ futebol_team_id_canonico('src.team.id') }} AS team_id,
     src.team.name AS team_name,
 
     src.player.id    AS player_id,

@@ -18,7 +18,7 @@ SELECT
     src.player.type   AS injury_type,    -- ⚠️ type/reason vêm ANINHADOS em player (não no topo)
     src.player.reason AS injury_reason,
 
-    src.team.id   AS team_id,
+    {{ futebol_team_id_canonico('src.team.id') }} AS team_id,
     src.team.name AS team_name,
     src.team.logo AS team_logo,
 

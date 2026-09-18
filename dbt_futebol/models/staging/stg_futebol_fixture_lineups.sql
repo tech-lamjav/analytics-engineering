@@ -11,7 +11,7 @@ SELECT
     src.loaded_at,
     src.lineup_phase,
 
-    src.team.id         AS team_id,
+    {{ futebol_team_id_canonico('src.team.id') }} AS team_id,
     src.team.name       AS team_name,
 
     src.formation,

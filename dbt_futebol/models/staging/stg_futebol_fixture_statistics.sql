@@ -8,7 +8,7 @@ WITH src AS (
 
 SELECT
     src.fixture_id,
-    src.team.id    AS team_id,
+    {{ futebol_team_id_canonico('src.team.id') }} AS team_id,
     src.team.name  AS team_name,
     src.loaded_at,
 
