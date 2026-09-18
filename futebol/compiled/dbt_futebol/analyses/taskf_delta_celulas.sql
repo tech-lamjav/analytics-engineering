@@ -1,0 +1,202 @@
+/*
+    [F-4] O NÚMERO DE CADA PREMISSA, LADO A LADO, ENTRE DUAS CÉLULAS. Por default `base` contra
+    `escopo`, que é a comparação que a #53 pede: a primeira célula que produz número novo.
+
+    A tabela do entregável final (as 39 linhas da #59) sai desta comparação repetida para as
+    outras células; aqui ela é o que responde "o que o número vira quando junta" para o eixo de
+    escopo isolado.
+
+    ────────────────────────────────────────────────────────────────────────────────
+    O QUE ESPERAR, ANTES DE OLHAR — para o resultado poder desmentir algo:
+
+    1. As TRÊS PREMISSAS DE TABELA do catálogo medido (`superioridade_tabela`, `supremacia`,
+       `sem_rodizio`) têm de sair IDÊNTICAS NO PISO 0. A ADR 0008 as mantém competição-scoped em
+       todas as células: rank e ppg saem do agregado próprio do team_form_pit, que não segue os
+       eixos. Se uma delas se mexer no piso 0, a ADR 0008 não está implementada como diz.
+       (A quarta que a ADR nomeia, `x_superioridade_tabela`, não é premissa medida: é coluna
+       interna do 1X2 que a Dupla Chance reusa dentro do `lado_coberto_forte`, o qual TAMBÉM lê
+       `forca_mismatch` e portanto segue o eixo.)
+
+    2. ⚠️ IDÊNTICAS NO PISO 0, NÃO NOS DEMAIS PISOS. O `min_jogos` segue a célula inclusive nas
+       linhas dessas três — é a seção "Consequences" da própria ADR 0008: o piso é propriedade do
+       jogo, não da premissa. Com o histórico junto, jogos que não passavam no piso 5 passam a
+       passar, então `n_p5` e `diferenca_p5` mudam mesmo com a premissa imóvel. O mesmo vale para
+       `jogos_medios_disp`/`jogos_medios_usado` e `pct_amostra_curta`, que não têm piso e leem o
+       `min_jogos` da célula.
+       Por isso o veredito das três olha SÓ o piso 0: exigir igualdade nos demais seria cobrar da
+       ADR 0008 uma coisa que ela explicitamente não promete.
+
+    3. `historico_over`, `historico_under`, `historico_btts`, `historico_seco` e as duas de xG
+       leem histórico competição-scoped PRÓPRIO, fora do team_form_pit (#52), e por isso TÊM de
+       se mexer. Se elas não se mexerem, o eixo não alcançou todas as fontes e a célula está
+       misturada.
+
+    4. `h2h_favoravel` (1X2) é a ÚNICA imune por definição: o `fact_h2h` já cruza campeonatos hoje
+       e a spec o deixa como está — "é a única fonte imune ao efeito medido" (#49). Ela só pode
+       mudar via piso: `n_p5` para cima, `diferenca_p0` parada.
+
+       ⚠️ `adversario_limitado` (DC) NÃO é imune, embora reuse o h2h. A premissa é
+       `o_aproveitamento < 45 OR x_h2h_favoravel`, e `o_aproveitamento` sai de
+       `wins_total/draws_total/played_total` do PIT — que seguem o eixo. Medido entre `base` e
+       `escopo`: `n_p0` 160 → 165 e `diferenca_p0` +0,7 → +1,2. Uma premissa que reusa fonte imune
+       só herda a imunidade se **todos** os seus insumos forem imunes; aqui o OR basta para
+       quebrá-la. Esta linha esteve errada no primeiro commit desta análise e foi corrigida com o
+       número que a desmentiu — a expectativa existe para poder ser falsificada, e foi.
+
+    ────────────────────────────────────────────────────────────────────────────────
+    ⚠️ AS DUAS CONTAGENS DE AMOSTRA (#54) SAEM SEPARADAS, e num par que envolva célula de recorte
+    de contagem elas contam histórias diferentes: `delta_jogos_disp` é o efeito do eixo (quanto
+    passado o jogo passou a ter) e `delta_jogos_usado` é ele MENOS a saturação em 10. Num par
+    `base` → `recorte` a usada pode até CAIR, com a disponível subindo — o time que tinha 25
+    partidas na temporada passa a alimentar a média com 10. Isso é o teto funcionando, não perda
+    de histórico. Ver analyses/taskf_saturacao_recorte.sql.
+
+    ⚠️ E há um par em que o eixo de recorte ENCOLHE o histórico de verdade: as duas premissas de
+    Handicap que saem do `margin_stats` (`raramente_perde_por_2`, `favorito_irregular`). Aquela
+    fonte não tem filtro de season nem no default — ela já atravessa temporada —, então nela
+    `base` → `recorte` é "todo o tempo coletado" → "as 10 últimas", e não "a temporada" → "as 10
+    últimas" como em todas as outras. Comparar o delta delas com o das demais sem saber disso
+    leva a conclusão errada.
+
+    A COMPARAÇÃO É FULL OUTER de propósito: premissa que existe numa célula e não na outra sai
+    como `SEM_CONTRAPARTE` em vez de desaparecer do resultado. Uma premissa some da tabela quando
+    ela não acende nenhuma vez na célula (o `HAVING COUNTIF(acesa) > 0` do taskf_teste2), e isso é
+    achado, não linha a esconder.
+
+    As células a comparar são vars, validadas contra os quatro nomes possíveis — um nome digitado
+    errado devolveria zero linha ou uma coluna inteira de `SEM_CONTRAPARTE`, e as duas coisas se
+    parecem demais com um resultado.
+
+    ⚠️ O UNIVERSO TAMBÉM É VAR, e o default é o primário (`completo`). Desde a #58 a tabela tem
+    quatro universos dentro dela; sem o recorte, esta análise juntaria a linha `completo` da célula
+    A com as quatro da célula B e devolveria quatro linhas por premissa — cada uma parecendo um
+    delta. O recorte é aplicado nos DOIS lados com o MESMO valor de propósito: comparar célula A no
+    universo X com célula B no universo Y misturaria os dois eixos numa diferença só, que é
+    exatamente o erro que o 2×2 desta task existe para não cometer. Quem quer o efeito de EXCLUIR
+    jogos — o mesmo par de células, dois universos — usa analyses/taskf_exclusao.sql.
+
+    COMO RODAR (do dbt_futebol/), depois de as duas células terem sido medidas pelo taskf_teste2:
+
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_delta_celulas
+      bq query --use_legacy_sql=false --project_id=smartbetting-dados \
+        < target/compiled/dbt_futebol/analyses/taskf_delta_celulas.sql
+
+      # outro par de células:
+      ... --select taskf_delta_celulas --vars '{taskf_celula_a: base, taskf_celula_b: ambos}'
+
+      # o mesmo par noutro universo:
+      ... --vars '{taskf_celula_a: base, taskf_celula_b: ambos, taskf_universo: estendido}'
+
+    (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
+
+    → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
+*/WITH a AS (
+    SELECT * FROM `smartbetting-dados`.`futebol_taskF`.`taskf_teste2`
+    WHERE celula = 'base' AND universo = 'completo'
+),
+b AS (
+    SELECT * FROM `smartbetting-dados`.`futebol_taskF`.`taskf_teste2`
+    WHERE celula = 'escopo' AND universo = 'completo'
+),
+
+juntado AS (
+    SELECT
+        mercado,
+        premissa,
+        benchmark,
+        COALESCE(a.usado_para_peso, b.usado_para_peso)  AS usado_para_peso,
+        a.celula IS NULL                                AS so_na_b,
+        b.celula IS NULL                                AS so_na_a,
+        a.jogos_medios_disp   AS jogos_disp_a,         b.jogos_medios_disp   AS jogos_disp_b,
+        a.jogos_medios_usado  AS jogos_usado_a,        b.jogos_medios_usado  AS jogos_usado_b,
+        a.pct_amostra_curta   AS pct_curta_a,          b.pct_amostra_curta   AS pct_curta_b,
+        a.fator_encolhimento  AS encolhimento_a,       b.fator_encolhimento  AS encolhimento_b,
+        a.n_p0          AS n_p0_a,          b.n_p0          AS n_p0_b,
+        a.diferenca_p0  AS dif_p0_a,        b.diferenca_p0  AS dif_p0_b,
+        a.peso_p0       AS peso_p0_a,       b.peso_p0       AS peso_p0_b,
+        a.a_odd_dava_p0 AS a_odd_dava_p0_a, b.a_odd_dava_p0 AS a_odd_dava_p0_b,
+        a.aconteceu_p0  AS aconteceu_p0_a,  b.aconteceu_p0  AS aconteceu_p0_b,
+        a.n_p3          AS n_p3_a,          b.n_p3          AS n_p3_b,
+        a.diferenca_p3  AS dif_p3_a,        b.diferenca_p3  AS dif_p3_b,
+        a.peso_p3       AS peso_p3_a,       b.peso_p3       AS peso_p3_b,
+        a.a_odd_dava_p3 AS a_odd_dava_p3_a, b.a_odd_dava_p3 AS a_odd_dava_p3_b,
+        a.aconteceu_p3  AS aconteceu_p3_a,  b.aconteceu_p3  AS aconteceu_p3_b,
+        a.n_p5          AS n_p5_a,          b.n_p5          AS n_p5_b,
+        a.diferenca_p5  AS dif_p5_a,        b.diferenca_p5  AS dif_p5_b,
+        a.peso_p5       AS peso_p5_a,       b.peso_p5       AS peso_p5_b,
+        a.a_odd_dava_p5 AS a_odd_dava_p5_a, b.a_odd_dava_p5 AS a_odd_dava_p5_b,
+        a.aconteceu_p5  AS aconteceu_p5_a,  b.aconteceu_p5  AS aconteceu_p5_b,
+        a.n_p10          AS n_p10_a,          b.n_p10          AS n_p10_b,
+        a.diferenca_p10  AS dif_p10_a,        b.diferenca_p10  AS dif_p10_b,
+        a.peso_p10       AS peso_p10_a,       b.peso_p10       AS peso_p10_b,
+        a.a_odd_dava_p10 AS a_odd_dava_p10_a, b.a_odd_dava_p10 AS a_odd_dava_p10_b,
+        a.aconteceu_p10  AS aconteceu_p10_a,  b.aconteceu_p10  AS aconteceu_p10_b
+    FROM a FULL OUTER JOIN b USING (mercado, premissa, benchmark)
+),
+
+classificado AS (
+    SELECT
+        j.*,
+        premissa IN ("superioridade_tabela", "supremacia", "sem_rodizio") AS e_premissa_de_tabela,(
+          IF(n_p0_a IS DISTINCT FROM n_p0_b, 1, 0) + 
+          IF(a_odd_dava_p0_a IS DISTINCT FROM a_odd_dava_p0_b, 1, 0) + 
+          IF(aconteceu_p0_a IS DISTINCT FROM aconteceu_p0_b, 1, 0) + 
+          IF(dif_p0_a IS DISTINCT FROM dif_p0_b, 1, 0))                                     AS campos_piso0_mudados,
+
+        (
+          IF(n_p0_a IS DISTINCT FROM n_p0_b, 1, 0)
+          + IF(dif_p0_a IS DISTINCT FROM dif_p0_b, 1, 0) + 
+          IF(n_p3_a IS DISTINCT FROM n_p3_b, 1, 0)
+          + IF(dif_p3_a IS DISTINCT FROM dif_p3_b, 1, 0) + 
+          IF(n_p5_a IS DISTINCT FROM n_p5_b, 1, 0)
+          + IF(dif_p5_a IS DISTINCT FROM dif_p5_b, 1, 0) + 
+          IF(n_p10_a IS DISTINCT FROM n_p10_b, 1, 0)
+          + IF(dif_p10_a IS DISTINCT FROM dif_p10_b, 1, 0)
+          + IF(jogos_disp_a  IS DISTINCT FROM jogos_disp_b, 1, 0)
+          + IF(jogos_usado_a IS DISTINCT FROM jogos_usado_b, 1, 0)
+          + IF(pct_curta_a IS DISTINCT FROM pct_curta_b, 1, 0))  AS campos_mudados
+    FROM juntado AS j
+)
+
+SELECT
+    mercado,
+    premissa,
+    benchmark,
+    usado_para_peso,
+    CASE
+        WHEN so_na_a OR so_na_b               THEN 'SEM_CONTRAPARTE'
+        WHEN e_premissa_de_tabela
+             AND campos_piso0_mudados = 0     THEN 'TABELA_IMOVEL_NO_PISO0'
+        WHEN e_premissa_de_tabela             THEN 'TABELA_MEXEU_CONTRA_A_ADR_0008'
+        WHEN campos_mudados = 0               THEN 'IDENTICO'
+        ELSE                                       'MUDOU'
+    END                                       AS veredito,
+    campos_mudados,
+    campos_piso0_mudados,
+    -- As duas contagens de amostra (#54). A DISPONÍVEL é a que o piso corta; a USADA é a que
+    -- alimentou as médias e satura sob recorte de contagem. Comparar `base` com `recorte` pela
+    -- usada mostraria a saturação, não o efeito do eixo.
+    jogos_disp_a,  jogos_disp_b,
+    ROUND(jogos_disp_b  - jogos_disp_a,  1)      AS delta_jogos_disp,
+    jogos_usado_a, jogos_usado_b,
+    ROUND(jogos_usado_b - jogos_usado_a, 1)      AS delta_jogos_usado,
+    pct_curta_a, pct_curta_b,
+    ROUND(pct_curta_b - pct_curta_a, 1)          AS delta_pct_curta,
+    n_p0_a, n_p0_b, n_p0_b - n_p0_a AS delta_n_p0,
+    dif_p0_a, dif_p0_b,
+    ROUND(dif_p0_b - dif_p0_a, 1)                     AS delta_dif_p0,
+    n_p3_a, n_p3_b, n_p3_b - n_p3_a AS delta_n_p3,
+    dif_p3_a, dif_p3_b,
+    ROUND(dif_p3_b - dif_p3_a, 1)                     AS delta_dif_p3,
+    n_p5_a, n_p5_b, n_p5_b - n_p5_a AS delta_n_p5,
+    dif_p5_a, dif_p5_b,
+    ROUND(dif_p5_b - dif_p5_a, 1)                     AS delta_dif_p5,
+    n_p10_a, n_p10_b, n_p10_b - n_p10_a AS delta_n_p10,
+    dif_p10_a, dif_p10_b,
+    ROUND(dif_p10_b - dif_p10_a, 1)                     AS delta_dif_p10,
+    peso_p0_a, peso_p0_b, ROUND(peso_p0_b - peso_p0_a, 2) AS delta_peso_p0,
+    peso_p5_a, peso_p5_b, ROUND(peso_p5_b - peso_p5_a, 2) AS delta_peso_p5,
+    'base' AS celula_a,
+    'escopo' AS celula_b
+FROM classificado
+ORDER BY ABS(COALESCE(dif_p5_b - dif_p5_a, 0)) DESC, mercado, premissa, benchmark
