@@ -14,7 +14,7 @@ SELECT
     src.elapsed         AS minute,
     src.extra           AS minute_extra,
 
-    src.team.id         AS team_id,
+    {{ futebol_team_id_canonico('src.team.id') }} AS team_id,
     src.team.name       AS team_name,
 
     src.player.id       AS player_id,
