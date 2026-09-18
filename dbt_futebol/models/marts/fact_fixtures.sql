@@ -1,8 +1,10 @@
 {{ config(
-    materialized='table',
+    materialized='incremental',
+    unique_key='fixture_id',
+    incremental_strategy='merge',
     partition_by={'field': 'date_utc', 'data_type': 'date'},
     cluster_by=['competition', 'season', 'home_team_id'],
-    description='Tabela mãe de jogos (fixtures). 1 linha por fixture_id — chave que destrava stats/events/lineups/player_stats. Particionada por DATE(date_utc) UTC e clusterizada por (competition, season, home_team_id). Reconstruída full a cada run (snapshot do /fixtures), o que atualiza status/placar de jogos em andamento e finalizados. `venue_id`/`venue_name`/`venue_city` são preenchidos com o último conhecido do mandante quando a API ainda não mandou o local (issue #150, ADR 0015) — `venue_inferido` marca quando isso aconteceu.'
+    description='Tabela mãe de jogos (fixtures). 1 linha por fixture_id — chave que destrava stats/events/lineups/player_stats. Particionada por DATE(date_utc) UTC e clusterizada por (competition, season, home_team_id). Incremental por MERGE em fixture_id (AE#191, ADR 0017) — só reescreve as partições de fixtures que de fato mudaram desde o último run, em vez de recriar a tabela inteira (o CREATE OR REPLACE full batia na quota de "partition modifications" do BigQuery, com fixtures-live rodando a cada ~15min contra as 966 partições da tabela). A CTE de dedup/fallback de venue continua lendo stg_futebol_fixtures por inteiro (barato) — só a escrita final é filtrada. `venue_id`/`venue_name`/`venue_city` são preenchidos com o último conhecido do mandante quando a API ainda não mandou o local (issue #150, ADR 0015) — `venue_inferido` marca quando isso aconteceu.'
 ) }}
 
 WITH deduplicado AS (
@@ -167,3 +169,19 @@ SELECT
     CURRENT_TIMESTAMP() AS dbt_loaded_at
 FROM deduplicado d
 JOIN com_ultimo_venue_conhecido v USING (fixture_id)
+-- FILTRO INCREMENTAL (AE#191): de propósito só AQUI, na ponta final — não empurrado pra
+-- dentro de `deduplicado`. O fallback de venue (CTE acima) precisa ver o HISTÓRICO INTEIRO
+-- de cada home_team_id pra funcionar (LAST_VALUE sobre a janela completa); filtrar a fonte
+-- cedo demais quebraria o fallback pra qualquer fixture fora do lote incremental.
+--
+-- Anti-join por fixture_id, NÃO um cursor global tipo `extracted_at > MAX(extracted_at)`:
+-- um cursor global é uma corrida entre fontes — um backfill de temporada com loaded_at mais
+-- antigo que chega DEPOIS de um poll do fixtures-live já ter avançado o máximo global seria
+-- descartado em silêncio. Comparar por fixture_id é correto não importa a ordem de chegada.
+{% if is_incremental() %}
+WHERE NOT EXISTS (
+    SELECT 1 FROM {{ this }} t
+    WHERE t.fixture_id = d.fixture_id
+      AND t.extracted_at >= d.extracted_at
+)
+{% endif %}
