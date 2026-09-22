@@ -258,6 +258,9 @@ flags AS (
         -- Champions League -> FALSE pelo mesmo motivo: fase de liga (36 times, 8 jogos) vira
         -- mata-mata em fevereiro e a tabela congela; G6/Z3 não modela a dinâmica top-8/9-24.
         -- TODO: refinar com rodada/congestionamento de calendário.
+        -- Nations League -> FALSE pelo mesmo motivo: 14 grupos de 4, rank é por grupo e
+        -- n_teams conta a season inteira — mesma estrutura de grupo+mata-mata de
+        -- Libertadores/Sudamericana/Champions. Fora do IN por decisão, não por acidente (AE#193).
         -- A lista sai de futebol_ligas_pontos_corridos(): ela é lida também pela chave de
         -- aplicabilidade desta premissa no mapa de insumos, e duas cópias divergem em silêncio.
         m.is_favorito AND m.competition IN {{ futebol_ligas_pontos_corridos_sql() }}

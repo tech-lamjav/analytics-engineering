@@ -9,9 +9,9 @@
     liga a mais na premissa vira ruído no score, liga a mais no mapa vira ruído no contador de
     premissas sem dado.
 
-    Copa do Brasil não entra (não tem tabela nenhuma). Libertadores, Sudamericana e Champions
-    também não: elas TÊM standings, mas o rank é por grupo/fase de liga e congela no mata-mata —
-    o raciocínio completo está no comentário da premissa, no modelo. -#}
+    Copa do Brasil não entra (não tem tabela nenhuma). Libertadores, Sudamericana, Champions e
+    Nations League também não: elas TÊM standings, mas o rank é por grupo/fase de liga e congela
+    no mata-mata — o raciocínio completo está no comentário da premissa, no modelo. -#}
 {% macro futebol_ligas_pontos_corridos() %}
     {{ return([
         'brasileirao', 'serie_b', 'la_liga', 'premier_league',
