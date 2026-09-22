@@ -2,8 +2,25 @@
     description='Flatten do raw_futebol_fixtures. NÃO é 1 linha por fixture — é 1 linha por EXTRAÇÃO: raw_futebol_fixtures é append-only e o extractor re-busca jogo recente pra pegar status/placar atualizado, então o mesmo fixture_id repete com loaded_at maior (ver models.yml, corrigido 02/09/2026). Apenas a espinha (/fixtures): fixture, league, teams, goals, score. Stats/events/lineups vêm de endpoints separados (subtasks 5-8). fact_fixtures deriva competition/date_utc e faz o dedup de verdade (latest-wins por loaded_at).'
 ) }}
 
+-- CORTE TEMPORÁRIO — DE#94/DE#95/DE#96 (data-engineering), ADR 0004 lá ("competição de
+-- insumo"). Amistosos de seleção (league_id 10) já chegam no raw (DE#94 ligou a coleta com
+-- universo cortado), mas NÃO podem entrar em produção ainda: ligar os 115 jogos finalizados
+-- move retroativamente a forma PIT das seleções que já têm linha em fact_fixtures (a forma
+-- atravessa competição desde a #91/ADR 0010 de lá), e isso só é seguro se medido primeiro
+-- (DE#95, contra o target futebol_taskF, nunca produção).
+--
+-- Filtrado aqui — o ponto MAIS CEDO do DAG que lê o raw (único model que faz `source(...)`
+-- sobre raw_futebol_fixtures; fact_fixtures é o único que lê este model) — para proteger
+-- fact_fixtures e os 6 marts que derivam league_id dela (odds/predictions/standings/
+-- injuries/team_season_stats — os "6 CASE" citados em models.yml) numa linha só, em vez de
+-- repetir o filtro em cada um.
+-- REMOVER quando o DE#95 der veredito favorável e o DE#96 ligar o slug 'amistosos' nos
+-- marts — a lista abaixo é a única coisa que precisa sair.
+{% set ligas_insumo_bloqueadas_ate_medicao = [10] %}
+
 WITH src AS (
     SELECT * FROM {{ source('futebol', 'raw_futebol_fixtures') }}
+    WHERE requested_league_id NOT IN ({{ ligas_insumo_bloqueadas_ate_medicao | join(',') }})
 )
 
 SELECT
