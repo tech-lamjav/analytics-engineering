@@ -26,6 +26,7 @@ SELECT
         WHEN 78  THEN 'bundesliga'
         WHEN 61  THEN 'ligue_1'
         WHEN 94  THEN 'primeira_liga'
+        WHEN 5  THEN 'nations_league'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS competition_id,
