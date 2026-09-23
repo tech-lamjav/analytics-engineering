@@ -45,6 +45,16 @@
     amostra não bate) para "avalia", o que É o deslocamento, não uma aproximação dele.
 
     Ver a leitura completa em docs/TASKF_RESULTADOS.md, seção "Ticket DE#95".
+
+    ────────────────────────────────────────────────────────────────────────────────
+    ⚠️ DEPOIS DA DE#96 (slug `amistosos` ligado com corte por kickoff)
+
+    A produção deixou de excluir a liga 10 inteira: agora exclui só o que tem kickoff antes da
+    data de entrada (macros/futebol_competicoes_insumo.sql). O "antes" desta query passa a conter
+    os amistosos FUTUROS, então rodar de novo depois do deploy não devolve o mesmo número nas
+    âncoras de Nations League que caem depois de algum amistoso. O que a #95 mediu — o efeito do
+    PASSADO — segue legível restringindo as duas CTEs a âncoras com kickoff anterior à data de
+    entrada: ali os dois cenários só diferem pelos 115 FT de jan–jun, como no dia da medição.
 #}
 
 WITH antes AS (

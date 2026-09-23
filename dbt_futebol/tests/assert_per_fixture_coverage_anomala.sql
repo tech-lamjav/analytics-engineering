@@ -26,21 +26,37 @@
 --      Round" = 37 de 40 sem player_stats), e um corte por quota é contíguo na ordem de
 --      ingestão, produzindo o mesmo rastro de rodada quase-vazia.
 --
--- O que sobrou e funciona: excluir as DUAS competições cujas fases iniciais a API não cobre e
--- pôr um limiar com folga nas demais. Com copa_do_brasil e champions_league fora, o resíduo da
--- base inteira é de 1 a 5 jogos por liga-temporada×fato — máximo 3,2% (libertadores 2024,
--- player_stats). Contra 67,6% do incidente: 3x de folga do lado do ruído, 6,7x do lado do sinal.
+-- O que sobrou e funciona: tirar da conta as competições cujo buraco NÃO é sinal e pôr um limiar
+-- com folga nas demais. A lista de exclusão tem DUAS razões distintas, e cada uma mora na sua
+-- própria variável para que o nome não minta sobre o conteúdo:
 --
--- A exclusão é DECISÃO, não acidente, e o critério é "mata-mata cujas fases iniciais a API não
--- cobre" — não "mata-mata". Libertadores e Sudamericana também são mata-mata e ficam DENTRO,
--- porque a ausência delas cabe na tolerância. Competição nova de copa precisa ser medida antes
--- de entrar aqui; enquanto não for, ela fica dentro e acende — que é o lado certo p/ errar.
+--   1. `competicoes_sem_cobertura_inicial` — LACUNA DA API. Mata-mata cujas fases iniciais a API
+--      não cobre: copa_do_brasil e champions_league. Com as duas fora, o resíduo da base inteira é
+--      de 1 a 5 jogos por liga-temporada×fato — máximo 3,2% (libertadores 2024, player_stats).
+--      Contra 67,6% do incidente: 3x de folga do lado do ruído, 6,7x do lado do sinal. O critério
+--      é "mata-mata cujas fases iniciais a API não cobre" — não "mata-mata". Libertadores e
+--      Sudamericana também são mata-mata e ficam DENTRO, porque a ausência delas cabe na
+--      tolerância. Copa nova precisa ser medida antes de entrar aqui; enquanto não for, ela fica
+--      dentro e acende — que é o lado certo p/ errar.
+--
+--   2. Competições de INSUMO (macros/futebol_competicoes_insumo.sql; hoje só amistosos, DE#96) —
+--      DECISÃO NOSSA, não lacuna da API. A API cobre os fatos per-fixture de amistoso; NÓS
+--      decidimos não coletá-los (ADR 0004 no data-engineering, decisão 17: a forma lê só
+--      fact_fixtures, e o teto de custo é zero recorrente). O gate de liga da extração garante
+--      0% de cobertura, e sem esta exclusão a guarda reprovava no dia 1 (0% contra 10%). Nada a
+--      medir aqui: uma competição entra nesta razão ao ser declarada de insumo, não por limiar.
+--
+-- A exclusão é DECISÃO, não acidente, nas duas razões. Se um dia os fatos per-fixture de uma
+-- competição de insumo passarem a ser coletados, ela precisa SAIR desta exclusão (sair da macro
+-- de insumo), ou um corte de quota nela passa mudo.
 --
 -- LIMITE CONHECIDO: truncamento abaixo do limiar passa. 10% de 380 jogos são 38 fixtures, e
 -- abaixo disso o corte é indistinguível do ruído da API com os dados que temos. Quem quer o
 -- quadro completo usa o gêmeo, na verificação de D+1.
 
 {% set competicoes_sem_cobertura_inicial = ['copa_do_brasil', 'champions_league'] %}
+{% set competicoes_de_insumo = futebol_competicoes_insumo().values() | map(attribute='slug') | list %}
+{% set competicoes_fora_da_conta = competicoes_sem_cobertura_inicial + competicoes_de_insumo %}
 {% set tolerancia_pct = 10 %}
 
 WITH finalizadas AS (
@@ -48,7 +64,7 @@ WITH finalizadas AS (
     FROM {{ ref('fact_fixtures') }}
     WHERE status_short IN ('FT', 'AET', 'PEN')
       AND competition NOT IN (
-          {%- for c in competicoes_sem_cobertura_inicial %}'{{ c }}'{{ ", " if not loop.last }}{%- endfor -%}
+          {%- for c in competicoes_fora_da_conta %}'{{ c }}'{{ ", " if not loop.last }}{%- endfor -%}
       )
 ),
 

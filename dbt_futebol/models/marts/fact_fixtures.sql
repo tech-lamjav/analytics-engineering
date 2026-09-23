@@ -25,6 +25,10 @@ SELECT
         WHEN 61  THEN 'ligue_1'
         WHEN 94  THEN 'primeira_liga'
         WHEN 5  THEN 'nations_league'
+        -- Competição de INSUMO (ADR 0004 no data-engineering, decisão 15): o slug entra SÓ aqui,
+        -- nunca nos outros cinco CASE — lá ele sugeriria cobertura de odds/tabela/desfalque/
+        -- previsão/stats de temporada que não coletamos. Ver macros/futebol_competicoes_insumo.sql.
+        WHEN 10 THEN 'amistosos'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS competition_id,

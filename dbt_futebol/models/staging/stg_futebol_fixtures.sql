@@ -2,32 +2,33 @@
     description='Flatten do raw_futebol_fixtures. NÃO é 1 linha por fixture — é 1 linha por EXTRAÇÃO: raw_futebol_fixtures é append-only e o extractor re-busca jogo recente pra pegar status/placar atualizado, então o mesmo fixture_id repete com loaded_at maior (ver models.yml, corrigido 02/09/2026). Apenas a espinha (/fixtures): fixture, league, teams, goals, score. Stats/events/lineups vêm de endpoints separados (subtasks 5-8). fact_fixtures deriva competition/date_utc e faz o dedup de verdade (latest-wins por loaded_at).'
 ) }}
 
--- CORTE TEMPORÁRIO — DE#94/DE#95/DE#96 (data-engineering), ADR 0004 lá ("competição de
--- insumo"). Amistosos de seleção (league_id 10) já chegam no raw (DE#94 ligou a coleta com
--- universo cortado), mas NÃO podem entrar em produção ainda: ligar os 115 jogos finalizados
--- move retroativamente a forma PIT das seleções que já têm linha em fact_fixtures (a forma
--- atravessa competição desde a #91/ADR 0010 de lá), e isso só é seguro se medido primeiro
--- (DE#95, contra o target futebol_taskF, nunca produção).
+-- CORTE DAS COMPETIÇÕES DE INSUMO POR DATA DE ENTRADA — DE#96 (data-engineering), ADR 0004 lá
+-- ("competição de insumo"), seção "Medição (DE#95)". Data e liga vêm de
+-- macros/futebol_competicoes_insumo.sql, que explica o porquê e é a fonte única.
 --
--- Filtrado aqui — o ponto MAIS CEDO do DAG que lê o raw (único model que faz `source(...)`
--- sobre raw_futebol_fixtures; fact_fixtures é o único que lê este model) — para proteger
--- fact_fixtures e os 6 marts que derivam league_id dela (odds/predictions/standings/
--- injuries/team_season_stats — os "6 CASE" citados em models.yml) numa linha só, em vez de
--- repetir o filtro em cada um.
--- REMOVER quando o DE#95 der veredito favorável e o DE#96 ligar o slug 'amistosos' nos
--- marts — a lista abaixo é a única coisa que precisa sair.
+-- Amistosos de seleção (league_id 10) chegam ao raw com a temporada inteira (DE#94 ligou a
+-- coleta com o universo cortado), mas só entram no mart os jogos com kickoff a partir de
+-- 2026-09-23. A #95 mediu que o passado (115 FT, jan–jun) deslocaria em ~23 pp a forma PIT de
+-- âncoras de Copa do Mundo e Nations League já medidas — a forma atravessa competição desde a
+-- #91/ADR 0010 de lá — e o veredito foi que o passado não entra. Este corte é PERMANENTE: o raw
+-- continua trazendo os 115 (a tabela externa é wildcard sobre o GCS, não há portão entre o
+-- bucket e o mart), então tirá-lo publicaria exatamente o deslocamento que a #95 recusou. A
+-- guarda assert_competicao_insumo_sem_passado acende se isso acontecer.
 --
--- MEDIÇÃO (DE#95): var `taskf_incluir_amistosos`, default false — SEM a var, o SQL compilado
--- é idêntico ao de antes (lista = [10]), então produção não muda uma linha. Só existe para o
--- DE#95 poder materializar o cenário "amistosos dentro" contra o target `taskF`, nunca contra
--- dev/prod. Ver docs/adr/0004-amistosos-como-competicao-de-insumo.md (decisão 16) no
--- data-engineering.
-{% set ligas_insumo_bloqueadas_ate_medicao = [] if var('taskf_incluir_amistosos', false) else [10] %}
+-- Até a #96 este mesmo ponto bloqueava a liga 10 INTEIRA (corte temporário da #94). Continua
+-- sendo aqui pelo mesmo motivo: é o ponto MAIS CEDO do DAG que lê o raw (único model que faz
+-- `source(...)` sobre raw_futebol_fixtures; fact_fixtures é o único que lê este model).
+--
+-- MEDIÇÃO (DE#95): var `taskf_incluir_amistosos`, default false. Com ela, o corte some e o
+-- passado entra — só existe para o cenário "com amistosos" da análise
+-- taskf_amistosos_efeito_retroativo_95 continuar reproduzível contra o target `taskF`, nunca
+-- contra dev/prod.
+{% set aplica_corte_insumo = not var('taskf_incluir_amistosos', false) %}
 
 WITH src AS (
     SELECT * FROM {{ source('futebol', 'raw_futebol_fixtures') }}
-    {% if ligas_insumo_bloqueadas_ate_medicao | length > 0 -%}
-    WHERE requested_league_id NOT IN ({{ ligas_insumo_bloqueadas_ate_medicao | join(',') }})
+    {% if aplica_corte_insumo -%}
+    WHERE NOT {{ futebol_insumo_antes_da_entrada('requested_league_id', 'TIMESTAMP_SECONDS(fixture.timestamp)') }}
     {%- endif %}
 )
 
