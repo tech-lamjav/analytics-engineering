@@ -1,0 +1,67 @@
+version: 2
+
+# ==============================================================================
+# Unit test do CORTE POR KICKOFF das competições de insumo (DE#96 no data-engineering,
+# ADR 0004 lá, seção "Medição (DE#95)").
+#
+# Por que unit test e não só a guarda de dados: hoje o raw tem 115 amistosos FT até
+# 10/06 e 22 NS a partir de 24/09 — nenhum jogo perto do corte (23/09). Uma contagem
+# sobre produção passa com o corte em qualquer data entre as duas pontas, e passa
+# também com o `<` trocado por `<=`. Só linha construída encosta na fronteira.
+#
+#   fixture 1  amistoso ANTES do corte (FT, junho)          -> fora
+#   fixture 2  amistoso UM SEGUNDO antes do corte           -> fora
+#   fixture 3  amistoso EXATAMENTE no corte (00:00 UTC)     -> dentro
+#   fixture 4  amistoso depois do corte (NS)                -> dentro
+#   fixture 5  liga de produto com kickoff antigo           -> dentro (o corte é por liga)
+# ==============================================================================
+unit_tests:
+  - name: stg_fixtures_insumo_so_entra_a_partir_do_corte
+    model: stg_futebol_fixtures
+    description: >
+      Competição de insumo (amistosos, league_id 10) só chega ao staging com kickoff a partir
+      da data de entrada declarada em futebol_competicoes_insumo(); o passado fica fora porque
+      a #95 mediu ~23 pp de deslocamento retroativo na forma. Liga de produto não é tocada.
+    given:
+      - input: source('futebol', 'raw_futebol_fixtures')
+        format: sql
+        rows: |
+          {%- set linhas = [
+              (1, 10, 1781053200),
+              (2, 10, 1790121599),
+              (3, 10, 1790121600),
+              (4, 10, 1790244300),
+              (5, 71, 1704067200),
+          ] -%}
+          {%- for fid, lid, ts in linhas %}
+          SELECT
+              {{ lid }} AS requested_league_id,
+              2026 AS requested_season,
+              TIMESTAMP '2026-09-23 12:00:00' AS loaded_at,
+              STRUCT(
+                  {{ fid }} AS id, CAST(NULL AS STRING) AS referee, 'UTC' AS timezone, {{ ts }} AS timestamp,
+                  STRUCT(CAST(NULL AS INT64) AS id, CAST(NULL AS STRING) AS name, CAST(NULL AS STRING) AS city) AS venue,
+                  STRUCT('x' AS long, 'NS' AS short, CAST(NULL AS INT64) AS elapsed) AS status
+              ) AS fixture,
+              STRUCT('Friendlies' AS round) AS league,
+              STRUCT(
+                  STRUCT(1 AS id, 'A' AS name, CAST(NULL AS BOOL) AS winner) AS home,
+                  STRUCT(2 AS id, 'B' AS name, CAST(NULL AS BOOL) AS winner) AS away
+              ) AS teams,
+              STRUCT(CAST(NULL AS INT64) AS home, CAST(NULL AS INT64) AS away) AS goals,
+              STRUCT(
+                  STRUCT(CAST(NULL AS INT64) AS home, CAST(NULL AS INT64) AS away) AS halftime,
+                  STRUCT(CAST(NULL AS INT64) AS home, CAST(NULL AS INT64) AS away) AS fulltime,
+                  STRUCT(CAST(NULL AS INT64) AS home, CAST(NULL AS INT64) AS away) AS extratime,
+                  STRUCT(CAST(NULL AS INT64) AS home, CAST(NULL AS INT64) AS away) AS penalty
+              ) AS score
+          {{ "UNION ALL" if not loop.last }}
+          {%- endfor %}
+      # O crosswalk de team_id (AE#189) não é o que se testa aqui; vazio = id passa direto.
+      - input: ref('team_id_aliases')
+        rows: []
+    expect:
+      rows:
+        - {fixture_id: 3, requested_league_id: 10}
+        - {fixture_id: 4, requested_league_id: 10}
+        - {fixture_id: 5, requested_league_id: 71}

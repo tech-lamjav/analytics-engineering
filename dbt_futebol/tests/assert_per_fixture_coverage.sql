@@ -25,6 +25,11 @@ WITH finalizadas AS (
     SELECT fixture_id, competition, season
     FROM {{ ref('fact_fixtures') }}
     WHERE status_short IN ('FT', 'AET', 'PEN')  -- "finalizado" do projeto inclui prorrogação e pênaltis
+      -- Competição de INSUMO (DE#96, macros/futebol_competicoes_insumo.sql) fica fora: o buraco
+      -- dela é 100% por DECISÃO de não coletar, não lacuna a fechar — contá-la aqui inflaria o
+      -- "custo exato em chamadas" com jogos que ninguém vai extrair. As lacunas da API (copa_do_
+      -- brasil, champions_league) seguem DENTRO: este gêmeo lista todo buraco real.
+      AND competition NOT IN {{ futebol_competicoes_insumo_slugs_sql() }}
 ),
 
 -- 1 linha por (fato, fixture) presente. DISTINCT porque todos os fatos per-fixture são

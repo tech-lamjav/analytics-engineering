@@ -160,14 +160,16 @@ models:
           precisam, e têm. Ao acrescentar liga: 6 CASE + 6 accepted_values — e, se ela for de pontos
           corridos, o `IN` de competições do `sem_rodizio` em int_futebol_premissas_ah, que é um
           7º lugar e não tem teste que acuse a omissão (ficar fora é silêncio, não erro).
+          Exceção: competição de INSUMO (hoje só `amistosos`, DE#96/ADR 0004 no data-engineering)
+          entra em 1 CASE + 1 accepted_values — só os daqui — e em macros/futebol_competicoes_insumo.sql.
         tests:
           - accepted_values:
               arguments:
-                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga', 'nations_league']
+                values: ['brasileirao', 'copa_mundo', 'serie_b', 'copa_do_brasil', 'libertadores', 'sudamericana', 'la_liga', 'premier_league', 'champions_league', 'serie_a_ita', 'bundesliga', 'ligue_1', 'primeira_liga', 'nations_league', 'amistosos']
               config:
                 tags: ['guarda']
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana, 140 = La Liga, 39 = Premier League, 2 = Champions League, 135 = Serie A ITA, 78 = Bundesliga, 61 = Ligue 1)"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana, 140 = La Liga, 39 = Premier League, 2 = Champions League, 135 = Serie A ITA, 78 = Bundesliga, 61 = Ligue 1, 94 = Primeira Liga, 5 = Nations League, 10 = Amistosos — competição de insumo, só com kickoff a partir da data de entrada de futebol_competicoes_insumo())"
       - name: season
         description: "Ano da temporada requisitada (cluster key)"
       - name: round
