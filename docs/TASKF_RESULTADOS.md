@@ -3288,3 +3288,83 @@ Ela **não toca** a `taskf_teste2` acumulativa (as quatro células de 12–13/08
 registro do que foi medido na época, e as 39 linhas publicadas neste documento continuam
 publicadas. O entregável da [F] rodado **daqui em diante** tem 37 linhas, e o
 `macros/taskf_fontes_de_historico.sql` já diz isso de si mesmo.
+
+---
+
+## Ticket DE#95 — o portão dos amistosos de seleção (ADR 0004, data-engineering)
+
+`analyses/taskf_amistosos_efeito_retroativo_95.sql` · medição de **23/09/2026**
+
+### Veredito
+
+**O passado não entra.** O deslocamento retroativo que ligar os 115 amistosos de seleção
+encerrados causaria no histórico PIT das seleções que já têm jogo medido no mart (Copa do Mundo
+e Nations League) é da ordem de **23 pontos percentuais** de taxa de vitória em média — cerca de
+**90 vezes** a régua de 0,25 pp herdada da #92. Não há leitura desta medição em que o efeito
+caiba na tolerância.
+
+| competição | âncoras (fixture, time) | sem histórico ANTES | ganhou histórico do zero | Δ médio `played_total` | Δ médio pp (taxa de vitória) | Δ mediano pp |
+|---|---|---|---|---|---|---|
+| `copa_mundo` (1) | 208 | 48 | 47 | +2,86 | **22,91** | 16,67 |
+| `nations_league` (5) | 312 | 216 | 200 | +2,65 | **24,15** | 15,00 |
+
+Exemplo concreto (fixture 1489369, abertura da Copa do Mundo em 11/06/2026, team_id 16): antes,
+`played_total = 0`, `form_last5 = ''` — o time estreava sem forma, e toda premissa dependente de
+amostra ficava `FALSE` por piso não batido. Com os amistosos dentro: `played_total = 7`,
+`form_last5 = 'DDWWW'`, taxa de vitória 71%. Não é ruído de recomputação (medido em 0,00 pp pela
+#92) — é o mecanismo que a ADR 0004 descreveu por escrito antes de medir: a forma atravessa
+competição desde a #91, e times que estreavam com histórico zero passam a carregar sete rodadas
+de amistoso como se fossem a mesma coisa que jogo oficial.
+
+### Método
+
+Comparação ANTES × DEPOIS do mesmo modelo (`int_futebol_team_form_pit`, célula de produção
+`todas|ultimos_10`), por (fixture_id, team_id), restrita às âncoras de `copa_mundo` e
+`nations_league` — as duas competições com jogo já medido no mart hoje.
+
+- **Antes**: produção tal como está (`futebol.int_futebol_team_form_pit`) — já exclui
+  league_id 10 pelo corte em `stg_futebol_fixtures.sql` (DE#94/DE#95/DE#96).
+- **Depois**: o mesmo modelo, mesmo commit, materializado contra o target `taskF` com uma var
+  nova (`taskf_incluir_amistosos`, default `false` — sem ela o SQL compilado é idêntico ao de
+  hoje, produção não muda uma linha) que desliga o corte só ali.
+
+Não foi um recálculo em análise solta — é o modelo de produção rodando com um insumo diferente,
+o que evita reproduzir a agregação de PIT numa segunda cópia (o precedente da meia-linha em
+quatro cópias, que a própria ADR 0004 cita).
+
+**O que a métrica NÃO é**: a régua de 0,25 pp foi calibrada sobre `aconteceu_p*` de premissa
+(Teste 2), não sobre taxa de vitória bruta do PIT. Rodar as 5 famílias de premissas nos dois
+cenários para produzir o número na mesma unidade exata ficou fora deste ticket por custo — e a
+decisão de não rodar é defensável porque o resultado não deixa zona cinzenta: quando
+`played_total` vai de 0 para vários jogos, toda premissa com piso de amostra sai de "não avalia"
+para "avalia", que É o deslocamento, e qualquer métrica de taxa se move na mesma ordem de
+grandeza (dezenas de pp, não frações de pp). Ver o cabeçalho da análise para a leitura completa.
+
+### Reprodução
+
+```bash
+cd dbt_futebol
+
+# materializa o cenário "com amistosos" contra taskF (nunca dev/prod)
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+  --select stg_futebol_fixtures fact_fixtures int_futebol_team_form_pit \
+  --full-refresh --vars '{taskf_incluir_amistosos: true}' --exclude-resource-type test
+
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --select taskf_amistosos_efeito_retroativo_95
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_amistosos_efeito_retroativo_95.sql
+
+# RESTAURA taskF ao default — dataset compartilhado, não fica com amistosos dentro
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+  --select stg_futebol_fixtures fact_fixtures int_futebol_team_form_pit \
+  --full-refresh --exclude-resource-type test
+```
+
+### O que isto implica para a cadeia
+
+Per acceptance criteria da DE#95: o passado (season 2026 inteira) não entra na ingestão de
+produção enquanto a forma atravessar competição do jeito atual. A DE#96 ("liga o slug no mart"),
+que dependia deste veredito, precisa ser reaberta com escopo revisto — a decisão 7 do ADR 0004
+("temporada 2026 inteira, 115 jogos") não sobrevive a este número. O corte temporário em
+`stg_futebol_fixtures.sql` e a guarda `assert_amistosos_fora_do_mart` continuam em produção;
+removê-los é decisão da #96, não desta medição.

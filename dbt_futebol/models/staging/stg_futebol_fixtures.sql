@@ -16,11 +16,19 @@
 -- repetir o filtro em cada um.
 -- REMOVER quando o DE#95 der veredito favorável e o DE#96 ligar o slug 'amistosos' nos
 -- marts — a lista abaixo é a única coisa que precisa sair.
-{% set ligas_insumo_bloqueadas_ate_medicao = [10] %}
+--
+-- MEDIÇÃO (DE#95): var `taskf_incluir_amistosos`, default false — SEM a var, o SQL compilado
+-- é idêntico ao de antes (lista = [10]), então produção não muda uma linha. Só existe para o
+-- DE#95 poder materializar o cenário "amistosos dentro" contra o target `taskF`, nunca contra
+-- dev/prod. Ver docs/adr/0004-amistosos-como-competicao-de-insumo.md (decisão 16) no
+-- data-engineering.
+{% set ligas_insumo_bloqueadas_ate_medicao = [] if var('taskf_incluir_amistosos', false) else [10] %}
 
 WITH src AS (
     SELECT * FROM {{ source('futebol', 'raw_futebol_fixtures') }}
+    {% if ligas_insumo_bloqueadas_ate_medicao | length > 0 -%}
     WHERE requested_league_id NOT IN ({{ ligas_insumo_bloqueadas_ate_medicao | join(',') }})
+    {%- endif %}
 )
 
 SELECT
