@@ -1,0 +1,21 @@
+version: 2
+
+# Slug da competição de insumo (DE#96 no data-engineering, ADR 0004 lá). O corte por kickoff que
+# decide QUAIS amistosos chegam aqui é testado em staging/_stg_futebol_fixtures__unit_tests.yml.
+unit_tests:
+  - name: fact_fixtures_amistosos_tem_slug_de_produto
+    model: fact_fixtures
+    description: >
+      league_id 10 vira competition = 'amistosos', nunca 'unknown'. O slug entra SÓ aqui — os
+      cinco marts que fazem o próprio CASE (odds/standings/injuries/predictions/team_season_stats)
+      não o recebem, porque não coletamos nada disso para amistoso (ADR 0004, decisão 15).
+    overrides:
+      macros:
+        is_incremental: false
+    given:
+      - input: ref('stg_futebol_fixtures')
+        rows:
+          - {fixture_id: 4, requested_league_id: 10, requested_season: 2026, timestamp_unix: 1790244300, home_team_id: 1, away_team_id: 2, loaded_at: '2026-09-23 12:00:00'}
+    expect:
+      rows:
+        - {fixture_id: 4, competition: 'amistosos', competition_id: 10}

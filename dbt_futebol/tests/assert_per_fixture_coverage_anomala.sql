@@ -55,7 +55,7 @@
 -- quadro completo usa o gêmeo, na verificação de D+1.
 
 {% set competicoes_sem_cobertura_inicial = ['copa_do_brasil', 'champions_league'] %}
-{% set competicoes_de_insumo = futebol_competicoes_insumo().values() | map(attribute='slug') | list %}
+{% set competicoes_de_insumo = futebol_competicoes_insumo_slugs() %}
 {% set competicoes_fora_da_conta = competicoes_sem_cobertura_inicial + competicoes_de_insumo %}
 {% set tolerancia_pct = 10 %}
 

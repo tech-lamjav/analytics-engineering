@@ -35,8 +35,19 @@
     descarta a linha (o lado conservador) e a guarda não a conta. -#}
 {% macro futebol_insumo_antes_da_entrada(league_id_col, kickoff_ts_col) -%}
     (FALSE
-        {%- for league_id, c in futebol_competicoes_insumo().items() %}
-        OR ({{ league_id_col }} = {{ league_id }} AND {{ kickoff_ts_col }} < TIMESTAMP('{{ c.entra_a_partir_de }}'))
+        {%- for league_id, competicao in futebol_competicoes_insumo().items() %}
+        OR ({{ league_id_col }} = {{ league_id }} AND {{ kickoff_ts_col }} < TIMESTAMP('{{ competicao.entra_a_partir_de }}'))
         {%- endfor %}
     )
+{%- endmacro %}
+
+
+{#- Os slugs como lista e como literal SQL ('amistosos', ...) — para quem exclui competição de
+    insumo por `competition` (as duas guardas de cobertura per-fixture). -#}
+{% macro futebol_competicoes_insumo_slugs() %}
+    {{ return(futebol_competicoes_insumo().values() | map(attribute='slug') | list) }}
+{% endmacro %}
+
+{% macro futebol_competicoes_insumo_slugs_sql() -%}
+    ({% for slug in futebol_competicoes_insumo_slugs() %}'{{ slug }}'{{ ", " if not loop.last }}{% endfor %})
 {%- endmacro %}

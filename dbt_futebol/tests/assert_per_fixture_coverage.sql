@@ -29,9 +29,7 @@ WITH finalizadas AS (
       -- dela é 100% por DECISÃO de não coletar, não lacuna a fechar — contá-la aqui inflaria o
       -- "custo exato em chamadas" com jogos que ninguém vai extrair. As lacunas da API (copa_do_
       -- brasil, champions_league) seguem DENTRO: este gêmeo lista todo buraco real.
-      AND competition NOT IN (
-          {%- for c in futebol_competicoes_insumo().values() %}'{{ c.slug }}'{{ ", " if not loop.last }}{%- endfor -%}
-      )
+      AND competition NOT IN {{ futebol_competicoes_insumo_slugs_sql() }}
 ),
 
 -- 1 linha por (fato, fixture) presente. DISTINCT porque todos os fatos per-fixture são
