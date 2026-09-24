@@ -299,7 +299,14 @@ scored AS (
 cegueira AS (
     SELECT
         s.*,
-        {{ futebol_premissas_cegas('int_futebol_premissas_ah') }} AS premissas_cegas
+        {{ futebol_premissas_cegas('int_futebol_premissas_ah') }} AS premissas_cegas,
+        -- AE#202 (filha da #147, mesmo padrão da AE#153 no 1X2, ADR 0014): o valor que cada
+        -- insumo tinha, não só se a premissa acendeu. A aplicabilidade é o LADO, como na
+        -- cegueira acima: a linha de favorito publica as premissas do favorito, a de azarão as
+        -- do azarão — e toda linha é uma das duas (B3 acabou com o pick), então nenhuma sai
+        -- com o array vazio. handicap_alto não entra: o único insumo dele é o próprio
+        -- line_value, que já está no grão de quem lê isto.
+        {{ futebol_insumos_medidos('int_futebol_premissas_ah') }} AS insumos_medidos
     FROM scored s
 )
 
@@ -328,6 +335,8 @@ SELECT
     -- cegueira: a lista é o que torna o número auditável.
     premissas_cegas,
     ARRAY_LENGTH(premissas_cegas) AS premissas_sem_dado,
+    -- AE#202: valor medido por (premissa, insumo). Ver docstring de futebol_insumos_medidos.
+    insumos_medidos,
 
     -- "por quê": premissas que dispararam, em linguagem de gente, ordenadas por peso.
     ARRAY(SELECT e FROM UNNEST([

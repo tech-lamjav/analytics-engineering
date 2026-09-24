@@ -3,12 +3,13 @@ version: 2
 models:
   - name: fact_insumos_medidos
     description: >
-      Entrega 3 do #147/#148 (AE#175, ADR 0016). Cópia achatada, escalar, de
-      `int_futebol_premissas_1x2.insumos_medidos` — o ARRAY<STRUCT> que a Entrega 2 (AE#153,
-      ADR 0014) publica não atravessa o sync BQ->Postgres (pula toda coluna
-      REPEATED/RECORD). 1 linha por (fixture_id, outcome, premissa, insumo) aplicável à
-      linha. `market`/`line_value` já estão no grão, mesmo com o escopo travado no 1X2 —
-      ver ADR 0016 para o porquê.
+      Entrega 3 do #147/#148 (AE#175, ADR 0016), estendida ao Handicap pela AE#202. Cópia
+      achatada, escalar, de `insumos_medidos` de `int_futebol_premissas_1x2` e
+      `int_futebol_premissas_ah` — o ARRAY<STRUCT> que a Entrega 2 (AE#153, ADR 0014)
+      publica não atravessa o sync BQ->Postgres (pula toda coluna REPEATED/RECORD). 1 linha
+      por (fixture_id, outcome, market, line_value, premissa, insumo) aplicável à linha. No
+      Handicap, uma linha por linha de handicap, com o valor repetido: o que muda entre as
+      linhas é quais premissas se aplicam (favorito ou azarão).
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -19,14 +20,14 @@ models:
               arguments:
                 values: ['Home', 'Draw', 'Away']
       - name: market
-        description: "Constante 'match_winner' (futebol_mercados_pontuados()[1]) enquanto o escopo for só o 1X2 — não um literal '1X2'."
+        description: "Slug de futebol_mercados_pontuados() — 'match_winner' (1X2) ou 'asian_handicap' (AE#202), não um literal '1X2'/'AH'."
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['match_winner']
+                values: ['match_winner', 'asian_handicap']
       - name: line_value
-        description: "NULL — o 1X2 não tem linha. Populado de verdade quando Over/Under e Handicap entrarem no escopo."
+        description: "NULL no 1X2, que não tem linha. No Handicap (AE#202), o handicap na ótica do MANDANTE — o mesmo line_value do funil e do board, igual para Home e Away."
       - name: premissa
         description: "Slug do catálogo futebol_insumos_premissa() — mesmo nome de int_futebol_premissas_1x2 e de fact_value_opportunities.evidencias."
         tests: [not_null]
@@ -42,13 +43,13 @@ models:
       # na combinação, uma futura linha que difira só em market/line_value pro mesmo
       # (fixture, outcome, premissa, insumo) passaria batido.
       #
-      # ⚠️ SEM tag:guarda de propósito, por enquanto — ver aviso no topo do model.sql: a
-      # tabela ainda não está no `--select` de workflow_futebol_odds.yml (data-engineering,
-      # ticket separado). Marcá-la guarda agora faria a fase agendada de
-      # `dbt test --select tag:guarda` do PRD quebrar contra uma tabela que o `dbt run`
-      # daquele workflow nunca constrói. Adicionar a tag junto do PR que adicionar o modelo
-      # ao selector, não antes.
+      # tag:guarda desde a AE#202: a tabela entrou no `--select` dos dois workflows que
+      # reconstroem os pais (DE#85, 16/09), a condição que a AE#175 deixou para ligar a tag.
+      # Com o Handicap, esta é a guarda que pega line_value errado (duas linhas de handicap
+      # caindo na mesma chave).
       - dbt_utils.unique_combination_of_columns:
+          config:
+            tags: ['guarda']
           arguments:
             combination_of_columns:
               - fixture_id

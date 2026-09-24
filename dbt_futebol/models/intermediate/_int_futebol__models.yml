@@ -546,6 +546,14 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
+      - name: insumos_medidos
+        description: >
+          AE#202 (filha da #147; mesmo gerador da AE#153 no 1X2, ADR 0014).
+          `ARRAY<STRUCT<premissa, insumo, valor FLOAT64>>`, uma entrada por (premissa,
+          insumo) aplicável ao LADO desta linha — favorito ou azarão, que muda com a linha
+          de handicap. Nunca vazio: toda linha é favorito ou azarão. `handicap_alto` não
+          publica entrada (o insumo dela é o line_value, já no grão). ARRAY, então o sync
+          o pula — quem atravessa pro Postgres é `fact_insumos_medidos`.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

@@ -157,7 +157,17 @@ unit_tests:
           UNION ALL SELECT 9, '1X', 15, 0
 
       - input: ref('int_futebol_premissas_ah')
-        rows: []
+        # AE#202: rows: [] (dict) não basta mais — mesmo motivo do 1X2 na AE#153: cand_ah
+        # seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS FLOAT64) AS line_value,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_ah_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
         rows: []
       - input: ref('int_futebol_corroboracao')
@@ -255,7 +265,17 @@ unit_tests:
       - input: ref('int_futebol_premissas_ou')
         rows: []
       - input: ref('int_futebol_premissas_ah')
-        rows: []
+        # AE#202: rows: [] (dict) não basta mais — mesmo motivo do 1X2 na AE#153: cand_ah
+        # seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS FLOAT64) AS line_value,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_ah_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
         rows: []
       - input: ref('int_futebol_corroboracao')
@@ -324,7 +344,17 @@ unit_tests:
       - input: ref('int_futebol_premissas_ou')
         rows: []
       - input: ref('int_futebol_premissas_ah')
-        rows: []
+        # AE#202: rows: [] (dict) não basta mais — mesmo motivo do 1X2 na AE#153: cand_ah
+        # seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS FLOAT64) AS line_value,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_ah_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
         rows: []
       - input: ref('int_futebol_premissas_dc')
@@ -412,7 +442,8 @@ unit_tests:
         format: sql
         rows: |
           SELECT 34 AS fixture_id, 'Home' AS outcome, -0.25 AS line_value,
-                 15 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts
+                 15 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
 
       - input: ref('int_futebol_premissas_1x2')
         format: sql
@@ -505,7 +536,17 @@ unit_tests:
       - input: ref('int_futebol_premissas_ou')
         rows: []
       - input: ref('int_futebol_premissas_ah')
-        rows: []
+        # AE#202: rows: [] (dict) não basta mais — mesmo motivo do 1X2 na AE#153: cand_ah
+        # seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS FLOAT64) AS line_value,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_ah_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
         rows: []
       - input: ref('int_futebol_premissas_dc')
@@ -601,7 +642,17 @@ unit_tests:
       - input: ref('int_futebol_premissas_dc')
         rows: []
       - input: ref('int_futebol_premissas_ah')
-        rows: []
+        # AE#202: rows: [] (dict) não basta mais — mesmo motivo do 1X2 na AE#153: cand_ah
+        # seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS FLOAT64) AS line_value,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_ah_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
         rows: []
 
@@ -740,8 +791,9 @@ unit_tests:
         format: sql
         rows: |
           SELECT 9 AS fixture_id, 'Home' AS outcome, -1.5 AS line_value,
-                 20 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts
-          UNION ALL SELECT 10, 'Away', -1.5, 20, 0, 0
+                 20 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          UNION ALL SELECT 10, 'Away', -1.5, 20, 0, 0, NULL
 
       # A "12" (fixture 8) NÃO tem linha aqui, de propósito: é o que a torna a saída
       # sem premissa a avaliar.
@@ -819,10 +871,11 @@ unit_tests:
         format: sql
         rows: |
           SELECT 11 AS fixture_id, 'Home' AS outcome, 0.0 AS line_value,
-                 10 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts
-          UNION ALL SELECT 11, 'Away', 0.0, 10, 0, 0
-          UNION ALL SELECT 12, 'Home', 0.0, 10, 0, 0
-          UNION ALL SELECT 12, 'Away', 0.0, 10, 0, 0
+                 10 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ah_pts,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          UNION ALL SELECT 11, 'Away', 0.0, 10, 0, 0, NULL
+          UNION ALL SELECT 12, 'Home', 0.0, 10, 0, 0, NULL
+          UNION ALL SELECT 12, 'Away', 0.0, 10, 0, 0, NULL
 
       - input: ref('futebol_teto_nota_contexto')
         format: csv
