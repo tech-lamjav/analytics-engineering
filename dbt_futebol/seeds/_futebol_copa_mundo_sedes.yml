@@ -1,0 +1,51 @@
+version: 2
+
+# ==============================================================================
+# AS CIDADES-SEDE DA COPA DO MUNDO 2026, e o anfitrião de cada uma (AE#200).
+#
+# A API não marca campo neutro (AE#200, comentário de 24/09): na Copa, mandante e visitante
+# são os rótulos do SORTEIO, e em 4 dos 15 jogos com anfitrião ela põe o anfitrião como
+# visitante. Este seed é o que permite ao eixo `pit_mando: neutro_copa` do
+# `int_futebol_team_form_pit` saber onde cada jogo foi jogado — um anfitrião só está em
+# casa quando a cidade é do país dele (o Canadá jogou 2 dos seus 5 nos EUA).
+#
+# ⚠️ UMA LINHA POR GRAFIA, não por sede. A API grava a mesma sede com nomes diferentes
+# (`Dallas`/`Arlington`, `New-York`/`East Rutherford`, `San-Francisco`/`Santa Clara`,
+# `Miami`/`Miami Gardens`, `Los Angeles`/`Inglewood`): são 21 grafias para 16 sedes,
+# lidas de `fact_fixtures.venue_city` em 24/09/2026. O join é por string exata.
+#
+# ⚠️ Cidade fora daqui vira campo neutro EM SILÊNCIO sob `neutro_copa` — é o modo de falha
+# que `assert_copa_mundo_cidade_no_seed_de_sedes` existe para fechar.
+# ==============================================================================
+seeds:
+  - name: futebol_copa_mundo_sedes
+    description: >
+      Uma linha por grafia de cidade-sede da Copa do Mundo 2026 como a API a grava em
+      `venue_city`, com o país e o team_id da seleção anfitriã daquele país. Lido só sob
+      `pit_mando: neutro_copa` (AE#200); no default nada o consulta.
+    config:
+      column_types:
+        venue_city: STRING
+        pais_sede: STRING
+        anfitriao_team_id: INT64
+    columns:
+      - name: venue_city
+        description: a cidade exatamente como `fact_fixtures.venue_city` a traz.
+        tests:
+          - not_null
+          - unique
+      - name: pais_sede
+        description: o país da cidade — só para leitura humana; o join usa o team_id.
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['USA', 'Mexico', 'Canada']
+      - name: anfitriao_team_id
+        description: o team_id da seleção do país da cidade (USA 2384, Mexico 16, Canada 5529).
+        tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [2384, 16, 5529]
+                quote: false

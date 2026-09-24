@@ -7,6 +7,15 @@
         pit_recorte  temporada     | ultimos_10 (default)
                      Qual TRECHO do passado conta.
 
+        pit_mando    casa_fora (default) | neutro_copa
+                     Como o CORTE POR MANDO classifica cada jogo do histórico (AE#200).
+                     casa_fora = o rótulo da API, sempre. neutro_copa = na Copa do Mundo, o
+                     anfitrião no próprio país é casa (e o adversário fora) e todo outro jogo
+                     é campo neutro — que conta nas duas médias de gols e em nenhum contador
+                     de resultado. Mora só no int_futebol_team_form_pit: nenhum histórico
+                     local dos modelos de premissa separa por mando. É eixo de MEDIÇÃO: o
+                     default é produção, e virá-lo é decisão da AE#200, não desta macro.
+
     ⚠️ OS DEFAULTS MUDARAM NA #91 (ADR 0010). Até 24/08/2026 eles eram `da_competicao` e
     `temporada`, escolhidos para que o SQL compilado no default fosse idêntico ao de antes das
     vars existirem — as vars serviam à medição e produção nunca as passava. A [F] mediu o custo
@@ -56,6 +65,7 @@
 
     {%- set escopo  = var('pit_escopo',  'todas') -%}
     {%- set recorte = var('pit_recorte', 'ultimos_10') -%}
+    {%- set mando   = var('pit_mando',   'casa_fora') -%}
 
     {%- if escopo not in ['da_competicao', 'todas'] -%}
         {{ exceptions.raise_compiler_error(
@@ -65,7 +75,11 @@
         {{ exceptions.raise_compiler_error(
             "pit_recorte inválido: '" ~ recorte ~ "'. Valores aceitos: temporada | ultimos_10.") }}
     {%- endif -%}
+    {%- if mando not in ['casa_fora', 'neutro_copa'] -%}
+        {{ exceptions.raise_compiler_error(
+            "pit_mando inválido: '" ~ mando ~ "'. Valores aceitos: casa_fora | neutro_copa.") }}
+    {%- endif -%}
 
-    {{ return({'escopo': escopo, 'recorte': recorte, 'tamanho_do_recorte': 10}) }}
+    {{ return({'escopo': escopo, 'recorte': recorte, 'mando': mando, 'tamanho_do_recorte': 10}) }}
 
 {% endmacro %}

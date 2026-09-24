@@ -113,13 +113,15 @@ a reading convenience, never the source.
 _Avoid_: motivo de rejeição as a single column
 
 **Faixa**:
-The confidence band over the score: Alta (>= 60), Média (40–59), Baixa (< 40).
-Thresholds differ from the NBA context. The band cuts and the **régua** are the same
+The confidence band over the score: Alta (>= 60), Média (30–59), Baixa (< 30) — the
+cuts since the virada (#109, PM decision of 01/09). Since the régua left the gate at the
+same virada, Baixa is published too: the faixa is a label, no longer a cut sentinel.
+Thresholds differ from the NBA context. Before the virada, the band cuts and the **régua** were the same
 numbers wearing two hats — set the régua at a band floor and the band below it stops
-existing, leaving a column that is constant and therefore lying. So the cuts are never
-chosen apart from the régua, and never on a scale that is about to change: they come out
-of one measurement, on the scale that will actually ship.
-_Avoid_: treating the régua as independent of the bands
+existing, leaving a column that is constant and therefore lying. What survives the
+virada: the cuts are never chosen on a scale that is about to change — they come out of
+one measurement, on the scale that will actually ship.
+_Avoid_: quoting 40–59 for Média (the pre-virada cuts)
 
 **Value opportunity**:
 A fixture x market x outcome that passed the gate — the product's unit of output. Since
@@ -449,6 +451,24 @@ axis entirely)
 **Mando**:
 Home advantage — playing at home with a strong home record. A declining, per-league
 signal.
+
+**Corte por mando**:
+Conditioning a team's PIT history on home/away: a premissa reads the team's record *at
+home* or *away* instead of over all its fixtures. It happens in one place (the PIT form
+history) and reaches eleven premissas across Resultado, Handicap, Gols, BTTS and Dupla
+Chance. Orthogonal to the **Recorte do PIT**: the recorte picks which stretch counts
+(the last 10), the corte then splits that stretch by mando.
+_Avoid_: "recorte de mando" (recorte is the temporal axis), "venue split" (venue is the
+**Estádio**)
+
+**Campo neutro**:
+A fixture where neither side plays at home, whatever the API's home/away labels say —
+the source has no neutral flag, and at the Copa do Mundo the labels are the draw's, not
+the venue's. A host nation is at home only when the fixture is in its own country.
+Distinct from the fixture the premissa rates, which in the Nations League group stage has
+real mando: campo neutro is a property of the **history**, not of the rated fixture.
+_Avoid_: calling a host's fixture home because the team is a host (Canada played 2 of
+its 5 in the USA)
 
 ### Match context
 
