@@ -31,9 +31,57 @@ unit_tests:
           ] AS insumos_medidos
           UNION ALL
           SELECT 1, 'Draw', CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>)
+      # AE#202: o fact lê também o Handicap. Vazio aqui — este teste é só do 1X2.
+      - input: ref('int_futebol_premissas_ah')
+        format: sql
+        rows: |
+          SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                 CAST(NULL AS FLOAT64) AS line_value,
+                 CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          FROM UNNEST([1]) WHERE FALSE
     expect:
       rows:
         - {fixture_id: 1, outcome: 'Home', market: 'match_winner', line_value: , premissa: 'forca_mismatch', insumo: 's_gf_venue', valor: 1.8}
         - {fixture_id: 1, outcome: 'Home', market: 'match_winner', line_value: , premissa: 'superioridade_xg', insumo: 's_xg_for', valor: 1.49}
         - {fixture_id: 1, outcome: 'Home', market: 'match_winner', line_value: , premissa: 'mando', insumo: 'pct_pts_home', valor: }
         # fixture 1 / Draw: zero linhas — de propósito, não listadas aqui.
+
+  # ============================================================================
+  # AE#202: Handicap asiático. Mesmo jogo, mesmo lado (Home), duas linhas: em −0,5 o Home
+  # dá handicap (favorito) e em +0,5 recebe (azarão). Prova que:
+  #   1. market = 'asian_handicap' e line_value vem da linha, não NULL;
+  #   2. o CONJUNTO de premissas muda com a linha (é por isso que a linha fica no grão,
+  #      em vez de colapsar — decisão da #202);
+  #   3. o mesmo insumo em duas premissas (s_ga_venue em tende_golear e em
+  #      defesa_fora_solida) não colide: a premissa está no grão.
+  # ============================================================================
+  - name: fact_insumos_medidos_handicap_por_linha
+    model: fact_insumos_medidos
+    description: >
+      Handicap entra com market asian_handicap e line_value populado; o conjunto de
+      premissas segue o lado daquela linha (favorito em −0,5, azarão em +0,5).
+    given:
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                 CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          FROM UNNEST([1]) WHERE FALSE
+      - input: ref('int_futebol_premissas_ah')
+        format: sql
+        rows: |
+          SELECT 7 AS fixture_id, 'Home' AS outcome, -0.5 AS line_value, [
+            STRUCT('tende_golear' AS premissa, 's_gf_venue' AS insumo, 2.1 AS valor),
+            STRUCT('tende_golear' AS premissa, 's_ga_venue' AS insumo, 0.7 AS valor)
+          ] AS insumos_medidos
+          UNION ALL
+          SELECT 7, 'Home', 0.5, [
+            STRUCT('defesa_fora_solida' AS premissa, 's_ga_venue' AS insumo, 0.7 AS valor),
+            STRUCT('raramente_perde_por_2' AS premissa, 's_lost2' AS insumo, CAST(NULL AS FLOAT64) AS valor)
+          ]
+    expect:
+      rows:
+        - {fixture_id: 7, outcome: 'Home', market: 'asian_handicap', line_value: -0.5, premissa: 'tende_golear', insumo: 's_gf_venue', valor: 2.1}
+        - {fixture_id: 7, outcome: 'Home', market: 'asian_handicap', line_value: -0.5, premissa: 'tende_golear', insumo: 's_ga_venue', valor: 0.7}
+        - {fixture_id: 7, outcome: 'Home', market: 'asian_handicap', line_value: 0.5, premissa: 'defesa_fora_solida', insumo: 's_ga_venue', valor: 0.7}
+        - {fixture_id: 7, outcome: 'Home', market: 'asian_handicap', line_value: 0.5, premissa: 'raramente_perde_por_2', insumo: 's_lost2', valor: }

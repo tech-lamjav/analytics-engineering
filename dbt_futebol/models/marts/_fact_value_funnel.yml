@@ -365,11 +365,13 @@ models:
           "que valor teve" pela mesma chave). `valor` pode ser NULL: insumo aplicável sem
           dado ainda gera entrada, porque a ausência também é informação.
 
-          ⚠️ SÓ O 1X2 NESTA ENTREGA. Os outros quatro mercados publicam ARRAY VAZIO (`[]`,
-          NUNCA NULL — BigQuery não guarda NULL em coluna ARRAY, nem em INSERT/MERGE nem
-          em ALTER TABLE ADD COLUMN sobre linha existente; medido contra o BigQuery real).
-          Vazio não é ausência de dado, é mercado fora do escopo decidido pelo Victor
-          (começar pelo 1X2, comentário de 09/09 na ClickUp `wdx6zevnj0`).
+          ⚠️ SÓ O 1X2 (AE#153) E O HANDICAP (AE#202, filha da #147). Os outros três
+          mercados publicam ARRAY VAZIO (`[]`, NUNCA NULL — BigQuery não guarda NULL em
+          coluna ARRAY, nem em INSERT/MERGE nem em ALTER TABLE ADD COLUMN sobre linha
+          existente; medido contra o BigQuery real). Vazio não é ausência de dado, é
+          mercado ainda fora do escopo (ordem combinada com o Victor na #147: Handicap →
+          Ambos marcam → Dupla chance). No Handicap o array nunca é vazio numa linha que
+          casou com o modelo — toda linha é favorito ou azarão.
 
           ⚠️ Chega por `append_new_columns` e fica `[]` PARA SEMPRE na linha de jogo já
           apitado antes deste deploy — mesma razão do parágrafo acima, e aceito
@@ -378,13 +380,14 @@ models:
           a "ausência" desta coluna se lê como array vazio, nunca como NULL.
 
           Protegida por `assert_funil_insumos_medidos_reconstroi` (a coluna gravada bate
-          com o que `int_futebol_premissas_1x2` diz hoje, em toda linha ainda gravável).
+          com o que `int_futebol_premissas_1x2`/`int_futebol_premissas_ah` dizem hoje, em
+          toda linha ainda gravável; e linha de Handicap gravável nunca fica vazia).
       - name: insumo_escopo
         description: >
           AE#153. O `pit_escopo` (ADR 0007/0010) que estava em vigor QUANDO ESTA LINHA foi
           gravada — não uma leitura do catálogo (que descreve o eixo em geral, sempre hoje).
           Escalar do build inteiro: a mesma var vale pra toda linha de toda execução, então
-          publica nos CINCO mercados, mesmo `insumos_medidos` ficando só no 1X2. Fecha por
+          publica nos CINCO mercados, mesmo `insumos_medidos` ficando só no 1X2 e no Handicap. Fecha por
           DADO a mesma classe de bug que a Entrega 1 só fechou por CÓDIGO — se o default
           mudar de novo em silêncio, esta coluna continua dizendo qual valia naquele dia.
           Chega por `append_new_columns`, mesma regra de `insumos_medidos`.

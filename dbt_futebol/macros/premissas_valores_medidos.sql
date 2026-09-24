@@ -39,7 +39,8 @@
 
     ⚠️ ARRAY NULL NÃO SOBREVIVE À ESCRITA (achado do code-review, medido contra o BigQuery
     real: `CAST(NULL AS ARRAY<...>)` escrito numa tabela volta como `[]`, nunca como NULL —
-    `ARRAY_LENGTH` dá 0, não NULL). Por isso os mercados fora do 1X2 nesta entrega usam
+    `ARRAY_LENGTH` dá 0, não NULL). Por isso os mercados que ainda não publicam o array (todos
+    menos 1X2 e, desde a AE#202, Handicap) usam
     `futebol_insumos_medidos_vazio()` (array VAZIO explícito) em vez de `CAST(NULL AS ...)`
     em `fact_value_funnel.sql` — escrever o que a coluna vai realmente guardar, em vez de um
     NULL que o BigQuery reescreveria em silêncio. Quem comparar `insumos_medidos` contra

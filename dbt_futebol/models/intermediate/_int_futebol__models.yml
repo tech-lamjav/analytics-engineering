@@ -504,7 +504,7 @@ models:
       S3 — premissas de contexto do mercado Handicap asiático (market_id 4). 2 linhas por
       (fixture, line_value): Home e Away. line_value = handicap na ótica do mandante (mesmo p/
       os dois lados; o par Home/Away é complementar). side_handicap = IF(Home, line, -line):
-      <0 favorito (5 premissas, Σ40), >0 azarão (3 premissas, Σ30), =0 pick (nenhuma dispara).
+      <0 favorito (5 premissas, Σ40), >0 azarão (3 premissas, Σ30), =0 a odd decide e o mando desempata (B3, #109) — não existe mais linha sem lado.
       Penalidade handicap_alto (|line|>=2.5, -12). evidencias[]/avisos[] = bullets pro front.
       ⚠️ MEDIÇÃO (task [F], ADR 0007, #52 e #54): o margin_stats é fonte de histórico
       competição-scoped PRÓPRIA deste modelo e aceita as DUAS vars da medição — pit_escopo
@@ -546,6 +546,14 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
+      - name: insumos_medidos
+        description: >
+          AE#202 (filha da #147; mesmo gerador da AE#153 no 1X2, ADR 0014).
+          `ARRAY<STRUCT<premissa, insumo, valor FLOAT64>>`, uma entrada por (premissa,
+          insumo) aplicável ao LADO desta linha — favorito ou azarão, que muda com a linha
+          de handicap. Nunca vazio: toda linha é favorito ou azarão. `handicap_alto` não
+          publica entrada (o insumo dela é o line_value, já no grão). ARRAY, então o sync
+          o pula — quem atravessa pro Postgres é `fact_insumos_medidos`.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
