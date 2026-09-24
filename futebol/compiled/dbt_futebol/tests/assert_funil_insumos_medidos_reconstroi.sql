@@ -1,0 +1,132 @@
+
+-- GUARDA DE RECONSTRUÇÃO DO VALOR MEDIDO (AE#153, Entrega 2 da #147/#148, ADR 0014): as três
+-- colunas GRAVADAS no funil (`insumos_medidos`, `insumo_escopo`, `insumo_recorte`) batem com o
+-- que os modelos de premissas (1X2 e Handicap) e `taskf_eixos()` dizem HOJE.
+--
+-- Só o 1X2 e, desde a AE#202, o Handicap têm `insumos_medidos` — os outros três mercados
+-- publicam array VAZIO (`[]`, não NULL — ver ⚠️ mais abaixo), fora de escopo por decisão, não
+-- por defeito. O Handicap casa pela LINHA também (line_key): o conjunto de premissas muda com
+-- ela, porque é a linha que diz se o lado é favorito ou azarão.
+--
+-- ⚠️ `insumo_escopo`/`insumo_recorte` são escalares do BUILD INTEIRO — a mesma var vale pra
+-- toda linha de toda execução — então a comparação é contra o LITERAL de `taskf_eixos()`
+-- lido agora, não contra um join. Se `pit_escopo`/`pit_recorte` mudarem de default entre a
+-- gravação e esta checagem, é EXATAMENTE isso que a guarda tem de acender: o carimbo por
+-- linha existe para essa mudança não passar em silêncio.
+--
+-- `insumos_medidos` compara via TO_JSON_STRING: BigQuery não tem `=`/`IS DISTINCT FROM` para
+-- ARRAY. As duas pontas vêm do MESMO gerador (`futebol_insumos_medidos()`, lido pelo modelo
+-- de premissas), então a ordem dos campos dentro do STRUCT é estável — não é comparação
+-- textual arbitrária, é a mesma serialização dos dois lados.
+--
+-- ⚠️ COALESCE(..., []) NOS DOIS LADOS antes de serializar (achado do code-review, medido
+-- contra o BigQuery real): array NULL não sobrevive à escrita — a coluna gravada em
+-- `fact_value_funnel` já chega como `[]`, nunca NULL (ver macro). Mas o LEFT JOIN abaixo
+-- é de QUERY VIVA, e fixture ausente em `fact_fixtures` (fail-open, ADR 0011/0003) faz
+-- `int_futebol_premissas_1x2` não ter linha nenhuma pra esse fixture — `insumos_medidos_
+-- fresco` sai NULL de verdade nesse caso, não `[]`. Sem o COALESCE, `"[]" IS DISTINCT
+-- FROM NULL` dá TRUE e a guarda acende sobre uma linha que não tem defeito nenhum — é
+-- exatamente o mesmo fail-open que a guarda irmã (`assert_funil_reconcilia_com_devig`)
+-- já trata com LEFT + fail-open, só que aqui a armadilha é do TIPO array, não do JOIN.
+--
+-- ⚠️ ESCOPADA AO QUE AINDA É GRAVÁVEL (mesmo motivo da guarda irmã de `nota_contexto`): a
+-- coluna chega por `append_new_columns`, e o funil só escreve linha cujo kickoff está no
+-- futuro (ADR 0011). Linha já congelada antes deste deploy fica com as três colunas NULL
+-- para sempre — não é defeito, é o append-only funcionando, e o Victor aceitou esse custo
+-- explicitamente (comentário de 09/09 na ClickUp `wdx6zevnj0`).
+--
+-- ⚠️ A SEGUNDA DIREÇÃO — o que a comparação sozinha não pega, porque [] contra [] fecha:
+--   * coluna que nunca chegou ao esquema (`append_new_columns` que não rodou) seria lida como
+--     "reconstrói perfeitamente" — é o `insumo_escopo IS NULL`, mesmo motivo da guarda irmã;
+--   * AE#202: linha gravável do Handicap que casou com o modelo e está vazia. No Handicap isso
+--     é sempre defeito (toda linha é favorito ou azarão), mesmo se o modelo também regrediu
+--     para []. No 1X2 não vale: o Draw é vazio por construção.
+WITH fixtures AS (
+    SELECT
+        fixture_id,
+        kickoff_utc AS _fx_kickoff_utc
+    FROM `smartbetting-dados`.`futebol`.`fact_fixtures`
+),
+
+funil AS (
+    SELECT
+        f.fixture_id,
+        f.market,
+        f.outcome,
+        f.line_key,
+        f.janela,
+        f.insumos_medidos,
+        f.insumo_escopo,
+        f.insumo_recorte
+    FROM `smartbetting-dados`.`futebol`.`fact_value_funnel` f
+    LEFT JOIN fixtures fx USING (fixture_id)
+    -- só o que o funil ainda escreveria hoje — ver o cabeçalho.
+    WHERE COALESCE(fx._fx_kickoff_utc > CURRENT_TIMESTAMP(), TRUE)
+),
+
+comparacao AS (
+    SELECT
+        f.fixture_id,
+        f.market,
+        f.outcome,
+        f.line_key,
+        f.janela,
+        f.insumos_medidos,
+        f.insumo_escopo,
+        f.insumo_recorte,
+        CASE f.market
+            WHEN 'match_winner' THEN p1.insumos_medidos
+            WHEN 'asian_handicap' THEN pah.insumos_medidos
+        END AS insumos_medidos_fresco,
+        -- AE#202: a linha casou com o modelo de premissas do Handicap. Toda linha dele é
+        -- favorito ou azarão (B3 acabou com o pick), então casar e ter array vazio é defeito —
+        -- vale mesmo quando o modelo TAMBÉM regrediu para [], caso em que a comparação acima
+        -- fecha [] contra [] e não acende.
+        pah.fixture_id IS NOT NULL AS casou_handicap
+    FROM funil f
+    -- LEFT: mercado sem modelo com a coluna não casa (insumos_medidos_fresco fica NULL) e a
+    -- checagem abaixo só cobra os mercados cobertos. Fixture fail-open (ausente em
+    -- fact_fixtures) TAMBÉM produz NULL aqui mesmo dentro de um mercado coberto — é o caso
+    -- que o COALESCE(..., []) mais abaixo neutraliza.
+    LEFT JOIN `smartbetting-dados`.`futebol`.`int_futebol_premissas_1x2` p1
+      ON  f.market      = 'match_winner'
+      AND p1.fixture_id = f.fixture_id
+      AND p1.outcome    = f.outcome
+    -- AE#202: mesmo predicado de linha do ramo do Handicap em fact_value_funnel.sql.
+    LEFT JOIN `smartbetting-dados`.`futebol`.`int_futebol_premissas_ah` pah
+      ON  f.market       = 'asian_handicap'
+      AND pah.fixture_id = f.fixture_id
+      AND pah.outcome    = f.outcome
+      AND COALESCE(CAST(pah.line_value AS STRING), 'NONE') = f.line_key
+)
+
+SELECT
+    fixture_id,
+    market,
+    outcome,
+    line_key,
+    janela,
+    insumo_escopo,
+    insumo_recorte,
+    CASE
+        WHEN insumo_escopo IS NULL AND market IS NOT NULL
+            THEN 'linha ainda gravável com insumo_escopo/insumo_recorte vazios — append_new_columns não rodou?'
+        WHEN market IN ('match_winner', 'asian_handicap')
+             AND TO_JSON_STRING(COALESCE(insumos_medidos, []))
+                 IS DISTINCT FROM TO_JSON_STRING(COALESCE(insumos_medidos_fresco, []))
+            THEN 'insumos_medidos gravado não bate com o que o modelo de premissas diz hoje'
+        WHEN casou_handicap AND ARRAY_LENGTH(COALESCE(insumos_medidos, [])) = 0
+            THEN 'linha gravável do Handicap sem valor medido — toda linha é favorito ou azarão'
+        WHEN insumo_escopo != 'todas' OR insumo_recorte != 'ultimos_10'
+            THEN 'insumo_escopo/insumo_recorte gravados não batem com taskf_eixos() de agora'
+        ELSE NULL
+    END AS diagnostico
+FROM comparacao
+WHERE insumo_escopo IS NULL
+   OR (market IN ('match_winner', 'asian_handicap')
+       AND TO_JSON_STRING(COALESCE(insumos_medidos, []))
+           IS DISTINCT FROM TO_JSON_STRING(COALESCE(insumos_medidos_fresco, [])))
+   OR (casou_handicap AND ARRAY_LENGTH(COALESCE(insumos_medidos, [])) = 0)
+   OR insumo_escopo != 'todas'
+   OR insumo_recorte != 'ultimos_10'
+ORDER BY fixture_id, market, outcome, line_key, janela
