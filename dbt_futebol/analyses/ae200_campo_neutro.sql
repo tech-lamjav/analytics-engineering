@@ -51,14 +51,33 @@ WITH exposicao AS (
     GROUP BY fixture_id
 ),
 com_preco AS (
-    SELECT DISTINCT fixture_id, market, outcome, CAST(line_value AS FLOAT64) AS line_value
+    -- `lado_funil` só serve para conferir o lado recomputado (sanidade 0b): é NULL nas linhas
+    -- congeladas antes da #105.
+    SELECT fixture_id, market, outcome, CAST(line_value AS FLOAT64) AS line_value,
+           ANY_VALUE(lado) AS lado_funil
     FROM `smartbetting-dados.futebol.fact_value_funnel`
+    GROUP BY 1, 2, 3, 4
+),
+-- O 4º argumento do futebol_lado() é "ESTE outcome tem a menor odd" — POR OUTCOME, como o
+-- funil o passa. O `is_favorito` do int_futebol_premissas_ah NÃO é isso na linha 0: lá ele vale
+-- COALESCE(home_e_favorito_por_odd, s_is_home) para os DOIS outcomes, então o Away herda o
+-- veredito do mandante (defeito pré-existente, fora desta medição). O lado de produção sai da
+-- linha Home: ela carrega COALESCE(home_favorito, TRUE), e o Away é favorito exatamente quando
+-- ela não é — inclusive sem odd, onde o mando decide e o mandante fica com o favoritismo.
+favorito_por_outcome AS (
+    SELECT
+        c.*,
+        IF(c.outcome = 'Home', c.is_favorito,
+           NOT LOGICAL_OR(IF(c.outcome = 'Home', c.is_favorito, NULL))
+               OVER (PARTITION BY c.celula, c.fixture_id, c.market, CAST(c.line_value AS STRING))
+        ) AS outcome_e_favorito_por_odd
+    FROM `{{ destino }}.ae200_celulas` c
 ),
 lados AS (
     SELECT
-        c.*,
-        {{ futebol_lado('c.market', 'c.outcome', 'c.line_value', 'c.is_favorito') }} AS lado
-    FROM `{{ destino }}.ae200_celulas` c
+        f.*,
+        {{ futebol_lado('f.market', 'f.outcome', 'f.line_value', 'f.outcome_e_favorito_por_odd') }} AS lado
+    FROM favorito_por_outcome f
 ),
 notas AS (
     SELECT
@@ -96,6 +115,8 @@ SELECT
         ELSE 'nao_exposto'
     END                                             AS grupo,
     p.fixture_id IS NOT NULL                        AS teve_preco,
+    a.lado                                          AS lado,
+    p.lado_funil                                    AS lado_funil,
     a.premissas                                     AS premissas_antes,
     d.premissas                                     AS premissas_depois,
     a.premissas_sem_dado                            AS sem_dado_antes,
@@ -133,7 +154,16 @@ SELECT 'copa_rateada', * FROM par WHERE grupo = 'copa_rateada';
 SELECT
     (SELECT COUNT(*) FROM `{{ destino }}.ae200_celulas` WHERE celula = '{{ antes }}')  AS linhas_antes,
     (SELECT COUNT(*) FROM `{{ destino }}.ae200_celulas` WHERE celula = '{{ depois }}') AS linhas_depois,
-    (SELECT COUNT(*) FROM par)                                                         AS linhas_pareadas;
+    (SELECT COUNT(*) FROM par)                                                         AS linhas_pareadas,
+    -- 0b. O lado recomputado bate com o que o funil gravou, onde o funil gravou um. Diferente de
+    --     zero = o teto (e a faixa de partida) desta medição não é o de produção.
+    --     Medido em 24/09: 172 de 37.458, todas no Handicap linha 0 — 152 são linhas que o funil
+    --     congelou como `Pick` antes da B3 (#109, 01/09), a regra velha da linha 0 que o
+    --     append-only guarda de propósito; 20 são odd de janela diferente (o funil congela na
+    --     janela da escrita, o taskF lê o snapshot inteiro). As duas pesam igual nas duas
+    --     células, então o Δ não é afetado.
+    (SELECT COUNTIF(lado IS DISTINCT FROM lado_funil) FROM par WHERE lado_funil IS NOT NULL) AS lado_diverge_do_funil,
+    (SELECT COUNTIF(lado_funil IS NOT NULL) FROM par)                                  AS lado_conferido;
 
 -- 1. ACENDIMENTO por premissa (toda linha, com ou sem preço).
 SELECT
