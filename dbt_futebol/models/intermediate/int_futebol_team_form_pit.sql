@@ -144,13 +144,13 @@ mando_real AS (
     SELECT
         f.fixture_id,
         CASE
-            WHEN f.competition <> 'copa_mundo'               THEN 'casa'
+            WHEN f.competition IS DISTINCT FROM 'copa_mundo' THEN 'casa'
             WHEN sd.anfitriao_team_id = f.home_team_id       THEN 'casa'
             WHEN sd.anfitriao_team_id = f.away_team_id       THEN 'fora'
             ELSE 'neutro'
         END AS mando_home,
         CASE
-            WHEN f.competition <> 'copa_mundo'               THEN 'fora'
+            WHEN f.competition IS DISTINCT FROM 'copa_mundo' THEN 'fora'
             WHEN sd.anfitriao_team_id = f.away_team_id       THEN 'casa'
             WHEN sd.anfitriao_team_id = f.home_team_id       THEN 'fora'
             ELSE 'neutro'

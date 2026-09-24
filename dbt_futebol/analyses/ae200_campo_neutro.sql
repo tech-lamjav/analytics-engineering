@@ -159,9 +159,9 @@ SELECT
     --     zero = o teto (e a faixa de partida) desta medição não é o de produção.
     --     Medido em 24/09: 172 de 37.458, todas no Handicap linha 0 — 152 são linhas que o funil
     --     congelou como `Pick` antes da B3 (#109, 01/09), a regra velha da linha 0 que o
-    --     append-only guarda de propósito; 20 são odd de janela diferente (o funil congela na
-    --     janela da escrita, o taskF lê o snapshot inteiro). As duas pesam igual nas duas
-    --     células, então o Δ não é afetado.
+    --     append-only guarda de propósito; as outras 20 NÃO foram investigadas — hipótese: odd de
+    --     janela diferente (o funil congela na janela da escrita, o taskF lê o snapshot
+    --     inteiro). As duas pesam igual nas duas células, então o Δ não é afetado.
     (SELECT COUNTIF(lado IS DISTINCT FROM lado_funil) FROM par WHERE lado_funil IS NOT NULL) AS lado_diverge_do_funil,
     (SELECT COUNTIF(lado_funil IS NOT NULL) FROM par)                                  AS lado_conferido;
 
