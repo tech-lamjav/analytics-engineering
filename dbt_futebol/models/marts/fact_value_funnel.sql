@@ -819,8 +819,8 @@ SELECT
     premissas_sem_dado,
 
     -- AE#153 (Entrega 2 da #147/#148, ADR 0014): o valor medido por (premissa, insumo),
-    -- só no 1X2 nesta entrega — [] (array vazio, nunca NULL: BigQuery não guarda NULL em
-    -- ARRAY) nos outros quatro mercados. E o eixo (escopo/recorte) que estava em vigor
+    -- no 1X2 e, desde a AE#202, no Handicap — [] (array vazio, nunca NULL: BigQuery não
+    -- guarda NULL em ARRAY) nos outros três mercados. E o eixo (escopo/recorte) que estava em vigor
     -- QUANDO ESTA LINHA foi gravada, nos cinco mercados.
     insumos_medidos,
     insumo_escopo,

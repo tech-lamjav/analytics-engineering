@@ -29,7 +29,7 @@ models:
       - name: line_value
         description: "NULL no 1X2, que não tem linha. No Handicap (AE#202), o handicap na ótica do MANDANTE — o mesmo line_value do funil e do board, igual para Home e Away."
       - name: premissa
-        description: "Slug do catálogo futebol_insumos_premissa() — mesmo nome de int_futebol_premissas_1x2 e de fact_value_opportunities.evidencias."
+        description: "Slug do catálogo futebol_insumos_premissa() — mesmo nome do modelo de premissas do mercado (int_futebol_premissas_1x2 / int_futebol_premissas_ah) e de fact_value_opportunities.evidencias."
         tests: [not_null]
       - name: insumo
         description: "Nome do insumo, literalmente o mesmo de Insumo declarado/Regime do insumo (CONTEXT.md) — a chave que cruza esta linha com o regime declarado no catálogo."
@@ -37,11 +37,11 @@ models:
       - name: valor
         description: "O número que a premissa comparou. Pode ser NULL — insumo existia e não tinha dado, não que o insumo não exista (Insumo medido, CONTEXT.md)."
     tests:
-      # Grão completo — os SEIS campos que a ADR 0016 declara como o grão congelado, não só
-      # os quatro que o 1X2 hoje varia. market/line_value entram aqui mesmo constantes: é
-      # exatamente a garantia que a ADR promete (grão pronto pro segundo mercado) — sem eles
-      # na combinação, uma futura linha que difira só em market/line_value pro mesmo
-      # (fixture, outcome, premissa, insumo) passaria batido.
+      # Grão completo — os SEIS campos que a ADR 0016 declara como o grão congelado. Desde a
+      # AE#202 market/line_value variam de verdade: o Handicap repete (fixture, outcome,
+      # premissa, insumo) em várias linhas de handicap, e sem eles na combinação a chave
+      # acusaria duplicata onde não há — ou, com line_value errado, deixaria passar duas
+      # linhas de handicap caindo na mesma chave.
       #
       # tag:guarda desde a AE#202: a tabela entrou no `--select` dos dois workflows que
       # reconstroem os pais (DE#85, 16/09), a condição que a AE#175 deixou para ligar a tag.

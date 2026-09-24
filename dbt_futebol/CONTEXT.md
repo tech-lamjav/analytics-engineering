@@ -322,10 +322,9 @@ The actual value a premissa/penalidade compared, not just whether it fired —
 (premissa, insumo) that applies to the row, keyed by the same insumo name as **Insumo
 declarado** so regime and value cross without a translation table. Lives as `ARRAY<STRUCT>`
 in BigQuery; the Postgres sync skips every `REPEATED`/`RECORD` column, so this never reaches
-the app on its own — `fact_insumos_medidos` (ADR 0016) is the flattened, synced copy, one row
-per (fixture, outcome, market, line, premissa, insumo). Published today for Resultado (1X2) and
-Handicap; in Handicap the same side has one row per line, because the line decides whether the
-side is favorito or azarão and therefore which premissas apply.
+the app on its own — `fact_insumos_medidos` (ADR 0016) is the flattened, synced copy. In
+Handicap the insumo medido belongs to a side AT A LINE, not to the side alone: the line decides
+whether the side is favorito or azarão, and therefore which premissas were measured at all.
 _Avoid_: confusing with **Insumo declarado** (declares WHICH columns feed a premissa, never a
 number) or **Regime do insumo** (declares under WHICH window, never a number) — only insumo
 medido carries an actual value, and it can be NULL (the insumo existed and had no data, not

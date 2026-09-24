@@ -1,7 +1,7 @@
 {{ config(tags=['guarda'], severity='error') }}
 -- GUARDA DE RECONSTRUÇÃO DO VALOR MEDIDO (AE#153, Entrega 2 da #147/#148, ADR 0014): as três
 -- colunas GRAVADAS no funil (`insumos_medidos`, `insumo_escopo`, `insumo_recorte`) batem com o
--- que `int_futebol_premissas_1x2` e `taskf_eixos()` dizem HOJE.
+-- que os modelos de premissas (1X2 e Handicap) e `taskf_eixos()` dizem HOJE.
 --
 -- Só o 1X2 e, desde a AE#202, o Handicap têm `insumos_medidos` — os outros três mercados
 -- publicam array VAZIO (`[]`, não NULL — ver ⚠️ mais abaixo), fora de escopo por decisão, não
@@ -35,10 +35,12 @@
 -- para sempre — não é defeito, é o append-only funcionando, e o Victor aceitou esse custo
 -- explicitamente (comentário de 09/09 na ClickUp `wdx6zevnj0`).
 --
--- ⚠️ A SEGUNDA DIREÇÃO — linha gravável de mercado coberto com `insumos_medidos` vazio — está aqui pelo
--- mesmo motivo da guarda irmã: sem ela, uma coluna que nunca chegou ao esquema (`
--- append_new_columns` que não rodou) seria lida como "reconstrói perfeitamente" (NULL contra
--- NULL fecha).
+-- ⚠️ A SEGUNDA DIREÇÃO — o que a comparação sozinha não pega, porque [] contra [] fecha:
+--   * coluna que nunca chegou ao esquema (`append_new_columns` que não rodou) seria lida como
+--     "reconstrói perfeitamente" — é o `insumo_escopo IS NULL`, mesmo motivo da guarda irmã;
+--   * AE#202: linha gravável do Handicap que casou com o modelo e está vazia. No Handicap isso
+--     é sempre defeito (toda linha é favorito ou azarão), mesmo se o modelo também regrediu
+--     para []. No 1X2 não vale: o Draw é vazio por construção.
 {%- set eixos = taskf_eixos() %}
 {#- Mercados cujo modelo de premissas publica insumos_medidos (AE#153 1X2, AE#202 Handicap). -#}
 {%- set mercados_com_array = "'" ~ futebol_mercados_pontuados()[1] ~ "', '" ~ futebol_mercados_pontuados()[4] ~ "'" %}
@@ -78,7 +80,12 @@ comparacao AS (
         CASE f.market
             WHEN '{{ futebol_mercados_pontuados()[1] }}' THEN p1.insumos_medidos
             WHEN '{{ futebol_mercados_pontuados()[4] }}' THEN pah.insumos_medidos
-        END AS insumos_medidos_fresco
+        END AS insumos_medidos_fresco,
+        -- AE#202: a linha casou com o modelo de premissas do Handicap. Toda linha dele é
+        -- favorito ou azarão (B3 acabou com o pick), então casar e ter array vazio é defeito —
+        -- vale mesmo quando o modelo TAMBÉM regrediu para [], caso em que a comparação acima
+        -- fecha [] contra [] e não acende.
+        pah.fixture_id IS NOT NULL AS casou_handicap
     FROM funil f
     -- LEFT: mercado sem modelo com a coluna não casa (insumos_medidos_fresco fica NULL) e a
     -- checagem abaixo só cobra os mercados cobertos. Fixture fail-open (ausente em
@@ -111,6 +118,8 @@ SELECT
              AND TO_JSON_STRING(COALESCE(insumos_medidos, []))
                  IS DISTINCT FROM TO_JSON_STRING(COALESCE(insumos_medidos_fresco, []))
             THEN 'insumos_medidos gravado não bate com o que o modelo de premissas diz hoje'
+        WHEN casou_handicap AND ARRAY_LENGTH(COALESCE(insumos_medidos, [])) = 0
+            THEN 'linha gravável do Handicap sem valor medido — toda linha é favorito ou azarão'
         WHEN insumo_escopo != '{{ eixos.escopo }}' OR insumo_recorte != '{{ eixos.recorte }}'
             THEN 'insumo_escopo/insumo_recorte gravados não batem com taskf_eixos() de agora'
         ELSE NULL
@@ -120,6 +129,7 @@ WHERE insumo_escopo IS NULL
    OR (market IN ({{ mercados_com_array }})
        AND TO_JSON_STRING(COALESCE(insumos_medidos, []))
            IS DISTINCT FROM TO_JSON_STRING(COALESCE(insumos_medidos_fresco, [])))
+   OR (casou_handicap AND ARRAY_LENGTH(COALESCE(insumos_medidos, [])) = 0)
    OR insumo_escopo != '{{ eixos.escopo }}'
    OR insumo_recorte != '{{ eixos.recorte }}'
 ORDER BY fixture_id, market, outcome, line_key, janela
