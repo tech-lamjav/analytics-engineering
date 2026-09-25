@@ -521,7 +521,7 @@ models:
       S3 — premissas de contexto do mercado Handicap asiático (market_id 4). 2 linhas por
       (fixture, line_value): Home e Away. line_value = handicap na ótica do mandante (mesmo p/
       os dois lados; o par Home/Away é complementar). side_handicap = IF(Home, line, -line):
-      <0 favorito (5 premissas, Σ40), >0 azarão (3 premissas, Σ30), =0 a odd decide e o mando desempata (B3, #109) — não existe mais linha sem lado.
+      <0 favorito (5 premissas, Σ40), >0 azarão (3 premissas, Σ30), =0 a odd decide e o mando desempata (B3, #109), POR OUTCOME — cada lado compara "o Home tem a menor odd" com o próprio mando, e o par sai sempre um favorito e um azarão (AE#204; guarda assert_ah_linha_zero_um_lado_por_outcome) — não existe mais linha sem lado.
       Penalidade handicap_alto (|line|>=2.5, -12). evidencias[]/avisos[] = bullets pro front.
       ⚠️ MEDIÇÃO (task [F], ADR 0007, #52 e #54): o margin_stats é fonte de histórico
       competição-scoped PRÓPRIA deste modelo e aceita as DUAS vars da medição — pit_escopo
