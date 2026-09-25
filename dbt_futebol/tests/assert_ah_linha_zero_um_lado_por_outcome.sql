@@ -7,6 +7,9 @@
 -- somava as premissas de um lado enquanto o funil (`futebol_lado()`, por outcome) o dividia
 -- pelo teto do outro.
 -- Retorna (= falha) todo par (fixture, linha 0) sem exatamente um favorito e um azarão.
+-- ⚠️ O que ela NÃO pega: o par inteiro invertido (Home e Away trocados juntos) sai coerente
+-- e passa; e a concordância com a coluna `lado` do funil, que decide pela odd de CADA janela
+-- enquanto este modelo lê só a janela corrente — divergência anterior à AE#204, fora dela.
 SELECT
     fixture_id,
     COUNTIF(is_favorito) AS n_favorito,
