@@ -27,6 +27,12 @@
                          como cegueira) ainda gera entrada, com `valor` NULL. É informação:
                          diz que o insumo existe e não tinha número, não que ele não existe.
 
+    E um caso de tipo (AE#209): insumo declarado em `booleanos` no catálogo — o veredito de
+    uma premissa do 1X2 que a Dupla Chance reusa — sai 1.0/0.0 por CAST(CAST(x AS INT64) AS
+    FLOAT64). O CAST duplo preserva o NULL; um IF(x, 1, 0) o transformaria em 0, que é o
+    disfarce da classe (b) do mapa da #41. O número por trás do veredito não é copiado: está
+    nas linhas do 1X2 do mesmo jogo, no lado coberto.
+
     Inclui `tipo = 'premissa'` E `tipo = 'penalidade'` (ex.: `desfalque_proprio`) — a
     penalidade também mediu algo, mesmo não somando ao contador de cegueira. Ignora
     `tipo = 'marcador'` (ex.: `is_favorito` no Handicap): não tem insumo declarado, e
@@ -39,14 +45,45 @@
 
     ⚠️ ARRAY NULL NÃO SOBREVIVE À ESCRITA (achado do code-review, medido contra o BigQuery
     real: `CAST(NULL AS ARRAY<...>)` escrito numa tabela volta como `[]`, nunca como NULL —
-    `ARRAY_LENGTH` dá 0, não NULL). Por isso os mercados que ainda não publicam o array (todos
-    menos 1X2 e, desde a AE#202, Handicap) usam
+    `ARRAY_LENGTH` dá 0, não NULL). Por isso os mercados que ainda não publicam o array (os que
+    estão fora de `futebol_mercados_com_insumos_medidos()`, abaixo) usam
     `futebol_insumos_medidos_vazio()` (array VAZIO explícito) em vez de `CAST(NULL AS ...)`
     em `fact_value_funnel.sql` — escrever o que a coluna vai realmente guardar, em vez de um
     NULL que o BigQuery reescreveria em silêncio. Quem comparar `insumos_medidos` contra
     outra leitura (a guarda de reconstrução, por exemplo) tem de normalizar os dois lados
     com o MESMO `COALESCE(..., [])` — comparar direto um NULL de query viva com um `[]`
     gravado os trata como diferentes quando são a mesma ausência. -#}
+{#- OS MERCADOS QUE PUBLICAM O VALOR MEDIDO, declarados num lugar só (AE#208; a Dupla chance
+    entrou na AE#209). Até a AE#202
+    a lista estava escrita à mão em quatro lugares — a UNION do fact_insumos_medidos, as duas
+    guardas de reconstrução e os ramos do funil —, e o code-review dela deixou a centralização
+    para o terceiro mercado, quando desse para ver o que de fato se repete. É isto:
+
+      market_id           — a chave de futebol_mercados_pontuados(), de onde sai o slug.
+      modelo              — o modelo de premissas que publica `insumos_medidos`.
+      tem_linha           — o mercado tem line_value no grão (Handicap). Sem linha, o fact
+                            publica line_value NULL e as guardas casam por 'NONE'.
+      toda_linha_tem_valor — toda linha do modelo que casa com o funil tem pelo menos uma
+                            entrada. É o que liga a SEGUNDA direção da guarda do funil (linha
+                            gravável que casou e está vazia = defeito). Falso só no 1X2: o
+                            Draw não tem lado apostado e é vazio por construção. Na Dupla
+                            chance é verdadeiro porque só 1X e X2 têm linha no modelo; a "12"
+                            não casa com ele e fica fora da checagem.
+
+    Quem lê daqui: fact_insumos_medidos, assert_insumos_medidos_reconstroi e
+    assert_funil_insumos_medidos_reconstroi. Os ramos do funil NÃO: cada um é um CTE próprio
+    com paridade byte a byte com o board, e o ramo continua escolhendo à mão entre
+    `p.insumos_medidos` e `futebol_insumos_medidos_vazio()`. Mercado novo aqui sem trocar o
+    ramo dele no funil acende a guarda do funil — é ela que amarra as duas listas. -#}
+{% macro futebol_mercados_com_insumos_medidos() %}
+    {{ return([
+        {'market_id': 1, 'modelo': 'int_futebol_premissas_1x2',  'tem_linha': false, 'toda_linha_tem_valor': false},
+        {'market_id': 4, 'modelo': 'int_futebol_premissas_ah',   'tem_linha': true,  'toda_linha_tem_valor': true},
+        {'market_id': 8, 'modelo': 'int_futebol_premissas_btts', 'tem_linha': false, 'toda_linha_tem_valor': true},
+        {'market_id': 12, 'modelo': 'int_futebol_premissas_dc',  'tem_linha': false, 'toda_linha_tem_valor': true}
+    ]) }}
+{% endmacro %}
+
 {% macro futebol_insumos_medidos_tipo() -%}
 ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>
 {%- endmacro %}
@@ -94,7 +131,11 @@ CAST([] AS {{ futebol_insumos_medidos_tipo() }})
                    {%- if i is mapping %} AND ({{ i.quando }}){% endif -%}
                    , FALSE), '{{ p.nome }}', CAST(NULL AS STRING)) AS premissa,
                 '{{ futebol_insumo_nome(i) }}' AS insumo,
+                {%- if futebol_insumo_nome(i) in p.get('booleanos', []) %}
+                CAST(CAST({{ futebol_insumo_nome(i) }} AS INT64) AS FLOAT64) AS valor
+                {%- else %}
                 CAST({{ futebol_insumo_nome(i) }} AS FLOAT64) AS valor
+                {%- endif %}
             ){{ "," if not loop.last }}
         {%- endfor %}
         ])

@@ -66,3 +66,19 @@ ticket, na quadra do Victor.
 **Não entra no selector sozinha.** `workflow_futebol_odds.yml` (data-engineering) enumera
 modelo a modelo, em duas listas (`--select` normal e `--full-refresh`) — a tabela nova precisa
 entrar nas duas, ou uma delas fica com o modelo faltando sem nenhum erro na hora do deploy.
+
+## Emenda de 2026-09-25 (AE#209): nem todo insumo é numérico
+
+A premissa registrada acima — "todo insumo é numérico (o próprio macro já força
+`CAST(... AS FLOAT64)`, e isso já roda em produção sem quebrar)" — valia para os mercados que
+o gerador tinha visto até então (1X2 e Handicap). Não valia para a Dupla chance: três dos dez
+insumos dela (`x_forca_mismatch`, `x_superioridade_tabela`, `x_h2h_favoravel`) são BOOL, o
+veredito de premissas do 1X2 do lado coberto que a DC reusa, e o BigQuery recusa
+`CAST(bool AS FLOAT64)`. O macro nunca tinha sido aplicado ao modelo da DC, por isso rodava
+sem quebrar.
+
+A decisão desta ADR não muda: a coluna `valor` continua FLOAT64 e o grão continua o mesmo. O
+que muda é o catálogo, que ganha a chave opcional `booleanos` por premissa
+(`macros/premissas_insumos.sql`), e o gerador, que publica esses insumos como 1.0/0.0 com o
+NULL preservado. O número por trás do veredito não é copiado para a DC: está no mesmo fact, na
+linha `match_winner` do mesmo jogo, no lado coberto.

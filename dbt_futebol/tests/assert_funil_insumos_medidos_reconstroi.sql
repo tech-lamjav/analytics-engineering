@@ -1,12 +1,17 @@
 {{ config(tags=['guarda'], severity='error') }}
 -- GUARDA DE RECONSTRUÇÃO DO VALOR MEDIDO (AE#153, Entrega 2 da #147/#148, ADR 0014): as três
 -- colunas GRAVADAS no funil (`insumos_medidos`, `insumo_escopo`, `insumo_recorte`) batem com o
--- que os modelos de premissas (1X2 e Handicap) e `taskf_eixos()` dizem HOJE.
+-- que os modelos de premissas e `taskf_eixos()` dizem HOJE.
 --
--- Só o 1X2 e, desde a AE#202, o Handicap têm `insumos_medidos` — os outros três mercados
--- publicam array VAZIO (`[]`, não NULL — ver ⚠️ mais abaixo), fora de escopo por decisão, não
--- por defeito. O Handicap casa pela LINHA também (line_key): o conjunto de premissas muda com
--- ela, porque é a linha que diz se o lado é favorito ou azarão.
+-- Os mercados cobertos são os de `futebol_mercados_com_insumos_medidos()` (AE#208): 1X2
+-- (AE#153), Handicap (AE#202), Ambos marcam (AE#208) e Dupla chance (AE#209). Só o Gols publica
+-- array VAZIO (`[]`, não NULL — ver ⚠️ mais abaixo), fora de escopo por decisão, não por defeito. Mercado com
+-- linha (o Handicap) casa pela LINHA também (line_key): o conjunto de premissas muda com ela,
+-- porque é a linha que diz se o lado é favorito ou azarão.
+--
+-- É ESTA guarda que amarra a lista da macro aos ramos do funil, que continuam escritos à mão:
+-- mercado acrescentado à macro sem trocar o `[]` do ramo dele no funil acende aqui, na
+-- primeira linha gravável.
 --
 -- ⚠️ `insumo_escopo`/`insumo_recorte` são escalares do BUILD INTEIRO — a mesma var vale pra
 -- toda linha de toda execução — então a comparação é contra o LITERAL de `taskf_eixos()`
@@ -38,12 +43,24 @@
 -- ⚠️ A SEGUNDA DIREÇÃO — o que a comparação sozinha não pega, porque [] contra [] fecha:
 --   * coluna que nunca chegou ao esquema (`append_new_columns` que não rodou) seria lida como
 --     "reconstrói perfeitamente" — é o `insumo_escopo IS NULL`, mesmo motivo da guarda irmã;
---   * AE#202: linha gravável do Handicap que casou com o modelo e está vazia. No Handicap isso
---     é sempre defeito (toda linha é favorito ou azarão), mesmo se o modelo também regrediu
---     para []. No 1X2 não vale: o Draw é vazio por construção.
+--   * linha gravável que casou com o modelo e está vazia, nos mercados em que toda linha tem
+--     valor medido (`toda_linha_tem_valor` na macro): Handicap desde a AE#202 (toda linha é
+--     favorito ou azarão), Ambos marcam desde a AE#208 (toda saída é Yes ou No, e as duas
+--     têm premissa) e Dupla chance desde a AE#209 (as 4 premissas se aplicam a 1X e X2; a "12"
+--     não tem linha no modelo, não casa e fica fora). Isso é defeito mesmo se o modelo também
+--     regrediu para [] — caso em que a comparação fecha [] contra [] e não acende. No 1X2 não
+--     vale: o Draw é vazio por construção.
 {%- set eixos = taskf_eixos() %}
-{#- Mercados cujo modelo de premissas publica insumos_medidos (AE#153 1X2, AE#202 Handicap). -#}
-{%- set mercados_com_array = "'" ~ futebol_mercados_pontuados()[1] ~ "', '" ~ futebol_mercados_pontuados()[4] ~ "'" %}
+{%- set mercados = futebol_mercados_com_insumos_medidos() %}
+{%- set slugs = [] %}
+{%- set nunca_vazios = [] %}
+{%- for m in mercados %}
+    {%- do slugs.append("'" ~ futebol_mercados_pontuados()[m.market_id] ~ "'") %}
+    {%- if m.toda_linha_tem_valor %}{%- do nunca_vazios.append('p' ~ m.market_id ~ '.fixture_id IS NOT NULL') %}{%- endif %}
+{%- endfor %}
+{%- set mercados_com_array = slugs | join(', ') %}
+{#- A linha casou com um modelo em que nenhuma linha é vazia por construção. -#}
+{%- set casou_nunca_vazio = '(' ~ (nunca_vazios | join(' OR ') if nunca_vazios else 'FALSE') ~ ')' %}
 WITH fixtures AS (
     SELECT
         fixture_id,
@@ -78,29 +95,26 @@ comparacao AS (
         f.insumo_escopo,
         f.insumo_recorte,
         CASE f.market
-            WHEN '{{ futebol_mercados_pontuados()[1] }}' THEN p1.insumos_medidos
-            WHEN '{{ futebol_mercados_pontuados()[4] }}' THEN pah.insumos_medidos
+        {%- for m in mercados %}
+            WHEN '{{ futebol_mercados_pontuados()[m.market_id] }}' THEN p{{ m.market_id }}.insumos_medidos
+        {%- endfor %}
         END AS insumos_medidos_fresco,
-        -- AE#202: a linha casou com o modelo de premissas do Handicap. Toda linha dele é
-        -- favorito ou azarão (B3 acabou com o pick), então casar e ter array vazio é defeito —
-        -- vale mesmo quando o modelo TAMBÉM regrediu para [], caso em que a comparação acima
-        -- fecha [] contra [] e não acende.
-        pah.fixture_id IS NOT NULL AS casou_handicap
+        {{ casou_nunca_vazio }} AS casou_nunca_vazio
     FROM funil f
     -- LEFT: mercado sem modelo com a coluna não casa (insumos_medidos_fresco fica NULL) e a
     -- checagem abaixo só cobra os mercados cobertos. Fixture fail-open (ausente em
     -- fact_fixtures) TAMBÉM produz NULL aqui mesmo dentro de um mercado coberto — é o caso
-    -- que o COALESCE(..., []) mais abaixo neutraliza.
-    LEFT JOIN {{ ref('int_futebol_premissas_1x2') }} p1
-      ON  f.market      = '{{ futebol_mercados_pontuados()[1] }}'
-      AND p1.fixture_id = f.fixture_id
-      AND p1.outcome    = f.outcome
-    -- AE#202: mesmo predicado de linha do ramo do Handicap em fact_value_funnel.sql.
-    LEFT JOIN {{ ref('int_futebol_premissas_ah') }} pah
-      ON  f.market       = '{{ futebol_mercados_pontuados()[4] }}'
-      AND pah.fixture_id = f.fixture_id
-      AND pah.outcome    = f.outcome
-      AND COALESCE(CAST(pah.line_value AS STRING), 'NONE') = f.line_key
+    -- que o COALESCE(..., []) mais abaixo neutraliza. Mercado com linha casa por ela, com o
+    -- mesmo predicado do ramo dele em fact_value_funnel.sql.
+    {%- for m in mercados %}
+    LEFT JOIN {{ ref(m.modelo) }} p{{ m.market_id }}
+      ON  f.market = '{{ futebol_mercados_pontuados()[m.market_id] }}'
+      AND p{{ m.market_id }}.fixture_id = f.fixture_id
+      AND p{{ m.market_id }}.outcome    = f.outcome
+      {%- if m.tem_linha %}
+      AND COALESCE(CAST(p{{ m.market_id }}.line_value AS STRING), 'NONE') = f.line_key
+      {%- endif %}
+    {%- endfor %}
 )
 
 SELECT
@@ -118,8 +132,8 @@ SELECT
              AND TO_JSON_STRING(COALESCE(insumos_medidos, []))
                  IS DISTINCT FROM TO_JSON_STRING(COALESCE(insumos_medidos_fresco, []))
             THEN 'insumos_medidos gravado não bate com o que o modelo de premissas diz hoje'
-        WHEN casou_handicap AND ARRAY_LENGTH(COALESCE(insumos_medidos, [])) = 0
-            THEN 'linha gravável do Handicap sem valor medido — toda linha é favorito ou azarão'
+        WHEN casou_nunca_vazio AND ARRAY_LENGTH(COALESCE(insumos_medidos, [])) = 0
+            THEN 'linha gravável sem valor medido num mercado em que toda linha tem — o ramo do funil ainda grava []?'
         WHEN insumo_escopo != '{{ eixos.escopo }}' OR insumo_recorte != '{{ eixos.recorte }}'
             THEN 'insumo_escopo/insumo_recorte gravados não batem com taskf_eixos() de agora'
         ELSE NULL
@@ -129,7 +143,7 @@ WHERE insumo_escopo IS NULL
    OR (market IN ({{ mercados_com_array }})
        AND TO_JSON_STRING(COALESCE(insumos_medidos, []))
            IS DISTINCT FROM TO_JSON_STRING(COALESCE(insumos_medidos_fresco, [])))
-   OR (casou_handicap AND ARRAY_LENGTH(COALESCE(insumos_medidos, [])) = 0)
+   OR (casou_nunca_vazio AND ARRAY_LENGTH(COALESCE(insumos_medidos, [])) = 0)
    OR insumo_escopo != '{{ eixos.escopo }}'
    OR insumo_recorte != '{{ eixos.recorte }}'
 ORDER BY fixture_id, market, outcome, line_key, janela

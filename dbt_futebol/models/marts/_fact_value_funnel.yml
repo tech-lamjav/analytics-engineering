@@ -365,13 +365,15 @@ models:
           "que valor teve" pela mesma chave). `valor` pode ser NULL: insumo aplicável sem
           dado ainda gera entrada, porque a ausência também é informação.
 
-          ⚠️ SÓ O 1X2 (AE#153) E O HANDICAP (AE#202, filha da #147). Os outros três
-          mercados publicam ARRAY VAZIO (`[]`, NUNCA NULL — BigQuery não guarda NULL em
-          coluna ARRAY, nem em INSERT/MERGE nem em ALTER TABLE ADD COLUMN sobre linha
-          existente; medido contra o BigQuery real). Vazio não é ausência de dado, é
-          mercado ainda fora do escopo (ordem combinada com o Victor na #147: Handicap →
-          Ambos marcam → Dupla chance). No Handicap o array nunca é vazio numa linha que
-          casou com o modelo — toda linha é favorito ou azarão.
+          ⚠️ Os mercados que publicam são os de `futebol_mercados_com_insumos_medidos()`:
+          1X2 (AE#153), Handicap (AE#202), Ambos marcam (AE#208) e Dupla chance (AE#209),
+          as três últimas filhas da #147. Só o Gols publica ARRAY VAZIO (`[]`, NUNCA NULL —
+          BigQuery não guarda NULL em coluna ARRAY, nem em INSERT/MERGE nem em ALTER TABLE
+          ADD COLUMN sobre linha existente; medido contra o BigQuery real). Vazio ali não é
+          ausência de dado, é mercado ainda fora do escopo. No Handicap, no Ambos marcam e
+          na Dupla chance o array nunca é vazio numa linha que casou com o modelo; a "12" da
+          Dupla chance não casa (não tem modelo de premissa) e fica `[]`. Na Dupla chance os
+          insumos x_* valem 1.0/0.0: são o veredito de premissas do 1X2 que ela reusa.
 
           ⚠️ Chega por `append_new_columns` e fica `[]` PARA SEMPRE na linha de jogo já
           apitado antes deste deploy — mesma razão do parágrafo acima, e aceito
@@ -380,14 +382,16 @@ models:
           a "ausência" desta coluna se lê como array vazio, nunca como NULL.
 
           Protegida por `assert_funil_insumos_medidos_reconstroi` (a coluna gravada bate
-          com o que `int_futebol_premissas_1x2`/`int_futebol_premissas_ah` dizem hoje, em
-          toda linha ainda gravável; e linha de Handicap gravável nunca fica vazia).
+          com o que os modelos de premissa dos mercados que publicam dizem hoje, em toda
+          linha ainda gravável; e linha gravável que casou com o modelo nunca fica vazia
+          nos mercados em que toda linha tem valor — todos menos o 1X2, cujo Draw é vazio
+          por construção).
       - name: insumo_escopo
         description: >
           AE#153. O `pit_escopo` (ADR 0007/0010) que estava em vigor QUANDO ESTA LINHA foi
           gravada — não uma leitura do catálogo (que descreve o eixo em geral, sempre hoje).
           Escalar do build inteiro: a mesma var vale pra toda linha de toda execução, então
-          publica nos CINCO mercados, mesmo `insumos_medidos` ficando só no 1X2 e no Handicap. Fecha por
+          publica nos CINCO mercados, mesmo `insumos_medidos` ficando fora do Gols. Fecha por
           DADO a mesma classe de bug que a Entrega 1 só fechou por CÓDIGO — se o default
           mudar de novo em silêncio, esta coluna continua dizendo qual valia naquele dia.
           Chega por `append_new_columns`, mesma regra de `insumos_medidos`.

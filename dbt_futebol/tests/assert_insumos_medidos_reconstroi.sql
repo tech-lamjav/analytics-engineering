@@ -15,17 +15,23 @@
 -- 2792/94/46 em 20, 23 e 24/09) porque o diário refazia o pai e deixava o filho defasado;
 -- verde no diário e no de odds em 25/09 (AE#201).
 --
--- AE#202: cobre os dois mercados publicados (1X2 e Handicap). A chave de comparação inclui
--- market e LINHA — no Handicap o mesmo (fixture, outcome) tem várias linhas, cada uma com o
--- seu conjunto de premissas. A linha entra como texto (line_key, 'NONE' quando NULL) porque o
--- 1X2 não tem linha e NULL = NULL não casaria no FULL OUTER JOIN.
+-- AE#202: a chave de comparação inclui market e LINHA — no Handicap o mesmo (fixture,
+-- outcome) tem várias linhas, cada uma com o seu conjunto de premissas. A linha entra como
+-- texto (line_key, 'NONE' quando NULL) porque os mercados sem linha não a têm e NULL = NULL
+-- não casaria no FULL OUTER JOIN.
+--
+-- AE#208: os mercados vêm de futebol_mercados_com_insumos_medidos(), a mesma lista que o
+-- fact lê. Antes eram dois ramos escritos à mão aqui, que precisavam lembrar de crescer junto
+-- com a UNION do fact.
+{%- set mercados = futebol_mercados_com_insumos_medidos() %}
 
 WITH origem AS (
+{%- for m in mercados %}
     SELECT
         fixture_id,
         outcome,
-        '{{ futebol_mercados_pontuados()[1] }}' AS market,
-        'NONE' AS line_key,
+        '{{ futebol_mercados_pontuados()[m.market_id] }}' AS market,
+        {{ "COALESCE(CAST(line_value AS STRING), 'NONE')" if m.tem_linha else "'NONE'" }} AS line_key,
         TO_JSON_STRING(
             ARRAY(
                 SELECT AS STRUCT premissa, insumo, valor
@@ -33,23 +39,12 @@ WITH origem AS (
                 ORDER BY premissa, insumo
             )
         ) AS insumos_serializados
-    FROM {{ ref('int_futebol_premissas_1x2') }}
+    FROM {{ ref(m.modelo) }}
+{%- if not loop.last %}
 
     UNION ALL
-
-    SELECT
-        fixture_id,
-        outcome,
-        '{{ futebol_mercados_pontuados()[4] }}' AS market,
-        COALESCE(CAST(line_value AS STRING), 'NONE') AS line_key,
-        TO_JSON_STRING(
-            ARRAY(
-                SELECT AS STRUCT premissa, insumo, valor
-                FROM UNNEST(insumos_medidos)
-                ORDER BY premissa, insumo
-            )
-        ) AS insumos_serializados
-    FROM {{ ref('int_futebol_premissas_ah') }}
+{% endif %}
+{%- endfor %}
 ),
 
 achatado AS (
