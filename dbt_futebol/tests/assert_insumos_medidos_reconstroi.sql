@@ -9,8 +9,11 @@
 -- ARRAY_LENGTH). A comparação de conteúdo é o que realmente sobrevive a uma mudança futura
 -- no SQL do modelo.
 --
--- tag:guarda desde a AE#202 — a tabela entrou no --select dos dois workflows que reconstroem
--- os pais (DE#85, 16/09), a condição que a AE#175 deixou escrita para ligar a tag.
+-- tag:guarda desde a AE#202. A condição que a AE#175 deixou escrita para ligar a tag é a
+-- tabela estar no --select de TODO workflow que reconstrói os pais: o de odds entrou no DE#85
+-- (16/09), o diário só no DE#105 (24/09). Até lá esta guarda ficava vermelha na suíte (FAIL
+-- 2792/94/46 em 20, 23 e 24/09) porque o diário refazia o pai e deixava o filho defasado;
+-- verde no diário e no de odds em 25/09 (AE#201).
 --
 -- AE#202: cobre os dois mercados publicados (1X2 e Handicap). A chave de comparação inclui
 -- market e LINHA — no Handicap o mesmo (fixture, outcome) tem várias linhas, cada uma com o
