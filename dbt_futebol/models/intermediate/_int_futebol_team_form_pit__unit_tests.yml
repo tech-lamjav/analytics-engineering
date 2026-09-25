@@ -1,0 +1,103 @@
+version: 2
+
+# ==============================================================================
+# Unit tests do int_futebol_team_form_pit — eixo `pit_mando` (AE#200).
+#
+# Um cenário, lido nas duas células do eixo. Quatro seleções, quatro jogos encerrados antes
+# de dois alvos (fixtures 9 e 10, NS):
+#
+#   F1  Copa  Czechia(770) × Mexico(16)       Mexico City  2–1  anfitrião em casa, mas a
+#                                                               API o rotula VISITANTE
+#   F2  Copa  Canada(5529) × Switzerland(15)  Inglewood    3–0  anfitrião FORA do país dele
+#   F3  Copa  Switzerland(15) × Czechia(770)  Houston      1–1  nenhum anfitrião
+#   F4  NL    Czechia(770) × Switzerland(15)  Mexico City  2–2  fora da Copa: o rótulo da API
+#                                                               vale mesmo numa cidade-sede
+#
+# Sob `neutro_copa` (o que a AE#200 decidiu):
+#   · F1: o Mexico é CASA e a Czechia é FORA, contra o rótulo — o anfitrião no próprio país
+#     é forçado, e o adversário vai junto.
+#   · F2 e F3: campo neutro. Entra nas DUAS médias de gols (casa e fora), e em NENHUM dos
+#     contadores de resultado (played/wins/draws de casa e de fora) — é esse par que dá a
+#     abstenção de `mando`/`mando_forte` sem tocar nos modelos de premissa.
+#   · F4: segue o rótulo da API.
+#
+# Sob o default (`casa_fora`) as mesmas linhas seguem o rótulo da API em todo jogo, e
+# `played_neutro` é 0 — é o que prova que o eixo não mexe em produção.
+# ==============================================================================
+unit_tests:
+  - name: pit_mando_neutro_copa_reclassifica_o_historico
+    model: int_futebol_team_form_pit
+    description: >
+      Sob pit_mando=neutro_copa, o anfitrião da Copa jogando no próprio país conta como casa
+      (e o adversário como fora) mesmo quando a API o rotula visitante; o jogo de Copa sem
+      anfitrião em casa é campo neutro, conta nas duas médias de gols e em nenhum contador de
+      resultado; e jogo de outra competição segue o rótulo da API mesmo numa cidade-sede.
+    overrides:
+      vars:
+        pit_mando: neutro_copa
+    given: &cenario
+      - input: ref('fact_fixtures')
+        rows:
+          - {fixture_id: 1, competition: 'copa_mundo', competition_id: 1, season: 2026, kickoff_utc: '2026-06-11 20:00:00', home_team_id: 770, away_team_id: 16, status_short: 'FT', score_fulltime_home: 2, score_fulltime_away: 1, venue_city: 'Mexico City'}
+          - {fixture_id: 2, competition: 'copa_mundo', competition_id: 1, season: 2026, kickoff_utc: '2026-06-12 20:00:00', home_team_id: 5529, away_team_id: 15, status_short: 'FT', score_fulltime_home: 3, score_fulltime_away: 0, venue_city: 'Inglewood'}
+          - {fixture_id: 3, competition: 'copa_mundo', competition_id: 1, season: 2026, kickoff_utc: '2026-06-13 20:00:00', home_team_id: 15, away_team_id: 770, status_short: 'FT', score_fulltime_home: 1, score_fulltime_away: 1, venue_city: 'Houston'}
+          - {fixture_id: 4, competition: 'nations_league', competition_id: 5, season: 2026, kickoff_utc: '2026-06-14 20:00:00', home_team_id: 770, away_team_id: 15, status_short: 'FT', score_fulltime_home: 2, score_fulltime_away: 2, venue_city: 'Mexico City'}
+          - {fixture_id: 9, competition: 'copa_mundo', competition_id: 1, season: 2026, kickoff_utc: '2026-07-01 20:00:00', home_team_id: 16, away_team_id: 5529, status_short: 'NS', venue_city: 'Toronto'}
+          - {fixture_id: 10, competition: 'copa_mundo', competition_id: 1, season: 2026, kickoff_utc: '2026-07-01 20:00:00', home_team_id: 770, away_team_id: 15, status_short: 'NS', venue_city: 'Seattle'}
+      - input: ref('fact_standings_snapshot')
+        rows: []
+      - input: ref('futebol_copa_mundo_sedes')
+        rows:
+          - {venue_city: 'Mexico City', pais_sede: 'Mexico', anfitriao_team_id: 16}
+          - {venue_city: 'Toronto',     pais_sede: 'Canada', anfitriao_team_id: 5529}
+          - {venue_city: 'Inglewood',   pais_sede: 'USA',    anfitriao_team_id: 2384}
+          - {venue_city: 'Houston',     pais_sede: 'USA',    anfitriao_team_id: 2384}
+          - {venue_city: 'Seattle',     pais_sede: 'USA',    anfitriao_team_id: 2384}
+    expect:
+      rows:
+        # O PIT emite os dois lados de TODO jogo, também dos quatro do histórico. F1 e F2
+        # abrem a Copa: ninguém tem passado.
+        - {fixture_id: 1, team_id: 16,   played_total: 0, played_neutro: 0, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: null, goals_against_avg_away: null}
+        - {fixture_id: 1, team_id: 770,  played_total: 0, played_neutro: 0, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: null, goals_against_avg_away: null}
+        - {fixture_id: 2, team_id: 5529, played_total: 0, played_neutro: 0, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: null, goals_against_avg_away: null}
+        - {fixture_id: 2, team_id: 15,   played_total: 0, played_neutro: 0, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: null, goals_against_avg_away: null}
+        # Antes de F3: Switzerland só tem F2 (neutro, 0 a 3); Czechia só tem F1 (fora, 2 a 1).
+        - {fixture_id: 3, team_id: 15,   played_total: 1, played_neutro: 1, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: 0.0, goals_against_avg_home: 3.0, goals_for_avg_away: 0.0, goals_against_avg_away: 3.0}
+        - {fixture_id: 3, team_id: 770,  played_total: 1, played_neutro: 0, played_home: 0, played_away: 1, wins_home: 0, draws_home: 0, wins_away: 1, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: 2.0, goals_against_avg_away: 1.0}
+        # Antes de F4: Switzerland com F2 e F3, os dois neutros; Czechia com F1 (fora) e F3 (neutro).
+        - {fixture_id: 4, team_id: 15,   played_total: 2, played_neutro: 2, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: 0.5, goals_against_avg_home: 2.0, goals_for_avg_away: 0.5, goals_against_avg_away: 2.0}
+        - {fixture_id: 4, team_id: 770,  played_total: 2, played_neutro: 1, played_home: 0, played_away: 1, wins_home: 0, draws_home: 0, wins_away: 1, draws_away: 0, goals_for_avg_home: 1.0, goals_against_avg_home: 1.0, goals_for_avg_away: 1.5, goals_against_avg_away: 1.0}
+        # Mexico: F1 como CASA (1 a 2), contra o rótulo de visitante.
+        - {fixture_id: 9, team_id: 16, played_total: 1, played_neutro: 0, played_home: 1, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: 1.0, goals_against_avg_home: 2.0, goals_for_avg_away: null, goals_against_avg_away: null}
+        # Canada: F2 é neutro (jogou nos EUA) — entra nas duas médias, em nenhum contador.
+        - {fixture_id: 9, team_id: 5529, played_total: 1, played_neutro: 1, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: 3.0, goals_against_avg_home: 0.0, goals_for_avg_away: 3.0, goals_against_avg_away: 0.0}
+        # Czechia: F1 FORA (2 a 1, vitória), F3 neutro (1 a 1), F4 casa pelo rótulo (2 a 2).
+        - {fixture_id: 10, team_id: 770, played_total: 3, played_neutro: 1, played_home: 1, played_away: 1, wins_home: 0, draws_home: 1, wins_away: 1, draws_away: 0, goals_for_avg_home: 1.5, goals_against_avg_home: 1.5, goals_for_avg_away: 1.5, goals_against_avg_away: 1.0}
+        # Switzerland: F2 e F3 neutros (0 a 3, 1 a 1), F4 fora pelo rótulo (2 a 2).
+        - {fixture_id: 10, team_id: 15, played_total: 3, played_neutro: 2, played_home: 0, played_away: 1, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 1, goals_for_avg_home: 0.5, goals_against_avg_home: 2.0, goals_for_avg_away: 1.0, goals_against_avg_away: 2.0}
+
+  - name: pit_mando_default_segue_o_rotulo_da_api
+    model: int_futebol_team_form_pit
+    description: >
+      No default (pit_mando=casa_fora) o mesmo cenário segue o rótulo da API em todo jogo,
+      inclusive na Copa, e nenhum jogo é neutro — o eixo não mexe no que produção lê.
+    given: *cenario
+    expect:
+      rows:
+        - {fixture_id: 1, team_id: 16,   played_total: 0, played_neutro: 0, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: null, goals_against_avg_away: null}
+        - {fixture_id: 1, team_id: 770,  played_total: 0, played_neutro: 0, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: null, goals_against_avg_away: null}
+        - {fixture_id: 2, team_id: 5529, played_total: 0, played_neutro: 0, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: null, goals_against_avg_away: null}
+        - {fixture_id: 2, team_id: 15,   played_total: 0, played_neutro: 0, played_home: 0, played_away: 0, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: null, goals_against_avg_away: null}
+        # Antes de F3: Switzerland com F2 fora (0 a 3); Czechia com F1 em casa (2 a 1).
+        - {fixture_id: 3, team_id: 15,   played_total: 1, played_neutro: 0, played_home: 0, played_away: 1, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: 0.0, goals_against_avg_away: 3.0}
+        - {fixture_id: 3, team_id: 770,  played_total: 1, played_neutro: 0, played_home: 1, played_away: 0, wins_home: 1, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: 2.0, goals_against_avg_home: 1.0, goals_for_avg_away: null, goals_against_avg_away: null}
+        # Antes de F4: Switzerland com F2 fora e F3 em casa; Czechia com F1 em casa e F3 fora.
+        - {fixture_id: 4, team_id: 15,   played_total: 2, played_neutro: 0, played_home: 1, played_away: 1, wins_home: 0, draws_home: 1, wins_away: 0, draws_away: 0, goals_for_avg_home: 1.0, goals_against_avg_home: 1.0, goals_for_avg_away: 0.0, goals_against_avg_away: 3.0}
+        - {fixture_id: 4, team_id: 770,  played_total: 2, played_neutro: 0, played_home: 1, played_away: 1, wins_home: 1, draws_home: 0, wins_away: 0, draws_away: 1, goals_for_avg_home: 2.0, goals_against_avg_home: 1.0, goals_for_avg_away: 1.0, goals_against_avg_away: 1.0}
+        # Mexico: F1 como VISITANTE, que é o rótulo da API.
+        - {fixture_id: 9, team_id: 16, played_total: 1, played_neutro: 0, played_home: 0, played_away: 1, wins_home: 0, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: null, goals_against_avg_home: null, goals_for_avg_away: 1.0, goals_against_avg_away: 2.0}
+        - {fixture_id: 9, team_id: 5529, played_total: 1, played_neutro: 0, played_home: 1, played_away: 0, wins_home: 1, draws_home: 0, wins_away: 0, draws_away: 0, goals_for_avg_home: 3.0, goals_against_avg_home: 0.0, goals_for_avg_away: null, goals_against_avg_away: null}
+        # Czechia: F1 e F4 em casa (2 a 1, 2 a 2), F3 fora (1 a 1).
+        - {fixture_id: 10, team_id: 770, played_total: 3, played_neutro: 0, played_home: 2, played_away: 1, wins_home: 1, draws_home: 1, wins_away: 0, draws_away: 1, goals_for_avg_home: 2.0, goals_against_avg_home: 1.5, goals_for_avg_away: 1.0, goals_against_avg_away: 1.0}
+        # Switzerland: F3 em casa (1 a 1), F2 e F4 fora (0 a 3, 2 a 2).
+        - {fixture_id: 10, team_id: 15, played_total: 3, played_neutro: 0, played_home: 1, played_away: 2, wins_home: 0, draws_home: 1, wins_away: 0, draws_away: 1, goals_for_avg_home: 1.0, goals_against_avg_home: 1.0, goals_for_avg_away: 1.0, goals_against_avg_away: 2.5}

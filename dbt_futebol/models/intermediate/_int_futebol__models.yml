@@ -192,11 +192,28 @@ models:
       em 6 modelos, os DOIS eixos em todos eles. Mexer só aqui produziria célula misturada. Tabela
       de quem-alcança-o-quê na ADR 0007. Os valores aceitos, a validação e o tamanho do recorte
       vivem em macros/taskf_eixos.sql, uma vez só.
+      ⚠️ EIXO pit_mando (AE#200), só deste modelo — nenhum histórico local dos modelos de
+      premissa separa por mando: `casa_fora` (default, produção) usa o rótulo da API;
+      `neutro_copa` reclassifica a Copa do Mundo pela cidade (seed futebol_copa_mundo_sedes):
+      anfitrião no próprio país é casa, todo outro jogo de Copa é campo neutro. Os agregados de
+      casa/fora saem de `mando` (casa/fora/neutro), não do rótulo cru: o neutro entra nas duas
+      médias de gols e em nenhum contador de resultado (played/wins/draws de casa e fora). No
+      default o dado é o de antes do eixo existir.
     columns:
       - name: fixture_id
         tests: [not_null]
       - name: team_id
         tests: [not_null]
+      - name: played_neutro
+        description: >
+          Jogos de campo neutro no histórico usado (AE#200). Sempre 0 sob pit_mando=casa_fora
+          (produção); sob neutro_copa é o que diz se a linha está exposta à reclassificação.
+          Não entra em played_home/played_away — só em played_total e nas duas médias de gols.
+        tests:
+          - not_null
+          - dbt_utils.accepted_range:
+              arguments:
+                min_value: 0
       - name: played_total
         description: >
           Jogos do time na competição/season ANTES do kickoff. 0 na estreia -> médias NULL ->

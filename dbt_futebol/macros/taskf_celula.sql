@@ -35,11 +35,26 @@
     {%- set eixos   = taskf_eixos() -%}
     {%- set escopo  = eixos.escopo -%}
     {%- set recorte = eixos.recorte -%}
+    {%- set nome    = taskf_nomes_de_celula()[escopo ~ '|' ~ recorte] -%}
+
+    {#- O eixo de mando (AE#200) não entra no 2x2: ele só foi medido sobre a célula de
+        produção, `ambos`. Fora dela, levanta — as outras três combinações nunca foram
+        pedidas, e um rótulo `base` sobre um histórico reclassificado seria o mesmo modo de
+        falha que o fail-closed acima fecha. -#}
+    {%- if eixos.mando != 'casa_fora' -%}
+        {%- if nome != 'ambos' -%}
+            {{ exceptions.raise_compiler_error(
+                "pit_mando: '" ~ eixos.mando ~ "' só existe sobre a célula ambos "
+                ~ "(pit_escopo=todas, pit_recorte=ultimos_10); pedida: " ~ nome ~ ".") }}
+        {%- endif -%}
+        {%- set nome = nome ~ '_' ~ eixos.mando -%}
+    {%- endif -%}
 
     {{ return({
-        'nome':    taskf_nomes_de_celula()[escopo ~ '|' ~ recorte],
+        'nome':    nome,
         'escopo':  escopo,
-        'recorte': recorte
+        'recorte': recorte,
+        'mando':   eixos.mando
     }) }}
 
 {% endmacro %}

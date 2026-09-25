@@ -1,7 +1,7 @@
 {{ config(
     materialized='table',
     cluster_by=['fixture_id', 'team_id'],
-    description='Correção da Task 0 (look-ahead) — agregados de forma POINT-IN-TIME por (fixture_id, team_id): tudo é calculado SÓ com jogos FINALIZADOS da MESMA competição/season e com kickoff ANTERIOR ao do jogo-alvo. Substitui as duas fontes contaminadas dos 5 modelos de premissas: (A) fact_team_season_stats, que tem 1 único snapshot por (time, liga, season) — p/ 2024/2025 é a temporada FECHADA (played_total=38 aplicado à rodada 1, ~51% de cada média sendo futuro e 100% dos jogos com o próprio resultado dentro da média); e (B2) o standings_latest (MAX(snapshot_date) sem âncora no kickoff), cujo histórico só começa em 11/06/2026 e que p/ 24/25 é a tabela final. Reconstrói do fact_fixtures o mesmo conjunto de colunas consumido pelos modelos (gols pró/contra casa/fora/total, clean sheet, failed to score, played/wins/draws) MAIS a tabela do campeonato no instante do jogo (rank/points/ppg/n_wins_last5). O rank sai DENTRO do grupo (group_name das standings = estrutura do chaveamento, conhecida antes dos jogos — não é medição): liga de pontos corridos = 1 grupo, logo rank global 1-20 (Brasileirão/Série B/La Liga/PL/Serie A ITA) ou 1-36 (Champions, fase de liga); Libertadores/Sudamericana/Copa do Mundo = rank por grupo (1-4 / 1-12), igual à API; Copa do Brasil não tem standings -> sem grupo -> rank NULL, como já era. Degradação graciosa por construção: no início de temporada played_total=0 -> médias NULL -> premissa FALSE (honesto: na rodada 1 não existe passado). played_* fica exposto p/ que a recalibragem possa decidir um piso de amostra. ⚠️ MEDIÇÃO (task [F], ADR 0007): aceita as vars pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10). ⚠️ Desde a #91 (ADR 0010) os DEFAULTS são `todas` + `ultimos_10` — a célula `ambos` — e NÃO reproduzem mais o comportamento descrito acima; ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no dataset futebol_taskF. A tabela do campeonato (rank/points/ppg/n_teams/goal_diff) NÃO segue os eixos: classificação existe dentro de uma competição, então ela permanece competição+temporada em todas as células, por construção (ADR 0008). Sob pit_recorte=ultimos_10 sai também played_total_disponivel — quantas partidas anteriores EXISTEM no escopo, sem o teto do recorte; played_total é a contagem USADA e satura em 10. ⚠️ Desde a #91 o default É `ultimos_10`, então a coluna PASSA a ser emitida sempre — e o piso de amostra do task01_base() lê ELA, não o played_total, que sob o teto satura em 10 (ADR 0007, ADR 0010). O macro escolhe a coluna conforme o recorte da célula, porque sob `temporada` ela não existe; quem precisa da contagem USADA nas quatro células é a medição (analyses/taskf_teste2.sql), que a calcula num CTE próprio.'
+    description='Correção da Task 0 (look-ahead) — agregados de forma POINT-IN-TIME por (fixture_id, team_id): tudo é calculado SÓ com jogos FINALIZADOS da MESMA competição/season e com kickoff ANTERIOR ao do jogo-alvo. Substitui as duas fontes contaminadas dos 5 modelos de premissas: (A) fact_team_season_stats, que tem 1 único snapshot por (time, liga, season) — p/ 2024/2025 é a temporada FECHADA (played_total=38 aplicado à rodada 1, ~51% de cada média sendo futuro e 100% dos jogos com o próprio resultado dentro da média); e (B2) o standings_latest (MAX(snapshot_date) sem âncora no kickoff), cujo histórico só começa em 11/06/2026 e que p/ 24/25 é a tabela final. Reconstrói do fact_fixtures o mesmo conjunto de colunas consumido pelos modelos (gols pró/contra casa/fora/total, clean sheet, failed to score, played/wins/draws) MAIS a tabela do campeonato no instante do jogo (rank/points/ppg/n_wins_last5). O rank sai DENTRO do grupo (group_name das standings = estrutura do chaveamento, conhecida antes dos jogos — não é medição): liga de pontos corridos = 1 grupo, logo rank global 1-20 (Brasileirão/Série B/La Liga/PL/Serie A ITA) ou 1-36 (Champions, fase de liga); Libertadores/Sudamericana/Copa do Mundo = rank por grupo (1-4 / 1-12), igual à API; Copa do Brasil não tem standings -> sem grupo -> rank NULL, como já era. Degradação graciosa por construção: no início de temporada played_total=0 -> médias NULL -> premissa FALSE (honesto: na rodada 1 não existe passado). played_* fica exposto p/ que a recalibragem possa decidir um piso de amostra. ⚠️ MEDIÇÃO (task [F], ADR 0007): aceita as vars pit_escopo (da_competicao|todas) e pit_recorte (temporada|ultimos_10). ⚠️ Desde a #91 (ADR 0010) os DEFAULTS são `todas` + `ultimos_10` — a célula `ambos` — e NÃO reproduzem mais o comportamento descrito acima; ele descreve o ramo `da_competicao`/`temporada`, hoje alcançável só passando as vars. Produção USA o default, que é a célula `ambos` da [F]; as vars seguem existindo para as OUTRAS células da medição, materializadas no dataset futebol_taskF. ⚠️ EIXO pit_mando (AE#200): `casa_fora` (default, produção) usa o rótulo da API; `neutro_copa` reclassifica a Copa do Mundo pela cidade (seed futebol_copa_mundo_sedes) — anfitrião no próprio país é casa, todo outro jogo de Copa é campo neutro. played/wins/draws de casa e fora e as médias de gols saem de `mando` (casa/fora/neutro), não do rótulo cru: o neutro entra nas duas médias de gols e em nenhum contador de resultado; played_neutro conta quantos houve (sempre 0 no default). A tabela do campeonato (rank/points/ppg/n_teams/goal_diff) NÃO segue os eixos: classificação existe dentro de uma competição, então ela permanece competição+temporada em todas as células, por construção (ADR 0008). Sob pit_recorte=ultimos_10 sai também played_total_disponivel — quantas partidas anteriores EXISTEM no escopo, sem o teto do recorte; played_total é a contagem USADA e satura em 10. ⚠️ Desde a #91 o default É `ultimos_10`, então a coluna PASSA a ser emitida sempre — e o piso de amostra do task01_base() lê ELA, não o played_total, que sob o teto satura em 10 (ADR 0007, ADR 0010). O macro escolhe a coluna conforme o recorte da célula, porque sob `temporada` ela não existe; quem precisa da contagem USADA nas quatro células é a medição (analyses/taskf_teste2.sql), que a calcula num CTE próprio.'
 ) }}
 {#-
     EIXOS DE MEDIÇÃO DA TASK [F] (issue #49, ADR 0007) — desde a #91 o DEFAULT deles É produção.
@@ -44,6 +44,32 @@
 {%- set eixos       = taskf_eixos() -%}
 {%- set pit_escopo  = eixos.escopo -%}
 {%- set pit_recorte = eixos.recorte -%}
+{%- set pit_mando   = eixos.mando -%}
+{#- CORTE POR MANDO (AE#200). `team_log` carrega `mando` em três estados — casa, fora, neutro —
+    e é dele, nunca do rótulo cru da API, que os agregados de casa/fora saem. As DUAS formas do
+    eixo passam pela mesma lista de agregados: sob `casa_fora` (default) o `mando` é o rótulo da
+    API e `neutro` não acontece, então o dado é o de antes do eixo existir.
+
+    Sob `neutro_copa`, na Copa do Mundo, o anfitrião jogando numa cidade do próprio país é casa
+    e o adversário é fora, CONTRA o rótulo quando preciso (em 4 dos 15 jogos com anfitrião a API
+    o põe como visitante); todo outro jogo de Copa é campo neutro. As outras competições seguem
+    o rótulo. O que o neutro faz nos agregados:
+
+      · médias de gols de casa E de fora — conta nas DUAS, como observação não-condicionada.
+        São as 9 premissas de corte por mando que leem gols; nas que somam os dois lados
+        (gf_comb/ga_comb) o viés de pôr o jogo nos dois baldes se cancela na soma.
+      · played/wins/draws de casa e de fora — conta em NENHUMA. É o que `mando` e `mando_forte`
+        leem (pct_pts_home/aprov_fora), e elas medem a própria vantagem de casa: num jogo
+        neutro não há vantagem a medir. Sem jogo real de casa o insumo sai NULL, a premissa não
+        acende e cai em premissas sem dado (ADR 0003) — a abstenção sem limiar que a AE#200
+        decidiu, sem tocar nos modelos de premissa.
+
+    ⚠️ O neutro NÃO duplica linha: `played_total`, a tabela do campeonato e o teto do recorte
+    continuam contando o jogo uma vez. Duplicar inflaria os três.
+
+    O seed é declarado sempre (depends_on abaixo) e lido só sob `neutro_copa`: no default o SQL
+    compilado não o consulta. -#}
+-- depends_on: {{ ref('futebol_copa_mundo_sedes') }}
 {#- O tamanho do recorte de contagem (o 10 de `ultimos_10`) vem da mesma macro que valida os
     eixos, e não de um literal digitado aqui: ele é lido também pelos seis sites de histórico dos
     modelos de premissas e pela análise que confere a saturação. -#}
@@ -56,23 +82,27 @@
     no default, pares ranqueados sob recorte de contagem) — para as duas formas não derivarem. -#}
 {%- set agregados_pit %}
         -- jogos / resultados
-        COUNTIF(l.is_home)                          AS played_home,
-        COUNTIF(NOT l.is_home)                      AS played_away,
+        -- Contadores de resultado por mando: só jogo de mando REAL (o neutro fica fora; ver o
+        -- cabeçalho do eixo pit_mando acima).
+        COUNTIF(l.mando = 'casa')                   AS played_home,
+        COUNTIF(l.mando = 'fora')                   AS played_away,
+        COUNTIF(l.mando = 'neutro')                 AS played_neutro,
         COUNT(l.team_id)                            AS played_total,
-        COUNTIF(l.is_home       AND l.gf > l.ga)    AS wins_home,
-        COUNTIF(l.is_home       AND l.gf = l.ga)    AS draws_home,
-        COUNTIF(NOT l.is_home   AND l.gf > l.ga)    AS wins_away,
-        COUNTIF(NOT l.is_home   AND l.gf = l.ga)    AS draws_away,
+        COUNTIF(l.mando = 'casa' AND l.gf > l.ga)   AS wins_home,
+        COUNTIF(l.mando = 'casa' AND l.gf = l.ga)   AS draws_home,
+        COUNTIF(l.mando = 'fora' AND l.gf > l.ga)   AS wins_away,
+        COUNTIF(l.mando = 'fora' AND l.gf = l.ga)   AS draws_away,
         COUNTIF(l.gf > l.ga)                        AS wins_total,
         COUNTIF(l.gf = l.ga)                        AS draws_total,
 
-        -- gols marcados / sofridos (médias por venue e no total)
-        SAFE_DIVIDE(SUM(IF(l.is_home,     l.gf, 0)), COUNTIF(l.is_home))     AS goals_for_avg_home,
-        SAFE_DIVIDE(SUM(IF(NOT l.is_home, l.gf, 0)), COUNTIF(NOT l.is_home)) AS goals_for_avg_away,
-        SAFE_DIVIDE(SUM(l.gf),                       COUNT(l.team_id))       AS goals_for_avg_total,
-        SAFE_DIVIDE(SUM(IF(l.is_home,     l.ga, 0)), COUNTIF(l.is_home))     AS goals_against_avg_home,
-        SAFE_DIVIDE(SUM(IF(NOT l.is_home, l.ga, 0)), COUNTIF(NOT l.is_home)) AS goals_against_avg_away,
-        SAFE_DIVIDE(SUM(l.ga),                       COUNT(l.team_id))       AS goals_against_avg_total,
+        -- gols marcados / sofridos (médias por venue e no total). O campo neutro entra nos
+        -- DOIS baldes — observação não-condicionada.
+        SAFE_DIVIDE(SUM(IF(l.mando IN ('casa', 'neutro'), l.gf, 0)), COUNTIF(l.mando IN ('casa', 'neutro'))) AS goals_for_avg_home,
+        SAFE_DIVIDE(SUM(IF(l.mando IN ('fora', 'neutro'), l.gf, 0)), COUNTIF(l.mando IN ('fora', 'neutro'))) AS goals_for_avg_away,
+        SAFE_DIVIDE(SUM(l.gf),                                       COUNT(l.team_id))                        AS goals_for_avg_total,
+        SAFE_DIVIDE(SUM(IF(l.mando IN ('casa', 'neutro'), l.ga, 0)), COUNTIF(l.mando IN ('casa', 'neutro'))) AS goals_against_avg_home,
+        SAFE_DIVIDE(SUM(IF(l.mando IN ('fora', 'neutro'), l.ga, 0)), COUNTIF(l.mando IN ('fora', 'neutro'))) AS goals_against_avg_away,
+        SAFE_DIVIDE(SUM(l.ga),                                       COUNT(l.team_id))                        AS goals_against_avg_total,
 
         -- defesa / ataque agregados
         COUNTIF(l.ga = 0)                           AS clean_sheet_total,
@@ -97,8 +127,39 @@ WITH fixtures AS (
         fixture_id, competition, competition_id, season,
         home_team_id, away_team_id, kickoff_utc,
         status_short, score_fulltime_home, score_fulltime_away
+        {%- if pit_mando == 'neutro_copa' %},
+        -- A cidade é a crua da API nos 104 jogos da Copa (medido em 24/09 contra o stg, AE#200):
+        -- o preenchimento da ADR 0015 roda por coluna, e nenhum jogo de Copa teve a cidade
+        -- inferida. Cidade fora do seed viraria neutro calado — quem fecha isso é a guarda
+        -- assert_copa_mundo_cidade_no_seed_de_sedes.
+        venue_city
+        {%- endif %}
     FROM {{ ref('fact_fixtures') }}
 ),
+{%- if pit_mando == 'neutro_copa' %}
+
+-- O mando REAL de cada lado (AE#200): casa/fora/neutro, lido da cidade, na Copa do Mundo; o
+-- rótulo da API nas outras competições.
+mando_real AS (
+    SELECT
+        f.fixture_id,
+        CASE
+            WHEN f.competition IS DISTINCT FROM 'copa_mundo' THEN 'casa'
+            WHEN sd.anfitriao_team_id = f.home_team_id       THEN 'casa'
+            WHEN sd.anfitriao_team_id = f.away_team_id       THEN 'fora'
+            ELSE 'neutro'
+        END AS mando_home,
+        CASE
+            WHEN f.competition IS DISTINCT FROM 'copa_mundo' THEN 'fora'
+            WHEN sd.anfitriao_team_id = f.away_team_id       THEN 'casa'
+            WHEN sd.anfitriao_team_id = f.home_team_id       THEN 'fora'
+            ELSE 'neutro'
+        END AS mando_away
+    FROM fixtures f
+    LEFT JOIN {{ ref('futebol_copa_mundo_sedes') }} sd
+        ON sd.venue_city = f.venue_city
+),
+{%- endif %}
 
 -- Grão de saída: os dois lados de cada jogo (inclusive jogos futuros).
 targets AS (
@@ -123,15 +184,23 @@ targets AS (
 -- passa a contar é o honesto. Nas copas de mata-mata a `tabela` não existe (Copa do Brasil não
 -- tem standings -> rank NULL), então o alcance real é o dos 3 jogos.
 team_log AS (
-    SELECT competition_id, season, kickoff_utc, home_team_id AS team_id,
-           TRUE AS is_home, score_fulltime_home AS gf, score_fulltime_away AS ga
-    FROM fixtures
-    WHERE {{ futebol_jogo_encerrado() }}
+    SELECT f.competition_id, f.season, f.kickoff_utc, f.home_team_id AS team_id,
+           {% if pit_mando == 'neutro_copa' %}m.mando_home{% else %}'casa'{% endif %} AS mando,
+           f.score_fulltime_home AS gf, f.score_fulltime_away AS ga
+    FROM fixtures f
+    {%- if pit_mando == 'neutro_copa' %}
+    JOIN mando_real m USING (fixture_id)
+    {%- endif %}
+    WHERE {{ futebol_jogo_encerrado('f.') }}
     UNION ALL
-    SELECT competition_id, season, kickoff_utc, away_team_id,
-           FALSE, score_fulltime_away, score_fulltime_home
-    FROM fixtures
-    WHERE {{ futebol_jogo_encerrado() }}
+    SELECT f.competition_id, f.season, f.kickoff_utc, f.away_team_id,
+           {% if pit_mando == 'neutro_copa' %}m.mando_away{% else %}'fora'{% endif %},
+           f.score_fulltime_away, f.score_fulltime_home
+    FROM fixtures f
+    {%- if pit_mando == 'neutro_copa' %}
+    JOIN mando_real m USING (fixture_id)
+    {%- endif %}
+    WHERE {{ futebol_jogo_encerrado('f.') }}
 ),
 
 -- Universo de times por (liga, season) — tirado de fixtures, não de standings, p/ a Copa do
@@ -176,7 +245,7 @@ pares AS (
         a.competition_id,
         a.season,
         l.team_id,
-        l.is_home,
+        l.mando,
         l.gf,
         l.ga,
         l.kickoff_utc,
@@ -319,6 +388,9 @@ SELECT
     -- jogos / resultados (todos PIT)
     r.played_home,
     r.played_away,
+    -- AE#200: jogos de campo neutro no histórico. Sempre 0 sob o default (casa_fora); sob
+    -- neutro_copa é o que diz se a linha está EXPOSTA à reclassificação.
+    r.played_neutro,
     r.played_total,
     {%- if pit_recorte == 'ultimos_10' %}
     -- Ver o comentário no CTE `pit`: existe só sob recorte de contagem, que é o único caso em
