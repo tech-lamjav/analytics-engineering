@@ -622,6 +622,16 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
+      - name: insumos_medidos
+        description: >
+          AE#208 (filha da #147; mesmo gerador do 1X2 e do Handicap, ADR 0014).
+          `ARRAY<STRUCT<premissa, insumo, valor FLOAT64>>`, uma entrada por (premissa,
+          insumo) aplicável à SAÍDA desta linha: Yes publica as 4 premissas do Sim (8
+          entradas), No as 3 do Não (6). Nunca vazio. Os insumos são do mandante e do
+          visitante (home_*/away_*), não S/O — no BTTS nenhum time é o lado apostado. A
+          `defesa_forte` publica o percentual de clean sheet (home_cs_pct/away_cs_pct), que é
+          o que o critério compara. ARRAY, então o sync o pula — quem atravessa pro Postgres
+          é `fact_insumos_medidos`.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:

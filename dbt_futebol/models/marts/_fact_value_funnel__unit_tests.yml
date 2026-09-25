@@ -128,7 +128,7 @@ unit_tests:
       # o funil só lê a coluna (cand_1x2), nunca o conteúdo, neste teste.
       # ⚠️ Tipo por extenso, não futebol_insumos_medidos_tipo(): fixture de unit test em
       # format: sql não tem o namespace de macros do projeto (testado — 'is undefined').
-      # Mudar o STRUCT exige atualizar as 8 ocorrências aqui à mão.
+      # Mudar o STRUCT exige atualizar todas as ocorrências deste arquivo à mão.
       - input: ref('int_futebol_premissas_1x2')
         format: sql
         rows: |
@@ -169,7 +169,16 @@ unit_tests:
                    CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
-        rows: []
+        # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
+        # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_btts_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_corroboracao')
         rows: []
 
@@ -277,7 +286,16 @@ unit_tests:
                    CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
-        rows: []
+        # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
+        # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_btts_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_corroboracao')
         rows: []
       # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
@@ -356,7 +374,16 @@ unit_tests:
                    CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
-        rows: []
+        # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
+        # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_btts_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_dc')
         rows: []
       - input: ref('int_futebol_corroboracao')
@@ -453,7 +480,16 @@ unit_tests:
                  CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
 
       - input: ref('int_futebol_premissas_btts')
-        rows: []
+        # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
+        # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_btts_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_dc')
         rows: []
       - input: ref('int_futebol_corroboracao')
@@ -548,7 +584,16 @@ unit_tests:
                    CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
-        rows: []
+        # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
+        # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_btts_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_dc')
         rows: []
       - input: ref('int_futebol_corroboracao')
@@ -654,7 +699,16 @@ unit_tests:
                    CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
-        rows: []
+        # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
+        # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_btts_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
 
       # Só o fixture 1 tem corroboração, e cheia (7 + 8 = 15). É metade do par: o
       # gêmeo dele (2) não tem nenhuma, e a nota de contexto dos dois é a mesma.
@@ -800,7 +854,16 @@ unit_tests:
       - input: ref('int_futebol_premissas_dc')
         rows: []
       - input: ref('int_futebol_premissas_btts')
-        rows: []
+        # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
+        # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_btts_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_corroboracao')
         rows: []
 
@@ -863,7 +926,16 @@ unit_tests:
       - input: ref('int_futebol_premissas_dc')
         rows: []
       - input: ref('int_futebol_premissas_btts')
-        rows: []
+        # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
+        # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS INT64) AS penalidades_btts_pts,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_corroboracao')
         rows: []
 

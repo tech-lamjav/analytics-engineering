@@ -3,13 +3,14 @@ version: 2
 models:
   - name: fact_insumos_medidos
     description: >
-      Entrega 3 do #147/#148 (AE#175, ADR 0016), estendida ao Handicap pela AE#202. Cópia
-      achatada, escalar, de `insumos_medidos` de `int_futebol_premissas_1x2` e
-      `int_futebol_premissas_ah` — o ARRAY<STRUCT> que a Entrega 2 (AE#153, ADR 0014)
-      publica não atravessa o sync BQ->Postgres (pula toda coluna REPEATED/RECORD). 1 linha
-      por (fixture_id, outcome, market, line_value, premissa, insumo) aplicável à linha. No
-      Handicap, uma linha por linha de handicap, com o valor repetido: o que muda entre as
-      linhas é quais premissas se aplicam (favorito ou azarão).
+      Entrega 3 do #147/#148 (AE#175, ADR 0016), estendida ao Handicap pela AE#202 e ao Ambos
+      marcam pela AE#208. Cópia achatada, escalar, de `insumos_medidos` dos modelos de
+      premissas listados em `futebol_mercados_com_insumos_medidos()` — o ARRAY<STRUCT> que a
+      Entrega 2 (AE#153, ADR 0014) publica não atravessa o sync BQ->Postgres (pula toda
+      coluna REPEATED/RECORD). 1 linha por (fixture_id, outcome, market, line_value,
+      premissa, insumo) aplicável à linha. No Handicap, uma linha por linha de handicap, com
+      o valor repetido: o que muda entre as linhas é quais premissas se aplicam (favorito ou
+      azarão). No Ambos marcam, sem linha, como o 1X2.
     columns:
       - name: fixture_id
         tests: [not_null]
@@ -18,18 +19,20 @@ models:
           - not_null
           - accepted_values:
               arguments:
-                values: ['Home', 'Draw', 'Away']
+                # Draw nunca chega (nenhuma premissa do 1X2 se aplica a ele), mas é saída
+                # legítima do mercado, e a lista declara o conjunto, não a ocorrência.
+                values: ['Home', 'Draw', 'Away', 'Yes', 'No']
       - name: market
-        description: "Slug de futebol_mercados_pontuados() — 'match_winner' (1X2) ou 'asian_handicap' (AE#202), não um literal '1X2'/'AH'."
+        description: "Slug de futebol_mercados_pontuados() — 'match_winner' (1X2), 'asian_handicap' (AE#202) ou 'btts' (AE#208), não um literal '1X2'/'AH'/'BTTS'."
         tests:
           - not_null
           - accepted_values:
               arguments:
-                values: ['match_winner', 'asian_handicap']
+                values: ['match_winner', 'asian_handicap', 'btts']
       - name: line_value
-        description: "NULL no 1X2, que não tem linha. No Handicap (AE#202), o handicap na ótica do MANDANTE — o mesmo line_value do funil e do board, igual para Home e Away."
+        description: "NULL nos mercados sem linha (1X2, Ambos marcam). No Handicap (AE#202), o handicap na ótica do MANDANTE — o mesmo line_value do funil e do board, igual para Home e Away."
       - name: premissa
-        description: "Slug do catálogo futebol_insumos_premissa() — mesmo nome do modelo de premissas do mercado (int_futebol_premissas_1x2 / int_futebol_premissas_ah) e de fact_value_opportunities.evidencias."
+        description: "Slug do catálogo futebol_insumos_premissa() — mesmo nome do modelo de premissas do mercado (int_futebol_premissas_1x2 / _ah / _btts) e de fact_value_opportunities.evidencias."
         tests: [not_null]
       - name: insumo
         description: "Nome do insumo, literalmente o mesmo de Insumo declarado/Regime do insumo (CONTEXT.md) — a chave que cruza esta linha com o regime declarado no catálogo."
