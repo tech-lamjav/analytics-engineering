@@ -4,8 +4,8 @@
 -- que os modelos de premissas e `taskf_eixos()` dizem HOJE.
 --
 -- Os mercados cobertos são os de `futebol_mercados_com_insumos_medidos()` (AE#208): 1X2
--- (AE#153), Handicap (AE#202) e Ambos marcam (AE#208). Os outros publicam array VAZIO (`[]`,
--- não NULL — ver ⚠️ mais abaixo), fora de escopo por decisão, não por defeito. Mercado com
+-- (AE#153), Handicap (AE#202), Ambos marcam (AE#208) e Dupla chance (AE#209). Só o Gols publica
+-- array VAZIO (`[]`, não NULL — ver ⚠️ mais abaixo), fora de escopo por decisão, não por defeito. Mercado com
 -- linha (o Handicap) casa pela LINHA também (line_key): o conjunto de premissas muda com ela,
 -- porque é a linha que diz se o lado é favorito ou azarão.
 --
@@ -45,10 +45,11 @@
 --     "reconstrói perfeitamente" — é o `insumo_escopo IS NULL`, mesmo motivo da guarda irmã;
 --   * linha gravável que casou com o modelo e está vazia, nos mercados em que toda linha tem
 --     valor medido (`toda_linha_tem_valor` na macro): Handicap desde a AE#202 (toda linha é
---     favorito ou azarão) e Ambos marcam desde a AE#208 (toda saída é Yes ou No, e as duas
---     têm premissa). Isso é defeito mesmo se o modelo também regrediu para [] — caso em que a
---     comparação fecha [] contra [] e não acende. No 1X2 não vale: o Draw é vazio por
---     construção.
+--     favorito ou azarão), Ambos marcam desde a AE#208 (toda saída é Yes ou No, e as duas
+--     têm premissa) e Dupla chance desde a AE#209 (as 4 premissas se aplicam a 1X e X2; a "12"
+--     não tem linha no modelo, não casa e fica fora). Isso é defeito mesmo se o modelo também
+--     regrediu para [] — caso em que a comparação fecha [] contra [] e não acende. No 1X2 não
+--     vale: o Draw é vazio por construção.
 {%- set eixos = taskf_eixos() %}
 {%- set mercados = futebol_mercados_com_insumos_medidos() %}
 {%- set slugs = [] %}
