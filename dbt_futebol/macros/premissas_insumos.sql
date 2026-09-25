@@ -133,7 +133,21 @@
     para comparar — o preço seria maior que o problema. Manter `regimes` correto é disciplina de
     quem edita os 5 modelos de premissa: ao tocar de onde um insumo lê, conferir se o regime dele
     neste mapa ainda descreve a leitura nova. É a mesma disciplina que já existe para as três
-    chaves anteriores. -#}
+    chaves anteriores.
+
+    QUINTA CHAVE, opcional — `booleanos` (AE#209): a lista dos insumos da premissa que são BOOL
+    na CTE, e não número. Existe por causa da Dupla Chance, cuja premissa é composta de outra:
+    `lado_coberto_forte` lê `x_forca_mismatch`/`x_superioridade_tabela` e `adversario_limitado`
+    lê `x_h2h_favoravel`, que são o VEREDITO de premissas do 1X2 do lado coberto. O valor medido
+    (futebol_insumos_medidos, macros/premissas_valores_medidos.sql) publica esses como 1.0/0.0,
+    e é preciso saber quais são porque o BigQuery recusa `CAST(bool AS FLOAT64)`. Fica no nível
+    da premissa, como `regimes`, e não dentro do item de insumo: `i is mapping` já quer dizer
+    "insumo condicional" em futebol_premissas_cegas e no gerador, e um insumo simples virado
+    dict para carregar o tipo seria lido como condicional sem `quando`. Validado em compilação:
+    nome em `booleanos` que não é insumo da própria premissa é erro. O que isto NÃO valida é o
+    tipo real da coluna — insumo BOOL fora da lista falha no BigQuery (`Invalid cast from BOOL
+    to FLOAT64`), o que é barulhento; insumo numérico DENTRO dela seria truncado para inteiro
+    pelo CAST para INT64, que é mudo. Só ponha aqui o que é BOOL na CTE `metrics`. -#}
 {#- O nome de um insumo, seja ele simples (string) ou condicional ({'col', 'quando'}). Único
     lugar que sabe extrair o nome — futebol_premissas_cegas (premissas_sem_dado.sql) e a
     validação de regimes abaixo chamam este macro em vez de repetir `i.col if i is mapping else
@@ -186,9 +200,9 @@
         {'modelo': 'int_futebol_premissas_btts', 'nome': 'ataque_trava',     'tipo': 'premissa', 'aplicavel': "outcome = 'No'",  'insumos': ['home_fts_pct', 'away_fts_pct'], 'regimes': {'home_fts_pct': 'pit', 'away_fts_pct': 'pit'}},
         {'modelo': 'int_futebol_premissas_btts', 'nome': 'historico_seco',   'tipo': 'premissa', 'aplicavel': "outcome = 'No'",  'insumos': ['home_no_btts_cnt', 'away_no_btts_cnt'], 'regimes': {'home_no_btts_cnt': 'pit', 'away_no_btts_cnt': 'pit'}},
 
-        {'modelo': 'int_futebol_premissas_dc', 'nome': 'lado_coberto_forte',   'tipo': 'premissa', 'aplicavel': 'TRUE', 'insumos': ['x_forca_mismatch', 'x_superioridade_tabela'], 'regimes': {'x_forca_mismatch': 'pit', 'x_superioridade_tabela': 'sempre_competicao'}},
+        {'modelo': 'int_futebol_premissas_dc', 'nome': 'lado_coberto_forte',   'tipo': 'premissa', 'aplicavel': 'TRUE', 'insumos': ['x_forca_mismatch', 'x_superioridade_tabela'], 'regimes': {'x_forca_mismatch': 'pit', 'x_superioridade_tabela': 'sempre_competicao'}, 'booleanos': ['x_forca_mismatch', 'x_superioridade_tabela']},
         {'modelo': 'int_futebol_premissas_dc', 'nome': 'equilibrio_defensivo', 'tipo': 'premissa', 'aplicavel': 'TRUE', 'insumos': ['s_ga_total', 'o_ga_total', 's_thrash_rate', 'o_thrash_rate'], 'regimes': {'s_ga_total': 'pit', 'o_ga_total': 'pit', 's_thrash_rate': 'pit', 'o_thrash_rate': 'pit'}},
-        {'modelo': 'int_futebol_premissas_dc', 'nome': 'adversario_limitado',  'tipo': 'premissa', 'aplicavel': 'TRUE', 'insumos': ['o_aproveitamento', 'x_h2h_favoravel'], 'regimes': {'o_aproveitamento': 'pit', 'x_h2h_favoravel': 'local_fixo'}},
+        {'modelo': 'int_futebol_premissas_dc', 'nome': 'adversario_limitado',  'tipo': 'premissa', 'aplicavel': 'TRUE', 'insumos': ['o_aproveitamento', 'x_h2h_favoravel'], 'regimes': {'o_aproveitamento': 'pit', 'x_h2h_favoravel': 'local_fixo'}, 'booleanos': ['x_h2h_favoravel']},
         {'modelo': 'int_futebol_premissas_dc', 'nome': 'invicto_recente',      'tipo': 'premissa', 'aplicavel': 'TRUE', 'insumos': ['s_games_last5', 's_losses_last5'], 'regimes': {'s_games_last5': 'pit', 's_losses_last5': 'pit'}},
 
         {'modelo': 'int_futebol_premissas_ou', 'nome': 'ataque_combinado',   'tipo': 'premissa',   'aplicavel': "outcome = 'Over'",  'insumos': ['gf_comb'], 'regimes': {'gf_comb': 'pit'}},
@@ -214,6 +228,14 @@
             {%- set nomes_insumo = [] %}
             {%- for i in p.insumos %}
                 {%- do nomes_insumo.append(futebol_insumo_nome(i)) %}
+            {%- endfor %}
+            {%- for nome in p.get('booleanos', []) %}
+                {%- if nome not in nomes_insumo %}
+                    {{ exceptions.raise_compiler_error(
+                        "futebol_insumos_premissa: '" ~ p.nome ~ "' (" ~ p.modelo ~ ") declara '" ~
+                        nome ~ "' em 'booleanos', mas ele não é insumo da premissa. 'booleanos' "
+                        "só marca o tipo de um insumo já declarado em 'insumos'.") }}
+                {%- endif %}
             {%- endfor %}
             {%- set regimes = p.get('regimes', {}) %}
             {%- for nome in nomes_insumo %}

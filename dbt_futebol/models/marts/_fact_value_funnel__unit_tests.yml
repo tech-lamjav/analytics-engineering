@@ -151,10 +151,12 @@ unit_tests:
                  15 AS pts_premissas, 0 AS premissas_sem_dado, 0 AS penalidades_ou_pts
 
       - input: ref('int_futebol_premissas_dc')
+        # AE#209: cand_dc passou a selecionar insumos_medidos — o mock traz a coluna tipada.
         format: sql
         rows: |
-          SELECT 2 AS fixture_id, '12' AS outcome, 15 AS pts_premissas, 0 AS premissas_sem_dado
-          UNION ALL SELECT 9, '1X', 15, 0
+          SELECT 2 AS fixture_id, '12' AS outcome, 15 AS pts_premissas, 0 AS premissas_sem_dado,
+                 CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          UNION ALL SELECT 9, '1X', 15, 0, NULL
 
       - input: ref('int_futebol_premissas_ah')
         # AE#202: rows: [] (dict) não basta mais — mesmo motivo do 1X2 na AE#153: cand_ah
@@ -270,7 +272,15 @@ unit_tests:
 
       # A "12" da fixture 11 NÃO tem linha aqui — de propósito. É o estado real.
       - input: ref('int_futebol_premissas_dc')
-        rows: []
+        # AE#209: rows: [] (dict) não basta mais — mesmo motivo do Ambos marcam na AE#208:
+        # cand_dc seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_ou')
         rows: []
       - input: ref('int_futebol_premissas_ah')
@@ -385,7 +395,15 @@ unit_tests:
                    CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           ) WHERE FALSE
       - input: ref('int_futebol_premissas_dc')
-        rows: []
+        # AE#209: rows: [] (dict) não basta mais — mesmo motivo do Ambos marcam na AE#208:
+        # cand_dc seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_corroboracao')
         rows: []
       # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
@@ -491,7 +509,15 @@ unit_tests:
                    CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           ) WHERE FALSE
       - input: ref('int_futebol_premissas_dc')
-        rows: []
+        # AE#209: rows: [] (dict) não basta mais — mesmo motivo do Ambos marcam na AE#208:
+        # cand_dc seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_corroboracao')
         rows: []
       # o denominador congelado (#105/PPP#365) — ver o ⚠️ do cabeçalho sobre o fixture sintético.
@@ -595,7 +621,15 @@ unit_tests:
                    CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           ) WHERE FALSE
       - input: ref('int_futebol_premissas_dc')
-        rows: []
+        # AE#209: rows: [] (dict) não basta mais — mesmo motivo do Ambos marcam na AE#208:
+        # cand_dc seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_corroboracao')
         rows: []
 
@@ -685,7 +719,15 @@ unit_tests:
 
       # A "12" (fixture 4) NÃO tem linha aqui, de propósito.
       - input: ref('int_futebol_premissas_dc')
-        rows: []
+        # AE#209: rows: [] (dict) não basta mais — mesmo motivo do Ambos marcam na AE#208:
+        # cand_dc seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_ah')
         # AE#202: rows: [] (dict) não basta mais — mesmo motivo do 1X2 na AE#153: cand_ah
         # seleciona insumos_medidos, e o mock sem schema não tem a coluna.
@@ -852,7 +894,15 @@ unit_tests:
       # A "12" (fixture 8) NÃO tem linha aqui, de propósito: é o que a torna a saída
       # sem premissa a avaliar.
       - input: ref('int_futebol_premissas_dc')
-        rows: []
+        # AE#209: rows: [] (dict) não basta mais — mesmo motivo do Ambos marcam na AE#208:
+        # cand_dc seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
         # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
         # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.
@@ -924,7 +974,15 @@ unit_tests:
       - input: ref('int_futebol_premissas_ou')
         rows: []
       - input: ref('int_futebol_premissas_dc')
-        rows: []
+        # AE#209: rows: [] (dict) não basta mais — mesmo motivo do Ambos marcam na AE#208:
+        # cand_dc seleciona insumos_medidos, e o mock sem schema não tem a coluna.
+        format: sql
+        rows: |
+          SELECT * FROM (
+            SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                   CAST(NULL AS INT64) AS pts_premissas, CAST(NULL AS INT64) AS premissas_sem_dado,
+                   CAST(NULL AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          ) WHERE FALSE
       - input: ref('int_futebol_premissas_btts')
         # AE#208: rows: [] (dict) não basta mais — mesmo motivo do Handicap na AE#202:
         # cand_btts seleciona insumos_medidos, e o mock sem schema não tem a coluna.

@@ -46,6 +46,13 @@ unit_tests:
           SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
                  CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
           FROM UNNEST([1]) WHERE FALSE
+      # AE#209: o fact lê também a Dupla chance. Vazio aqui — este teste é de outro mercado.
+      - input: ref('int_futebol_premissas_dc')
+        format: sql
+        rows: |
+          SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                 CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          FROM UNNEST([1]) WHERE FALSE
     expect:
       rows:
         - {fixture_id: 1, outcome: 'Home', market: 'match_winner', line_value: , premissa: 'forca_mismatch', insumo: 's_gf_venue', valor: 1.8}
@@ -88,6 +95,13 @@ unit_tests:
           ]
       # AE#208: o fact lê também o Ambos marcam. Vazio aqui — este teste é de outro mercado.
       - input: ref('int_futebol_premissas_btts')
+        format: sql
+        rows: |
+          SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                 CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          FROM UNNEST([1]) WHERE FALSE
+      # AE#209: o fact lê também a Dupla chance. Vazio aqui — este teste é de outro mercado.
+      - input: ref('int_futebol_premissas_dc')
         format: sql
         rows: |
           SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
@@ -140,8 +154,66 @@ unit_tests:
           SELECT 9, 'No', [
             STRUCT('defesa_forte' AS premissa, 'home_cs_pct' AS insumo, 50.0 AS valor)
           ]
+      # AE#209: o fact lê também a Dupla chance. Vazio aqui — este teste é de outro mercado.
+      - input: ref('int_futebol_premissas_dc')
+        format: sql
+        rows: |
+          SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                 CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          FROM UNNEST([1]) WHERE FALSE
     expect:
       rows:
         - {fixture_id: 9, outcome: 'Yes', market: 'btts', line_value: , premissa: 'defesas_vazaveis', insumo: 'home_cs_pct', valor: 50.0}
         - {fixture_id: 9, outcome: 'Yes', market: 'btts', line_value: , premissa: 'historico_btts', insumo: 'away_btts_cnt', valor: }
         - {fixture_id: 9, outcome: 'No', market: 'btts', line_value: , premissa: 'defesa_forte', insumo: 'home_cs_pct', valor: 50.0}
+
+  # ============================================================================
+  # AE#209: Dupla chance. Sem linha, saídas 1X/X2. Prova que:
+  #   1. market = 'double_chance' e line_value NULL;
+  #   2. o insumo booleano (o veredito da premissa do 1X2 que a DC reusa) chega como 1.0 e
+  #      atravessa o achatamento como qualquer número — é o que o front lê para saber qual
+  #      metade da premissa composta acendeu;
+  #   3. o NULL da cegueira herdada do 1X2 sobrevive.
+  # A "12" não tem modelo de premissa, então não aparece em lugar nenhum daqui.
+  # ============================================================================
+  - name: fact_insumos_medidos_dupla_chance_com_booleano
+    model: fact_insumos_medidos
+    description: >
+      Dupla chance entra com market double_chance e line_value NULL; o veredito booleano
+      reusado do 1X2 chega como 1.0/NULL.
+    given:
+      - input: ref('int_futebol_premissas_1x2')
+        format: sql
+        rows: |
+          SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                 CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          FROM UNNEST([1]) WHERE FALSE
+      - input: ref('int_futebol_premissas_ah')
+        format: sql
+        rows: |
+          SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                 CAST(NULL AS FLOAT64) AS line_value,
+                 CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          FROM UNNEST([1]) WHERE FALSE
+      - input: ref('int_futebol_premissas_btts')
+        format: sql
+        rows: |
+          SELECT CAST(NULL AS INT64) AS fixture_id, CAST(NULL AS STRING) AS outcome,
+                 CAST([] AS ARRAY<STRUCT<premissa STRING, insumo STRING, valor FLOAT64>>) AS insumos_medidos
+          FROM UNNEST([1]) WHERE FALSE
+      - input: ref('int_futebol_premissas_dc')
+        format: sql
+        rows: |
+          SELECT 12 AS fixture_id, '1X' AS outcome, [
+            STRUCT('lado_coberto_forte' AS premissa, 'x_forca_mismatch' AS insumo, 1.0 AS valor),
+            STRUCT('adversario_limitado' AS premissa, 'x_h2h_favoravel' AS insumo, CAST(NULL AS FLOAT64) AS valor)
+          ] AS insumos_medidos
+          UNION ALL
+          SELECT 12, 'X2', [
+            STRUCT('equilibrio_defensivo' AS premissa, 's_ga_total' AS insumo, 1.25 AS valor)
+          ]
+    expect:
+      rows:
+        - {fixture_id: 12, outcome: '1X', market: 'double_chance', line_value: , premissa: 'lado_coberto_forte', insumo: 'x_forca_mismatch', valor: 1.0}
+        - {fixture_id: 12, outcome: '1X', market: 'double_chance', line_value: , premissa: 'adversario_limitado', insumo: 'x_h2h_favoravel', valor: }
+        - {fixture_id: 12, outcome: 'X2', market: 'double_chance', line_value: , premissa: 'equilibrio_defensivo', insumo: 's_ga_total', valor: 1.25}

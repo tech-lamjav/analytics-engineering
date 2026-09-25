@@ -685,6 +685,17 @@ models:
               arguments:
                 min_value: 0
                 inclusive: true
+      - name: insumos_medidos
+        description: >
+          AE#209 (filha da #147; mesmo gerador dos outros mercados, ADR 0014).
+          `ARRAY<STRUCT<premissa, insumo, valor FLOAT64>>`, uma entrada por (premissa,
+          insumo); as 4 premissas se aplicam às duas saídas, então 1X e X2 publicam 10
+          entradas cada e nunca vazio. Os três insumos x_* (x_forca_mismatch,
+          x_superioridade_tabela, x_h2h_favoravel) são o VEREDITO de premissas do 1X2 do lado
+          coberto e valem 1.0/0.0 — NULL quando a premissa está cega lá —, declarados em
+          `booleanos` no catálogo. O número por trás do veredito está na linha match_winner
+          do mesmo jogo, no lado coberto (Home para 1X, Away para X2). ARRAY, então o sync o
+          pula — quem atravessa pro Postgres é `fact_insumos_medidos`.
     tests:
       - dbt_utils.unique_combination_of_columns:
           arguments:
