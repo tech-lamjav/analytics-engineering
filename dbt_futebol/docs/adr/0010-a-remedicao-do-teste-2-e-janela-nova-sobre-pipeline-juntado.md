@@ -310,3 +310,88 @@ universo não é gated.
 **Manter a condição antiga e só marcar (c) como pendente.** Rejeitada: a condição exige, em (b),
 algo que a ADR 0004 proíbe, e delega, via ADR 0008, uma decisão à task que ela bloqueia. Uma
 condição que não pode ser satisfeita não é bloqueio, é esquecimento com data.
+
+---
+
+## Emenda de 2026-09-29 — o Teste 2 não passa pelo gate de preço, e a janela nova é declarada
+
+Escrita **antes** de olhar qualquer resultado do Teste 2 na janela nova (regra 3 da ADR 0004).
+
+### 1. O universo do Teste 2 continua sem gate — e agora isso está no código, não na intenção
+
+A parte "O que NÃO é condição" afirma que o universo do Teste 2 **não passa pelo gate**. Em
+2026-09-10 o `b4aad43` pôs as três portas de preço do board (`n_casas >= 4`, `NOT pen_odd_outlier`,
+faixa de odd 1,50–4,00; Dupla Chance 1,25–2,00) como `WHERE` incondicional em `apostas` do
+`task01_base`. A intenção do commit era o backtest ("o backtest media aposta que o board recusa"),
+mas o macro é compartilhado e o Teste 2 herdou — sem que ninguém registrasse. Efeito medido em
+2026-09-29 sobre a janela congelada (`completo`): **5.605 → 1.802 linhas**, mesmos 169 jogos (`sharp`
+2.481 → 1.311; `consenso` 2.786 → 341; `derivada` 338 → 150). É "mudar quais linhas entram", que
+invalida a âncora pela lista da #82.
+
+**Decisão:** `task01_base` ganha `gates_board` (default `true`; produção e backtests inalterados) e
+só `analyses/taskf_teste2.sql` passa `false`. O Teste 2 mede o universo que a ADR sempre disse que
+media, e a âncora continua comparável. A leitura **com** gate é reportada ao lado como leitura
+secundária — não como o Teste 2.
+
+Por que não re-ancorar sobre o universo com gate: seria trocar o desenho do Teste 2 por tabela, num
+commit que não o tinha como alvo. O gate filtra a faixa de odd (1,50–4,00), que enviesa o que
+`a_odd_dava` enxerga; se o Teste 2 deve passar a medir o universo do board, isso é decisão da [B], com
+ADR própria, e não efeito colateral.
+
+O argumento de amostra curta **não** discrimina as duas leituras: acima do piso 5 ficam 514 de 632
+jogos sem gate e 512 de 630 com gate (81,3% nos dois casos). O gate corta linhas (21,2 mil → 7,0 mil),
+não jogos.
+
+### 2. A janela e a composição do universo primário
+
+- **Janela:** `kickoff_utc ∈ [2026-08-04 12:00:00, 2026-10-01 00:00:00) UTC`, como declarada em 25/08.
+- **Seleções ficam fora do universo primário:** `copa_mundo` (1), `nations_league` (5) e `amistosos`
+  (10). A Nations League entrou no mart depois da janela ser declarada (AE#193, 22/09) e está dentro do
+  que o `task01_base` enxerga hoje (42 jogos encerrados e precificados; na leitura com gate, 478 linhas, 92% delas
+  abaixo do piso 5, e nenhum jogo no piso 10). O ADR §1 recusou a Copa do Mundo pelo mecanismo — histórico de
+  seleção não é medido pela nossa coleta —, e a Nations League repete esse defeito. Ela é medida **à
+  parte**, como universo secundário.
+- **Por que a redação é "seleções" e não "Copa do Mundo":** a macro `taskf_familia_competicao` rotula a
+  Nations League `ano_calendario` só porque a base tem a temporada 2026 (24/09–17/11). Se o mata-mata de
+  2027 entrar sob `season=2026`, ela passa a `split_year` e o piso de 100 split-year subiria por
+  reclassificação, não por jogo. A família de cada competição na janela fica **fixada** como a lista
+  abaixo, e uma re-execução posterior não a redecide.
+- **Famílias fixadas (29/09):** `split_year` = `la_liga`, `primeira_liga`, `premier_league`,
+  `serie_a_ita`, `champions_league`, `ligue_1`, `bundesliga`. `ano_calendario` = `serie_b`,
+  `brasileirao`, `sudamericana`, `libertadores`, `copa_do_brasil`. Fora: `copa_mundo`,
+  `nations_league`, `amistosos`.
+- O predicado do universo da janela nova em `macros/taskf_universos.sql` ainda **não existe**; entra no
+  PR que roda o Teste 2, depois de 01/10, com esta lista como especificação.
+
+### 3. Os quatro pisos do termo 4 — contagem provisória de 29/09 (a final é a de 01/10)
+
+`analyses/ae117_termo4_pisos.sql` (uma consulta, ambas as leituras). Universo primário = sem seleções
+(a linha "Nations League fora" não desconta `copa_mundo` nem `amistosos`, que já são 0):
+
+| piso | alvo | sem gate, NL dentro | sem gate, NL fora (primário) |
+|---|---|---|---|
+| encerrados e precificados | ≥ 400 | 632 | 588 |
+| acima do piso 5 | ≥ 300 | 514 | 511 |
+| de competição split-year | ≥ 100 | 359 | 359 |
+| de Copa do Mundo | 0 | 0 | 0 |
+
+Com gate (leitura secundária) os números são 630 / 512 / 359 / 0 com a Nations League dentro e
+586 / 509 / 359 / 0 fora. Os quatro passam em todas as leituras, com folga; o veredito de
+passa/falha não depende da decisão sobre a Nations League nem do gate. Restam ~11 jogos com odds abertas (Nações + uma Série B); nenhum é
+split-year. A contagem que vale é a de 01/10, depois do rebuild dos fatos.
+
+### 4. Ressalva nova, que a lista de invalidação da #82 não nomeia
+
+`team_group` em `int_futebol_team_form_pit.sql` lê o `snapshot_date` **mais recente** de standings —
+não é point-in-time. Na janela congelada, 43 das 542 linhas de PIT têm `rank` diferente entre o
+`futebol_taskF` (build de 24/09) e produção (29/09), todas de Copa do Mundo e Champions, e isso move
+duas células no `taskF` (`superioridade_tabela` sharp 98→99; `lado_coberto_forte` 119→120). Um snapshot
+futuro pode mover o valor de um booleano da janela por **dado**, sem commit. Não é corrigido aqui;
+fica registrado para que qualquer delta da remedição seja lido com isto em mente.
+
+### 5. A âncora re-medida (nota de 2026-09-29, depois do re-run)
+
+Com `gates_board=false`, a âncora foi re-medida no `aa9f44a`: mesmo universo (169 jogos / 5.605 linhas), 0
+linhas sem contraparte, e **uma** linha divergente — `Gols · xg_combinado_alto` (sharp), por dado (fixture
+1492290), não por código. Carimbo, delta e a descoberta do `team_group` não-PIT em
+`docs/TASKF_RESULTADOS.md`, seção "AE#117". O termo 3 volta a ✅ com essa ressalva.
