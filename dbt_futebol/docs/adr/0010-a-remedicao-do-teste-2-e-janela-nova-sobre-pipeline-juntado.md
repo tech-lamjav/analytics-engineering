@@ -388,3 +388,10 @@ não é point-in-time. Na janela congelada, 43 das 542 linhas de PIT têm `rank`
 duas células no `taskF` (`superioridade_tabela` sharp 98→99; `lado_coberto_forte` 119→120). Um snapshot
 futuro pode mover o valor de um booleano da janela por **dado**, sem commit. Não é corrigido aqui;
 fica registrado para que qualquer delta da remedição seja lido com isto em mente.
+
+### 5. A âncora re-medida (nota de 2026-09-29, depois do re-run)
+
+Com `gates_board=false`, a âncora foi re-medida no `aa9f44a`: mesmo universo (169 jogos / 5.605 linhas), 0
+linhas sem contraparte, e **uma** linha divergente — `Gols · xg_combinado_alto` (sharp), por dado (fixture
+1492290), não por código. Carimbo, delta e a descoberta do `team_group` não-PIT em
+`docs/TASKF_RESULTADOS.md`, seção "AE#117". O termo 3 volta a ✅ com essa ressalva.

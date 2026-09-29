@@ -677,10 +677,28 @@ sources:
           com `--vars '{taskf_remedicao_agora: taskf_teste2_ancora, taskf_remedicao_anterior:
           taskf_teste2_ancora_pre_a1}'`. Precedente do nome: as cópias `baseline_*_pre91` da #91.
 
+      - name: taskf_teste2_ancora_pre_gates
+        description: >
+          A ÂNCORA DE ANTES DO RE-RUN DE 29/09 (AE#117), preservada por `bq cp` antes de
+          `taskf_destino: ancora` sobrescrevê-la. Commit `1b9c757`, 26/08 (a re-medição da #103),
+          224 linhas / 37 premissas, universo `completo` de 169 jogos / 5.605 linhas SEM gate de
+          preço. Existe porque o `b4aad43` (10/09) pôs os gates do board no `task01_base` e
+          invalidou a âncora pela lista acima; o re-run passou a `gates_board=false` no Teste 2.
+
+          ⚠️ Registro histórico, como as demais cópias: não se escreve nela. Lado ANTERIOR do delta
+          em `analyses/taskf_remedicao.sql` com `--vars '{taskf_remedicao_agora:
+          taskf_teste2_ancora, taskf_remedicao_anterior: taskf_teste2_ancora_pre_gates}'`.
+          Precedente do nome: `_pre_a1`, `baseline_*_pre91`.
+
       - name: taskf_pit_por_celula_ancora
         description: >
           O carimbo do PIT da âncora — mesma relação com o taskf_pit_por_celula que a
           taskf_teste2_ancora tem com a taskf_teste2, e escrito na mesma execução (#82).
+
+      - name: taskf_pit_por_celula_ancora_pre_gates
+        description: >
+          Cópia (`bq cp`, 29/09) do carimbo do PIT da âncora de `1b9c757`, feita junto com a
+          `taskf_teste2_ancora_pre_gates`. Registro histórico: não se escreve nela.
 
       - name: taskf_teste2
         description: >

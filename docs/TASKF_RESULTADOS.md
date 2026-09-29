@@ -3368,3 +3368,133 @@ que dependia deste veredito, precisa ser reaberta com escopo revisto — a decis
 ("temporada 2026 inteira, 115 jogos") não sobrevive a este número. O corte temporário em
 `stg_futebol_fixtures.sql` e a guarda `assert_amistosos_fora_do_mart` continuam em produção;
 removê-los é decisão da #96, não desta medição.
+
+---
+
+## AE#117 — A âncora re-medida em 29/09, porque o `b4aad43` a invalidou
+
+⚠️ **ESTA SEÇÃO TAMBÉM NÃO É PARTE DO 2×2.** Ela substitui a âncora da seção "#103" acima. A versão
+anterior (`1b9c757`) ficou preservada em `futebol_taskF.taskf_teste2_ancora_pre_gates` (e o carimbo
+do PIT em `taskf_pit_por_celula_ancora_pre_gates`), pelo mesmo precedente de `_pre_a1`.
+
+### Por que foi invalidada
+
+O `b4aad43` (10/09, ClickUp `wdx6zevnj0`) pôs as três portas de preço do board (`n_casas >= 4`,
+`NOT pen_odd_outlier`, faixa de odd 1,50–4,00; Dupla Chance 1,25–2,00) como `WHERE` incondicional em
+`apostas` do `task01_base`. A intenção era o backtest; o Teste 2 herdou. O universo `completo` da
+janela congelada caía de **5.605 para 1.802 linhas** (mesmos 169 jogos) — "mudar quais linhas
+entram", a lista da #82. Dos 42 commits de comportamento entre `1b9c757` e o `master`, é o único que
+invalida; o Handicap (#138/#140/#204→PR #207) não invalida, porque só muda a linha 0 e o
+`task01_meia_linha` a descarta antes da medição (974 linhas de linha 0 na janela, 0 passam).
+
+**Correção:** `task01_base(cutoff=none, gates_board=true)`. O default `true` preserva produção e
+backtests; só `analyses/taskf_teste2.sql` passa `gates_board=false`, e o Teste 2 volta ao universo sem
+gate que a ADR 0010 sempre disse que media (emenda de 29/09 na ADR).
+
+### Carimbo de execução
+
+| | Execução | Commit | Universo `completo` | Linhas da tabela | `odds_loaded_at` |
+|---|---|---|---|---|---|
+| **âncora anterior** | 2026-08-26 15:05:09 UTC | `1b9c757` | 169 jogos / 5.605 linhas | 224 | 12/08 13:24:15 |
+| **âncora vigente** | 2026-09-29 19:08:56 UTC | `aa9f44a` | os **mesmos** 169 jogos / **5.605** linhas | 224 | 24/09 19:50:50 |
+
+`sem_copa_mundo` também idêntico (90 jogos / 2.870 linhas). O `estendido` cresceu (228 → 749 jogos)
+porque não tem teto — é o único universo que não é congelado. `aa9f44a` é o commit que carrega a
+mudança de comportamento; os seguintes são ADR, documentação e a declaração das sources (mesma
+convenção da #82/#103).
+
+⚠️ `odds_loaded_at` **mudou** (12/08 → 24/09): o `futebol_taskF` foi reconstruído em 24/09 pela receita
+do AE#200 e os fatos que a janela lê foram medidos iguais a produção (ver abaixo), mas o carimbo é outro.
+
+### O delta é uma linha, e é dado
+
+`analyses/taskf_remedicao.sql` com `--vars '{taskf_remedicao_agora: taskf_teste2_ancora,
+taskf_remedicao_anterior: taskf_teste2_ancora_pre_gates}'`:
+
+| | |
+|---|---|
+| linhas comparadas | 56 |
+| sem contraparte | **0** |
+| linhas divergentes | **1** — `Gols · xg_combinado_alto · sharp` |
+| campos divergentes | 22 de 1.680 (1,3%), **todos dessa linha** |
+
+`xg_combinado_alto` (sharp): `n_p0` 231 → 232 (e +1 nos pisos 3/5/10); `aconteceu_p0` 65,4 → 65,1;
+`aconteceu_p10` 63,3 → 62,8; `diferenca_p10` −5,5 → −5,9. Esta linha **está fora da régua de 0,25 pp**
+(a maior variação é 0,5 pp) e **não** é mudança de código: `int_futebol_premissas_ou.sql` tem diff zero
+entre `1b9c757` e o `master`, e o `futebol_taskF` e a produção dão o mesmo `n_p0 = 232`. A hipótese é a
+fixture **1492290** (Brasileirão, 21/07, dentro da janela): a ressalva de dado que a #82 já nomeou — ela
+tem `fact_fixture_stats` (times 1062 e 118) que a base de 12/08 não tinha, e essas estatísticas
+alimentam o histórico de xG. É **inferência**: a âncora guarda só agregados, então não isolei a linha
+exata que passou a acender.
+
+Fora essa linha, a âncora **reproduziu a si mesma** — inclusive os três campos de 0,1 pp que a #103
+mediu como ruído de recomputação (`forca_mismatch`, `defesas_vazaveis`, `adversario_fragil_fora`), que
+aqui deram zero.
+
+### A primeira passada não foi essa, e a diferença importa
+
+A primeira execução (19:03 UTC) deu **7 linhas divergentes / 44 campos**: além do `xg_combinado_alto`,
+`superioridade_tabela` (1X2 sharp, `n_p0` 98 → 99) e `lado_coberto_forte` (Dupla Chance, 119 → 120)
+saíram 0,3–0,7 pp fora da régua. As duas vinham de **uma única fixture: a 1539013** (Copa do Mundo,
+Away), cuja premissa era `true` no `futebol_taskF` e `false` em produção. A causa não é código:
+`team_group` em `int_futebol_team_form_pit.sql:221-228` lê o `snapshot_date` **mais recente** de
+standings, então o `rank`/`group_name` da Copa muda de acordo com o snapshot que o dataset carrega —
+o do `futebol_taskF` era o do build de 24/09, o de produção o de 29/09. Reconstruí
+`fact_standings_snapshot` no `futebol_taskF` (é tabela reconstruída inteira a cada run) e repeti build,
+carimbo do PIT, Teste 2 e delta: as duas deixaram de divergir, e os três campos de 0,1 pp também.
+**Vale registrar como ressalva nova:** o resultado depende de qual snapshot de standings o dataset
+carrega; não é ponto-no-tempo. Não foi corrigido aqui.
+
+### Estado dos fatos do `futebol_taskF` na janela congelada (medido em 29/09)
+
+Iguais a produção: `fact_odds_snapshot` (823.734 linhas, `EXCEPT DISTINCT` zero), `fact_fixtures` (255 FT
+na janela, mesmo kickoff/status/gols/times), `fact_fixture_stats` (15.534 dos dois lados — a 1492290 agora
+tem as duas linhas no taskF), PIT (`played_*`: zero diferenças nas 510 linhas — 255 jogos FT × 2 times — do
+carimbo novo contra o de `1b9c757`). Diferem, sem efeito na janela: 2 fixtures PST remarcadas (1492310 e 1492318) e a fixture
+1492145, remarcada para 02/09 (FT 2–0) — saiu do corte por mudança de data, **não sumiu**. Correção à
+ressalva da #82, que dizia que ela tinha sumido de produção.
+
+### O que invalida esta âncora
+
+A mesma lista da #82, sem alteração — mudança de COMPORTAMENTO em `macros/task01_base.sql`, no de-vig,
+no `int_futebol_team_form_pit` ou nos cinco modelos de premissas entre esta medição e a remedição —
+**mais** dois pontos que a lista não nomeia e que esta seção descobriu:
+
+1. Um `task01_base()` chamado pelo Teste 2 **com** `gates_board` ligado (ou um default trocado para
+   `false`, ou o inverso) muda o universo. O `git_sha` gravado (`aa9f44a`) e este parágrafo são a guarda.
+2. O `team_group` não-PIT (acima): reconstruir standings depois de 29/09 pode mover booleanos da Copa do
+   Mundo por dado. Não há guarda automática.
+
+### Reprodução
+
+```bash
+# ANTES de qualquer coisa: preservar a âncora que vai ser substituída (taskf_destino: ancora DELETA `ambos`)
+bq --headless cp smartbetting-dados:futebol_taskF.taskf_teste2_ancora \
+                 smartbetting-dados:futebol_taskF.taskf_teste2_ancora_pre_gates
+bq --headless cp smartbetting-dados:futebol_taskF.taskf_pit_por_celula_ancora \
+                 smartbetting-dados:futebol_taskF.taskf_pit_por_celula_ancora_pre_gates
+
+# do dbt_futebol/, no commit aa9f44a
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt run --target taskF --select fact_standings_snapshot
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+  --select int_futebol_team_form_pit int_futebol_premissas_1x2 int_futebol_premissas_ou \
+           int_futebol_premissas_ah int_futebol_premissas_btts int_futebol_premissas_dc \
+  --exclude assert_taskf_pit_default_igual_baseline assert_insumos_medidos_reconstroi \
+            assert_funil_insumos_medidos_reconstroi
+
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_pit_por_celula taskf_teste2 \
+  --vars '{taskf_git_sha: aa9f44a, taskf_destino: ancora}'
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_pit_por_celula.sql
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados \
+  < target/compiled/dbt_futebol/analyses/taskf_teste2.sql
+
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_remedicao \
+  --vars '{taskf_remedicao_agora: taskf_teste2_ancora, taskf_remedicao_anterior: taskf_teste2_ancora_pre_gates}'
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=200 \
+  < target/compiled/dbt_futebol/analyses/taskf_remedicao.sql
+```
+
+⚠️ Os dois testes `assert_insumos_medidos_reconstroi` e `assert_funil_insumos_medidos_reconstroi` ficam de
+fora porque leem `fact_insumos_medidos` e `fact_value_funnel`, marts que **não existem** no
+`futebol_taskF` — o erro é `Not found`, não falha de dado.
