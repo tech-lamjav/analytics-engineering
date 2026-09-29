@@ -66,6 +66,12 @@
     (conferido em fact_value_funnel.sql/fact_value_opportunities.sql antes de
     implementar). Os três gates acima são os que o board realmente aplica; ficou de
     fora o que não corresponde a código em produção.
+
+    ⚠️ `gates_board=false` DESLIGA as três portas (default `true`: produção e backtests
+    inalterados). Existe para o Teste 2 da remedição (ADR 0010, emenda de 2026-09-29): a ADR
+    estabelece que o universo do Teste 2 NÃO passa pelo gate, e a b4aad43 mudou isso por
+    tabela — a intenção do commit era o backtest, não o Teste 2. Só
+    `analyses/taskf_teste2.sql` passa `false`; `task01_base()` sem argumento segue com gate.
 #}
 
 
@@ -202,7 +208,7 @@
 {% endmacro %}
 
 
-{% macro task01_base(cutoff=none) %}
+{% macro task01_base(cutoff=none, gates_board=true) %}
 {#- O piso de amostra segue o RECORTE da célula: sob `ultimos_10` o modelo emite as duas
     contagens e o piso lê a DISPONÍVEL; sob `temporada` a coluna do disponível não existe
     (sem teto, disponível É a usada) e a leitura tem de cair no `played_total`. Ler a coluna
@@ -451,6 +457,7 @@ apostas AS (
       -- ~3,6 mil linhas sumindo em silêncio na janela congelada.
       AND o.market_id IN ({{ task01_markets().keys() | join(', ') }})
       AND {{ task01_meia_linha('o.') }}
+      {%- if gates_board %}
       -- AS TRÊS PORTAS DE PREÇO DO BOARD (#104/#109) — ver ⚠️ "GATES DO BOARD" no
       -- topo do macro. Mesmos `var`, mesmos defaults de fact_value_funnel.sql.
       AND COALESCE(o.n_casas >= {{ var('liquidez_min_casas', 4) }}, FALSE)
@@ -464,6 +471,7 @@ apostas AS (
                                THEN {{ var('faixa_odd_dc_max', 2.00) }}
                                ELSE {{ var('faixa_odd_max', 4.00) }} END,
             FALSE)
+      {%- endif %}
 )
 
 {% endmacro %}

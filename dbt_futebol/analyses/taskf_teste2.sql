@@ -282,7 +282,7 @@ DELETE FROM `{{ tabela }}` WHERE celula = '{{ c.nome }}';
 
 INSERT INTO `{{ tabela }}` ({{ nomes_colunas | join(', ') }})
 
-WITH {{ task01_base() }},
+WITH {{ task01_base(gates_board=false) }},
 
 {#- A CONTAGEM USADA, no mesmo formato em que o task01_base() calcula a disponível: o MENOR
     entre os dois times, porque as premissas comparam os dois, e 0 quando não há linha no PIT.
