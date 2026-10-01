@@ -8,7 +8,7 @@ Argentina, Colômbia, Peru e México rodam dois torneios curtos por ano dentro d
 
 O que quebra hoje com dois torneios por `season` é enumerável: o CTE `tabela` acumula rank e ppg dos dois torneios, o `team_group` escolhe um grupo de forma arbitrária em empate de `snapshot_date`, o `n_teams` da Argentina dá 30 contra zonas de 15 (e `s_rank >= n_teams - 3` nunca dispara), e as quatro premissas de tabela leem esses campos. O last-10 do PIT não quebra: cruza competições por desenho desde a #91, e o piso 5 não morde na virada porque `played_total_disponivel` conta todo jogo anterior.
 
-No dia 0 as quatro ligas ficam **fora** de `futebol_ligas_pontos_corridos()`, como UCL e Libertadores, para as premissas de tabela silenciarem em vez de disparar sobre uma tabela sem sentido, até a derivação existir. Falta confirmar no PR que essa via cobre as quatro premissas.
+No dia 0 as quatro ligas ficam **fora** de `futebol_ligas_pontos_corridos()`, como UCL, Libertadores, Sudamericana e Nations League. Isso silencia **só o `sem_rodizio`**, a única premissa que lê a macro (`int_futebol_premissas_ah.sql:272`). `superioridade_tabela`, `supremacia` e `x_superioridade_tabela` não filtram por competição e **continuam disparando** sobre o rank e o ppg acumulados dos dois torneios, que é o que já acontece com o rank por grupo nas competições citadas. Decidimos aceitar essa paridade em vez de abrir um gate novo por competição nos três modelos de premissa: o ppg acumulado é um proxy de força razoável, e a parte que erra é o rank. A derivação do torneio é o pré-requisito para confiar nas premissas de tabela dessas ligas.
 
 ## Considered options
 

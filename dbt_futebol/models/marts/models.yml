@@ -169,7 +169,7 @@ models:
               config:
                 tags: ['guarda']
       - name: competition_id
-        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana, 140 = La Liga, 39 = Premier League, 2 = Champions League, 135 = Serie A ITA, 78 = Bundesliga, 61 = Ligue 1, 94 = Primeira Liga, 5 = Nations League, 10 = Amistosos — competição de insumo, só com kickoff a partir da data de entrada de futebol_competicoes_insumo())"
+        description: "ID da liga na API-Football (71 = Brasileirão, 1 = Copa do Mundo, 72 = Série B, 73 = Copa do Brasil, 13 = Libertadores, 11 = Sudamericana, 140 = La Liga, 39 = Premier League, 2 = Champions League, 135 = Serie A ITA, 78 = Bundesliga, 61 = Ligue 1, 94 = Primeira Liga, 5 = Nations League, 128 = Liga Profesional (Argentina), 239 = Primera A (Colômbia), 281 = Liga 1 (Peru), 262 = Liga MX, 10 = Amistosos — competição de insumo, só com kickoff a partir da data de entrada de futebol_competicoes_insumo())"
       - name: season
         description: "Ano da temporada requisitada (cluster key)"
       - name: round
