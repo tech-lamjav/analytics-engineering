@@ -360,8 +360,10 @@ não jogos.
   `serie_a_ita`, `champions_league`, `ligue_1`, `bundesliga`. `ano_calendario` = `serie_b`,
   `brasileirao`, `sudamericana`, `libertadores`, `copa_do_brasil`. Fora: `copa_mundo`,
   `nations_league`, `amistosos`.
-- O predicado do universo da janela nova em `macros/taskf_universos.sql` ainda **não existe**; entra no
-  PR que roda o Teste 2, depois de 01/10, com esta lista como especificação.
+- ~~O predicado do universo da janela nova em `macros/taskf_universos.sql` ainda não existe~~ — **existe
+  desde o PR #216 (01/10)**: `taskf_janela_nova()` carrega a janela, as famílias fixadas e as seleções
+  fora; os universos `janela_nova` e `janela_nova_nations_league` ficam numa lista à parte de
+  `taskf_universos()` (a Costura B cobra aquela lista da tabela congelada).
 
 ### 3. Os quatro pisos do termo 4 — contagem provisória de 29/09 (a final é a de 01/10)
 
@@ -395,3 +397,25 @@ Com `gates_board=false`, a âncora foi re-medida no `aa9f44a`: mesmo universo (1
 linhas sem contraparte, e **uma** linha divergente — `Gols · xg_combinado_alto` (sharp), por dado (fixture
 1492290), não por código. Carimbo, delta e a descoberta do `team_group` não-PIT em
 `docs/TASKF_RESULTADOS.md`, seção "AE#117". O termo 3 volta a ✅ com essa ressalva.
+
+---
+
+## Atualização de 2026-10-01 — a janela fechou, o Teste 2 rodou (AE#117, PR #216)
+
+Escrita **depois** do Teste 2 e sem mudar nada do que a emenda acima decidiu. Só o que a emenda deixou
+em aberto:
+
+1. **Destino da medição.** A emenda não criou onde gravar a janela nova. `taskf_destino` ganhou
+   `remedicao` (sem gate, a leitura primária) e `remedicao_com_gate` (a secundária), tabelas irmãs com o
+   mesmo schema e o mesmo código de agregação. `medicao` sobrescreveria a célula `ambos` do 2×2 com
+   outro `git_sha` (Costura B vermelha, registro congelado destruído); `ancora` misturaria a medição que
+   a âncora reproduz com a que será comparada a ela.
+2. **Contagem final dos pisos (termo 4), universo primário sem seleção:** 589 encerrados e precificados
+   (≥ 400), 512 acima do piso 5 (≥ 300), 359 split-year (≥ 100), 0 Copa do Mundo — com gate 587 / 510 /
+   359 / 0. Com a Nations League dentro: 641 / 516 / 359 / 0 sem gate e 639 / 514 / 359 / 0 com gate.
+3. **Resultado e veredito por premissa:** `docs/TASKF_RESULTADOS.md`, seção "AE#117 — Teste 2 da janela
+   nova". Esta ADR continua **sem definir limiar de aprovação por premissa**; a seção publica o número
+   medido de cada uma e não aprova nem reprova nenhuma.
+4. **A âncora foi re-rodada no mesmo PR** (a regra da #82, porque `macros/` mudou): universo `completo`
+   idêntico (169 jogos / 5.605 linhas); a divergência conhecida de `xg_combinado_alto` (22 campos, por
+   dado) segue fora da régua de 0,25 pp, e há dois campos de 0,1 pp por empate de arredondamento.
