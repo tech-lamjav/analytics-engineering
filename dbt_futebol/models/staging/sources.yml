@@ -700,6 +700,50 @@ sources:
           Cópia (`bq cp`, 29/09) do carimbo do PIT da âncora de `1b9c757`, feita junto com a
           `taskf_teste2_ancora_pre_gates`. Registro histórico: não se escreve nela.
 
+      - name: taskf_teste2_ancora_pre_janela_nova
+        description: >
+          A ÂNCORA DE ANTES DO RE-RUN DE 01/10 (AE#117, termo 5), preservada por `bq cp` antes de
+          `taskf_destino: ancora` sobrescrevê-la. Commit `aa9f44a` (re-medição de 29/09, sem gate),
+          universo `completo` de 169 jogos / 5.605 linhas. `macros/` mudou no PR que roda o Teste 2
+          da janela nova (predicado e destino novos), e a regra da #82 manda re-rodar a âncora no
+          mesmo PR — esta cópia é o lado ANTERIOR do delta que isola o efeito do dia (e do
+          snapshot de standings) do efeito das `macros/` novas.
+
+          ⚠️ Registro histórico, como as demais cópias: não se escreve nela. Comparada por
+          `analyses/taskf_remedicao.sql` com `--vars '{taskf_remedicao_agora: taskf_teste2_ancora,
+          taskf_remedicao_anterior: taskf_teste2_ancora_pre_janela_nova}'`.
+
+      - name: taskf_pit_por_celula_ancora_pre_janela_nova
+        description: >
+          Cópia (`bq cp`, 01/10) do carimbo do PIT da âncora de `aa9f44a`, feita junto com a
+          `taskf_teste2_ancora_pre_janela_nova`. Registro histórico: não se escreve nela.
+
+      - name: taskf_teste2_remedicao
+        description: >
+          O TESTE 2 DA JANELA NOVA (AE#117, ADR 0010 termo 5): a célula `ambos` (o pipeline que
+          produção roda) medida sobre `kickoff_utc ∈ [2026-08-04 12:00, 2026-10-01 00:00) UTC`,
+          SEM gate de preço — a leitura primária da emenda de 29/09 — e com os universos de
+          `taskf_universos_janela_nova()` (`janela_nova` e `janela_nova_nations_league`), não os
+          quatro do 2×2. Mesmo schema da acumulativa e MESMO código de agregação
+          (analyses/taskf_teste2.sql, `--vars '{taskf_destino: remedicao}'`).
+
+          ⚠️ Existe SEPARADA da taskf_teste2 porque a emenda não criou destino e `medicao`
+          sobrescreveria a célula `ambos` do 2×2 congelado com outro `git_sha` (Costura B
+          vermelha com razão). Sem Costura B aqui: quem a substitui é
+          `tests/assert_taskf_remedicao_universo.sql`.
+
+      - name: taskf_teste2_remedicao_com_gate
+        description: >
+          A leitura SECUNDÁRIA da mesma remedição: o mesmo Teste 2, mesma janela, mesmo commit, com
+          as três portas de preço do board ligadas (`gates_board=true`). Sai "ao lado" da primária
+          e nunca no lugar dela (emenda de 29/09, §1). `--vars '{taskf_destino: remedicao_com_gate}'`.
+
+      - name: taskf_pit_por_celula_remedicao
+        description: >
+          O carimbo do PIT da remedição — mesma relação com o taskf_pit_por_celula que a
+          taskf_teste2_remedicao tem com a taskf_teste2. Só existe para o destino `remedicao`: o PIT
+          não depende do gate, então a leitura com gate reaproveita este carimbo.
+
       - name: taskf_teste2
         description: >
           A saída do Teste 2 da medição, uma linha por (célula, UNIVERSO, mercado, premissa,

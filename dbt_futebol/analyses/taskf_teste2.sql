@@ -234,6 +234,19 @@
     excluí-lo faz a célula rodar sem guarda de look-ahead — o defeito (Task 0) que contaminou a
     medição que a [F] existe para refazer.
 
+    FASE 5, só na AE#117 (ADR 0010, termo 5): A REMEDIÇÃO NA JANELA NOVA. É a fase 4 outra vez — a
+    célula `ambos`, default, sem `--vars` de eixo —, com o destino `remedicao` (sem gate, a leitura
+    primária) e depois `remedicao_com_gate` (a secundária, "ao lado"). Muda também a LISTA DE
+    UNIVERSOS emitida: `janela_nova` e `janela_nova_nations_league`, não os quatro do 2×2 (a
+    Costura B cobra os quatro da acumulativa, que fica intocada). O PIT carimbo só precisa do
+    primeiro destino — ele não depende do gate:
+
+      DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_pit_por_celula taskf_teste2 \
+        --vars '{taskf_git_sha: '"$(git rev-parse --short HEAD)"', taskf_destino: remedicao}'
+      (os dois `bq query <`; depois só o taskf_teste2 de novo com `taskf_destino: remedicao_com_gate`)
+
+    O build da fase 4 vale para as duas: o gate é filtro do `task01_base`, não de modelo.
+
     (`bq query` com o SQL como argumento trava nesta máquina — sempre por redirecionamento.)
 
     → RESULTADOS: `docs/TASKF_RESULTADOS.md`.
@@ -282,7 +295,11 @@ DELETE FROM `{{ tabela }}` WHERE celula = '{{ c.nome }}';
 
 INSERT INTO `{{ tabela }}` ({{ nomes_colunas | join(', ') }})
 
-WITH {{ task01_base(gates_board=false) }},
+{#- O gate de preço do board SEGUE O DESTINO (macros/taskf_destino.sql): desligado em `medicao`,
+    `ancora` e `remedicao` — a emenda de 29/09 da ADR 0010 —, ligado só na leitura secundária
+    `remedicao_com_gate`. Não é literal aqui para que a leitura com gate saia do MESMO código, e
+    não de uma cópia que derivaria. -#}
+WITH {{ task01_base(gates_board=taskf_gates_board()) }},
 
 {#- A CONTAGEM USADA, no mesmo formato em que o task01_base() calcula a disponível: o MENOR
     entre os dois times, porque as premissas comparam os dois, e 0 quando não há linha no PIT.
@@ -350,7 +367,7 @@ apostas_marcadas AS (
     existisse no predicado e não na lista (ou o contrário) produziria coluna vazia numa tabela
     que já tem quatro dimensões, que é o tipo de buraco que ninguém encontra olhando. -#}
 apostas_universos AS (
-    {%- for u in taskf_universos() %}
+    {%- for u in taskf_universos_do_destino() %}
     SELECT '{{ u.nome }}' AS universo, a.*
     FROM apostas_marcadas AS a
     WHERE {{ taskf_universo_predicado(u.nome, 'a.') }}

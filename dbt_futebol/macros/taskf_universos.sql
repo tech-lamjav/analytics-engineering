@@ -119,9 +119,17 @@
     Fail-closed: nome desconhecido levanta erro de compilação em vez de virar filtro que não casa
     com linha nenhuma.
 -#}
-{% macro taskf_universo_valido(nome) %}
+{% macro taskf_universo_valido(nome, janela_nova=false) %}
     {%- set nomes = [] -%}
     {%- for u in taskf_universos() -%}{%- set _ = nomes.append(u.nome) -%}{%- endfor -%}
+    {#- Os universos da janela nova (AE#117) só são nomes válidos para quem os pede POR NOME — o
+        predicado, abaixo, e a lista do destino `remedicao`. Um consumidor do 2×2 congelado que
+        passasse `janela_nova` em `var('taskf_universo')` filtraria a tabela acumulativa por um
+        valor que ela não tem, e zero linha nessa tabela se parece com "essa premissa não acende
+        aqui". Por isso o default é recusar. -#}
+    {%- if janela_nova -%}
+        {%- for u in taskf_universos_janela_nova() -%}{%- set _ = nomes.append(u.nome) -%}{%- endfor -%}
+    {%- endif -%}
     {%- if nome not in nomes -%}
         {{ exceptions.raise_compiler_error(
             "universo inválido: '" ~ nome ~ "'. Valores aceitos: " ~ nomes | join(' | ')) }}
@@ -143,7 +151,8 @@
 -#}
 {% macro taskf_universo_predicado(nome, alias='') %}
     {%- set j = taskf_universo() -%}
-    {%- set _ = taskf_universo_valido(nome) -%}
+    {%- set _ = taskf_universo_valido(nome, janela_nova=true) -%}
+    {%- set w = taskf_janela_nova() -%}
     {%- if nome == 'completo' -%}
         {{ taskf_universo_filtro(alias) }}
     {%- elif nome == 'sem_copa_mundo' -%}
@@ -153,6 +162,12 @@
     {%- elif nome == 'estendido_sem_champions_classif' -%}
         ({{ alias }}kickoff_utc >= TIMESTAMP('{{ j.ini }}')
          AND NOT {{ taskf_champions_classificatoria(alias) }})
+    {%- elif nome == 'janela_nova' -%}
+        ({{ taskf_janela_nova_filtro(alias) }}
+         AND {{ alias }}competition NOT IN ({% for c in w.fora %}'{{ c }}'{{ ', ' if not loop.last }}{% endfor %}))
+    {%- elif nome == 'janela_nova_nations_league' -%}
+        ({{ taskf_janela_nova_filtro(alias) }}
+         AND {{ alias }}competition = 'nations_league')
     {%- endif -%}
 {%- endmacro %}
 
@@ -186,3 +201,65 @@
     ({{ alias }}competition = 'champions_league'
      AND ({{ alias }}round LIKE '%Qualifying Round%' OR {{ alias }}round = 'Play-offs'))
 {%- endmacro %}
+
+
+{#
+    A JANELA NOVA (AE#117, ADR 0010 emenda de 29/09, termo 5) — o universo do Teste 2 da remedição.
+
+    É uma LISTA À PARTE de `taskf_universos()`, e a separação não é arrumação: a Costura B
+    (`tests/assert_taskf_celulas_mesmo_universo.sql`) monta o que ESPERA da tabela congelada do 2×2
+    como `taskf_universos()` × quatro células. Um universo a mais naquela lista deixaria
+    `celulas_faltando` vermelho para sempre sobre uma tabela que, por promessa da ADR 0010, é o
+    registro congelado de 12–13/08 e não se mede de novo. Os universos daqui só são emitidos pelo
+    destino `remedicao` (macros/taskf_destino.sql), e só ele os lê.
+
+    Tudo o que a emenda FIXOU mora aqui, uma vez:
+
+      janela   kickoff_utc ∈ [ini, fim) UTC. O `ini` é o INSTANTE do carimbo da [F] (04/08 12:00),
+               o mesmo teto do universo congelado (taskf_universo().teto_utc) — as duas janelas
+               ladrilham nesse instante. O `fim` é EXCLUSIVO.
+      fora     as seleções saem do universo primário: copa_mundo, nations_league, amistosos. O
+               histórico de seleção não é medido pela nossa coleta (ADR 0010 §1).
+      famílias FIXADAS em 29/09, e não re-derivadas: a macro taskf_familia_competicao rotularia a
+               Nations League `ano_calendario` só porque a base tem a temporada 2026, e se o
+               mata-mata de 2027 entrar sob `season=2026` ela viraria `split_year` e o piso de 100
+               subiria por reclassificação. "Uma re-execução posterior não a redecide."
+      esperados os jogos que a contagem final de 01/10 declarou (analyses/ae117_termo4_pisos.sql),
+               por leitura: sem gate é a que o Teste 2 usa. É o gabarito da guarda
+               tests/assert_taskf_remedicao_universo.sql — um valor FIXO porque a janela está
+               fechada.
+#}
+{% macro taskf_janela_nova() %}
+    {{ return({
+        'ini':            '2026-08-04 12:00:00',
+        'fim':            '2026-10-01 00:00:00',
+        'fora':           ['copa_mundo', 'nations_league', 'amistosos'],
+        'split_year':     ['la_liga', 'primeira_liga', 'premier_league', 'serie_a_ita',
+                           'champions_league', 'ligue_1', 'bundesliga'],
+        'ano_calendario': ['serie_b', 'brasileirao', 'sudamericana', 'libertadores',
+                           'copa_do_brasil'],
+        'jogos_esperados': {'sem_gate': 589, 'com_gate': 587}
+    }) }}
+{% endmacro %}
+
+
+{#- O intervalo da janela nova, escrito uma vez. `alias` inclui o ponto, como em
+    taskf_universo_filtro. Inferior INCLUSIVO, superior EXCLUSIVO. -#}
+{% macro taskf_janela_nova_filtro(alias='') %}
+    {%- set w = taskf_janela_nova() -%}
+    ({{ alias }}kickoff_utc >= TIMESTAMP('{{ w.ini }}')
+     AND {{ alias }}kickoff_utc < TIMESTAMP('{{ w.fim }}'))
+{%- endmacro %}
+
+
+{#- Os universos do destino `remedicao`: o primário (sem seleções) e a Nations League à parte, que a
+    emenda manda medir como universo secundário. Sem `jogos_esperados` por universo: o gabarito da
+    janela nova é por LEITURA (com/sem gate), não por universo — ver taskf_janela_nova(). -#}
+{% macro taskf_universos_janela_nova() %}
+    {{ return([
+        {'nome': 'janela_nova',
+         'descricao': 'A janela nova [04/08 12:00, 01/10 00:00) UTC, sem seleções. O primário.'},
+        {'nome': 'janela_nova_nations_league',
+         'descricao': 'A mesma janela, só a Nations League — universo secundário, medido à parte.'}
+    ]) }}
+{% endmacro %}
