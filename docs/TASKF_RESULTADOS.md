@@ -3580,8 +3580,12 @@ O que os números dizem, sem interpretação além:
 
 **Exclusões contadas** (jogos da janela que o `task01_base` não mede por exigir `status_short = 'FT'`,
 a regra da [0.1]): 5 AET (`champions_league`), 4 PEN (`libertadores`), 2 PEN (`sudamericana`) e 1 PST
-(`primeira_liga`) — **12 jogos**. As 52 partidas de Nations League saem do primário por decisão da
-emenda, e Copa do Mundo e amistosos têm zero na janela.
+(`primeira_liga`) — **12 jogos**. Mais **9 jogos FT sem preço**, todos de `amistosos` (a agenda da
+janela tem 662 jogos, 650 FT; 641 FT estão no universo precificado, os outros 9 são esses amistosos, que
+não têm odds). Cobertura de preço dos jogos FT: **641 de 650 (98,6%)**; fora os amistosos, 641 de 641.
+As 52 partidas de Nations League saem do primário por decisão da emenda. `copa_mundo` não tem jogo
+agendado na janela, e os amistosos ficam fora por decisão da emenda **e** por ausência de odds — não
+é a mesma coisa que "zero na janela".
 
 ### A âncora, re-rodada no mesmo PR (regra da #82)
 
