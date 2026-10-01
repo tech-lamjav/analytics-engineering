@@ -3693,9 +3693,14 @@ Três snapshots foram copiados dos builds: `leva8_pit_antes` (21.754 linhas), `l
 
 ### Reprodução
 
-O script que rodou é `leva8_run_all.sh` (log em `leva8_run_all.log`) — **scratch de sessão, não versionado**; por isso os passos estão aqui.
-O script faz, nesta ordem: guarda de concorrência, conferência dos backups, builds `2025_2026` → `2026` → `antes`
-(cada um seguido dos CTAS dos snapshots), restauração por `trap` e verificação final.
+Os scripts estão versionados em `scripts/taskf_leva_ligas/` (ver o `README.md` de lá): `01` baixa os fixtures da API, `02`
+monta o NDJSON, `03` carrega `leva8_raw_fixtures`, `04_roda_builds.sh` faz os builds e `05_compara.sh` roda a análise. A
+medição desta seção rodou em 01/10 com uma versão **de scratch** do `04` (`leva8_run_all.sh`), que o `04` versionado
+reescreve de forma autocontida: ele próprio faz o backup `leva8_bak_*` e salva a definição da view, que lá eram passos
+manuais. O `02` reproduz byte a byte o NDJSON carregado e o `05` reproduz a matriz de 84 linhas; o modo `completo` do
+`04` **não foi executado** na versão versionada (o `checagens` foi). Os passos abaixo são o que o script faz, nesta
+ordem: guarda de concorrência, conferência dos backups, builds `2025_2026` → `2026` → `antes` (cada um seguido dos CTAS
+dos snapshots), restauração por `trap` e verificação final.
 
 ```bash
 # 0. guarda de concorrência: ninguém escreveu no taskF na última hora (o taskF é compartilhado)
@@ -3741,11 +3746,13 @@ bq query --use_legacy_sql=false --location=us-east1 --format=json --max_rows=200
   < target/compiled/dbt_futebol/analyses/taskf_leva_ligas_efeito_retroativo.sql
 ```
 
-`leva8_raw_fixtures` vem de `leva8_build_ndjson.py` (um NDJSON por linha de `/fixtures`, com `requested_league_id`,
-`requested_season`, `mode`, `total_fixtures` e `loaded_at`, a partir de `A_fixtures_league{L}_season{S}.json` do
-cache da API) carregado em tabela nativa; a conferência da carga é `leva8_verify_load.sql` (o comando exato de
-`bq load` não está nos artefatos desta sessão). O universo precificado lê `futebol.fact_odds_snapshot` **na hora da
-consulta** (01/10), não no instante dos builds.
+`leva8_raw_fixtures` vem de `scripts/taskf_leva_ligas/02_monta_ndjson.py` (um NDJSON por linha de `/fixtures`, com
+`requested_league_id`, `requested_season`, `mode`, `total_fixtures` e `loaded_at`, a partir de
+`A_fixtures_league{L}_season{S}.json` do cache da API, baixado por `01_baixa_fixtures.py`) e é carregada em tabela
+nativa por `03_carrega_raw_fixtures.sh`, com o schema da external table de produção. O comando exato de `bq load`
+que rodou na medição original não ficou registrado; o do `03` é o equivalente e **não foi executado** na versão
+versionada. O universo precificado lê `futebol.fact_odds_snapshot` **na hora da consulta** (01/10), não no instante
+dos builds.
 
 ### Estado do taskF depois da medição
 
