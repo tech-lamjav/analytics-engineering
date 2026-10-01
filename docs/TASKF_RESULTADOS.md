@@ -3693,8 +3693,7 @@ Três snapshots foram copiados dos builds: `leva8_pit_antes` (21.754 linhas), `l
 
 ### Reprodução
 
-O script que rodou é `/private/tmp/claude-501/-Users-mateuskasuya-Documents-smartbetting/1966321c-7079-4b3d-8205-daf994e848b6/scratchpad/leva8_run_all.sh`
-(log em `leva8_run_all.log`, mesma pasta) — **scratch de sessão, não versionado**; por isso os passos estão aqui.
+O script que rodou é `leva8_run_all.sh` (log em `leva8_run_all.log`) — **scratch de sessão, não versionado**; por isso os passos estão aqui.
 O script faz, nesta ordem: guarda de concorrência, conferência dos backups, builds `2025_2026` → `2026` → `antes`
 (cada um seguido dos CTAS dos snapshots), restauração por `trap` e verificação final.
 
@@ -3836,6 +3835,22 @@ segundo a matriz; nenhuma foi implementada nem medida além do que está dito.
   306 contra 2.010 / 1.694 / 1.296 / 980 no `2025_2026`; abaixo do piso 5, 70 / 53 / 51 / 90 contra 103 / 84 / 80 / 95
   (populações de âncoras diferentes, não comparáveis como proporção). Não se mediu o efeito sobre essas âncoras
   próprias além disso.
+
+### Decisão de 2026-10-01
+
+Escolhida a forma **2 (aceitar e carimbar)**, mantendo o backfill de 2025. A forma 3 foi descartada: não muda as
+janelas operacionais (`congelada` e `nova` dão células idênticas nos dois cenários), só poupa quota.
+
+- **Por que não a 1.** O histórico doméstico é o ganho do produto: com as 3 ligas sul-americanas como produto, a
+  Libertadores 2026 cai de 97,4% para 70,1% de jogos com um lado fora da base e a Sudamericana de 97,4% para 71,8%.
+  Uma data de entrada entregaria as 4 ligas sem histórico nas primeiras semanas e tornaria o backfill inútil.
+- **Por que o piso de amostra do Teste 2 não é afetado.** No universo precificado nenhuma âncora ganha histórico do zero
+  nem cruza o piso 5; o deslocamento é troca de jogos dentro do last-10.
+- **Afasta-se do precedente dos amistosos** (ADR 0004: "o passado não entra"), de propósito: lá o passado não tinha
+  valor de produto; aqui o passado é o produto.
+- **Condição.** Nada de config nem backfill das 4 ligas até o Teste 2 (AE#117) rodar e ser carimbado. O cadastro
+  depois re-ancora, com a âncora anterior preservada em `_pre_*` (precedente #82/#103/#117).
+- **Em aberto.** O efeito em `aconteceu_p*` (a unidade da régua) continua desconhecido e deve ser medido na re-âncora.
 
 **A consulta da data de entrada** (somente leitura; `leva8_fixtures_2025_2026` é a cópia de `fact_fixtures` do cenário
 com tudo):
