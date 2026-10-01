@@ -267,6 +267,10 @@ flags AS (
         -- Nations League -> FALSE pelo mesmo motivo: 14 grupos de 4, rank é por grupo e
         -- n_teams conta a season inteira — mesma estrutura de grupo+mata-mata de
         -- Libertadores/Sudamericana/Champions. Fora do IN por decisão, não por acidente (AE#193).
+        -- Argentina, Colômbia, Peru e Liga MX -> FALSE: dois torneios curtos por season, a tabela
+        -- acumula os dois e o n_teams da Argentina (30) não é o da zona (15). Fora do IN por
+        -- decisão, não por acidente (ADR 0018). Só o sem_rodizio lê esta lista; as outras três
+        -- premissas de tabela continuam disparando nelas, como já acontece em Libertadores.
         -- A lista sai de futebol_ligas_pontos_corridos(): ela é lida também pela chave de
         -- aplicabilidade desta premissa no mapa de insumos, e duas cópias divergem em silêncio.
         m.is_favorito AND m.competition IN {{ futebol_ligas_pontos_corridos_sql() }}
