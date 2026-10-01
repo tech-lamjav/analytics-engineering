@@ -3498,3 +3498,387 @@ bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados --max
 ⚠️ Os dois testes `assert_insumos_medidos_reconstroi` e `assert_funil_insumos_medidos_reconstroi` ficam de
 fora porque leem `fact_insumos_medidos` e `fact_value_funnel`, marts que **não existem** no
 `futebol_taskF` — o erro é `Not found`, não falha de dado.
+
+---
+
+## Leva AR/CO/PE/MX — efeito retroativo no PIT (o portão antes do primeiro backfill)
+
+`analyses/taskf_leva_ligas_efeito_retroativo.sql` · medição de **01/10/2026** · molde: DE#95 (seção acima)
+
+Mede o que cadastrar **Argentina 128, Colômbia 239, Peru 281 e Liga MX 262** faria, **retroativamente**, no
+histórico PIT (`int_futebol_team_form_pit`, célula de produção `pit_escopo=todas`, `pit_recorte=ultimos_10`) de
+clubes **já medidos** no mart: 44 clubes por `team_id` (22 da 128, 11 da 239, 11 da 281) jogam Libertadores (13)
+e Sudamericana (11), e a forma atravessa competição desde a #91/ADR 0010. A Liga MX tem 0 clubes em Lib/Sud.
+
+⚠️ **A métrica NÃO é a unidade da régua.** A régua herdada é 0,25 pp (#92) e calibra `aconteceu_p*` de premissa
+(Teste 2). O que se mediu aqui é a **taxa de vitória PIT** (`wins_total / played_total`, em pp) por
+`(fixture_id, team_id)`. Toda razão "Δpp ÷ 0,25" abaixo compara números de **unidades diferentes**: é uma escala
+de grandeza, não uma medida contra a régua. O Teste 2 **não** foi rodado nos cenários, então esta seção não afirma
+se a régua em `aconteceu_p*` é ou não cruzada. (Mesma decisão e mesma ressalva da DE#95.)
+
+### Veredito factual (a decisão é do usuário — ver "As três formas")
+
+1. **O efeito existe e é medível.** No universo precificado (o do Teste 2: 64 jogos de Lib/Sud, 16/06 a 01/10),
+   os **44 pares (jogo, time) de clubes da leva** têm agregados alterados (44 de 44); **40 dos 64 jogos** têm ao
+   menos uma âncora alterada, e **29** têm ao menos uma com |Δ| > 0,25 pp na taxa de vitória.
+2. **Tamanho, na proxy:** das 9 células liga × janela precificadas com n > 0, **8** têm Δ médio de **3,75 a
+   12,88 pp** (15× a 51,5× o valor 0,25) e **1** (PE/nova, n=4) tem 0,00 pp — os agregados mudam, mas `wins` e
+   `played` ficam iguais. Referência da DE#95, mesma proxy: ~23 pp (~90×) em Copa do Mundo e Nations League.
+3. **Não é entrada nem saída do piso.** Nenhuma âncora precificada ganha histórico do zero e nenhuma cruza o piso
+   5 (`n_ganhou_historico_do_zero = 0`, `n_cruzou_piso_5 = 0` em todas as células precificadas); o
+   `played_total` médio sobe no máximo 1,17 jogo. O deslocamento é **troca de jogos dentro dos "últimos 10"**.
+   Fora do universo precificado (todos os jogos de Lib/Sud) há âncoras que ganham histórico do zero e cruzam o piso
+   (tabelas abaixo).
+4. **Os dois cenários coincidem nas janelas operacionais.** Em `congelada` e `nova`, `2026` e `2025_2026` dão
+   células **idênticas** (os jogos de 2025 não entram nos "últimos 10" dessas âncoras). A diferença entre
+   cenários só aparece na janela `toda`, em âncoras antigas.
+5. **Liga MX: efeito zero, medido e não presumido** — `n_ancoras = 0` nas 12 células (2 cenários × 3 janelas ×
+   2 universos).
+6. **Nada vaza para outras competições.** `afetado_fora_lib_sud` (clube da leva com âncora fora de Lib/Sud) tem
+   n = 0; `controle_outras` (19.886 âncoras no `antes`) tem delta 0 exato.
+7. **O controle é zero em todas as células** (tabela abaixo): não houve drift de raw entre os builds, e nenhuma
+   linha acendeu AVISO. Os números de AR/CO/PE são utilizáveis.
+
+### A matriz
+
+Janelas, sobre o `kickoff_utc` da âncora: `congelada` = [2026-06-16, 2026-08-04 12:00 UTC); `nova` = [2026-08-04
+12:00, 2026-10-01 00:00 UTC); `toda` = sem limite. Cenários: `2026` (só a temporada corrente das 4 ligas) e
+`2025_2026` (backfill de 2025 + corrente). A liga de origem de um clube vem dos fixtures da leva **naquele
+cenário**. Convenções (as da DE#95): o Δ pp trata "sem histórico" como 0 pp dos dois lados e é a média do **módulo**
+do delta; a mediana é um `APPROX_QUANTILES` de 2 buckets (salta entre 0 e 10 com n pequeno). `last10 mudou` é
+inferido dos agregados — pode subcontar, nunca sobrecontar. "cruzou piso 5" = `played_total_disponivel` < 5 antes e
+≥ 5 depois (`macros/task01_base.sql:217`).
+
+**Universo precificado** (o fixture tem alguma linha em `fact_odds_snapshot`; o do Teste 2). As células são **idênticas nos dois cenários** — conferido célula a célula, não presumido:
+
+| janela | grupo | n âncoras | do zero | last10 mudou | Δ `played_total` | Δ pp médio | mediana pp | máx pp | cruzou piso 5 | Δpp ÷ 0,25 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| congelada | AR 128 | 6 | 0 | 6 | 1,17 | 6,03 | 0,0 | 13,33 | 0 | 24,1× |
+| congelada | CO 239 | 4 | 0 | 4 | 0,75 | 12,01 | 10,0 | 20,0 | 0 | 48× |
+| congelada | PE 281 | 4 | 0 | 4 | 0,0 | 7,5 | 0,0 | 20,0 | 0 | 30× |
+| congelada | MX 262 | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| congelada | afetado fora de Lib/Sud | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| congelada | controle Lib/Sud | 18 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+| congelada | controle outras | 326 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+| nova | AR 128 | 20 | 0 | 20 | 1,0 | 12,88 | 10,0 | 33,33 | 0 | 51,5× |
+| nova | CO 239 | 6 | 0 | 6 | 0,0 | 6,67 | 10,0 | 10,0 | 0 | 26,7× |
+| nova | PE 281 | 4 | 0 | 4 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+| nova | MX 262 | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| nova | afetado fora de Lib/Sud | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| nova | controle Lib/Sud | 66 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+| nova | controle outras | 1210 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+| toda | AR 128 | 26 | 0 | 26 | 1,04 | 11,3 | 10,0 | 33,33 | 0 | 45,2× |
+| toda | CO 239 | 10 | 0 | 10 | 0,3 | 8,81 | 10,0 | 20,0 | 0 | 35,2× |
+| toda | PE 281 | 8 | 0 | 8 | 0,0 | 3,75 | 0,0 | 20,0 | 0 | 15× |
+| toda | MX 262 | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| toda | afetado fora de Lib/Sud | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| toda | controle Lib/Sud | 84 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+| toda | controle outras | 1644 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+
+**Universo todos (todo jogo de Lib/Sud), janelas congelada e nova**: as células das ligas e de `afetado fora de Lib/Sud` são idênticas às do universo precificado (conferido) e idênticas nos dois cenários — nessas duas janelas, todo jogo de Lib/Sud com clube da leva está precificado. Só o `controle outras` muda de tamanho (ver a tabela do controle).
+
+**Universo todos, janela toda — cenário 2026**:
+
+| janela | grupo | n âncoras | do zero | last10 mudou | Δ `played_total` | Δ pp médio | mediana pp | máx pp | cruzou piso 5 | Δpp ÷ 0,25 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| toda | AR 128 | 304 | 5 | 104 | 0,86 | 5,19 | 0,0 | 60,0 | 25 | 20,8× |
+| toda | CO 239 | 142 | 0 | 58 | 0,51 | 7,27 | 0,0 | 47,5 | 5 | 29,1× |
+| toda | PE 281 | 133 | 1 | 48 | 0,68 | 5,72 | 0,0 | 70,0 | 9 | 22,9× |
+| toda | MX 262 | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| toda | afetado fora de Lib/Sud | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| toda | controle Lib/Sud | 1289 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+| toda | controle outras | 19886 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+
+**Universo todos, janela toda — cenário 2025_2026**:
+
+| janela | grupo | n âncoras | do zero | last10 mudou | Δ `played_total` | Δ pp médio | mediana pp | máx pp | cruzou piso 5 | Δpp ÷ 0,25 |
+|---|---|---|---|---|---|---|---|---|---|---|
+| toda | AR 128 | 314 | 10 | 213 | 1,85 | 11,13 | 10,0 | 70,0 | 53 | 44,5× |
+| toda | CO 239 | 142 | 3 | 104 | 1,97 | 15,56 | 10,0 | 65,0 | 26 | 62,2× |
+| toda | PE 281 | 133 | 4 | 107 | 1,86 | 15,67 | 10,0 | 70,0 | 23 | 62,7× |
+| toda | MX 262 | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| toda | afetado fora de Lib/Sud | 0 | 0 | 0 | — | — | — | — | 0 | — |
+| toda | controle Lib/Sud | 1279 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+| toda | controle outras | 19886 | 0 | 0 | 0,0 | 0,0 | 0,0 | 0,0 | 0 | 0× |
+
+**Grupo de controle** (pares cujo time não é de nenhuma das 4 ligas no cenário; o delta tem de ser 0 exato). `n_sem_par = 0`, `n_last10_mudou = 0`, Δ `played_total` = 0, Δ pp = 0 e máx = 0 em **todas** as 24 células de controle (2 cenários × 3 janelas × 2 universos × 2 grupos — conferido por código sobre o JSON do resultado); a coluna `observacao` não acendeu AVISO em nenhuma das 84 linhas da matriz.
+
+| cenário | janela | universo | controle Lib/Sud (n) | controle outras (n) |
+|---|---|---|---|---|
+| 2026 | congelada | precificados | 18 | 326 |
+| 2026 | congelada | todos | 18 | 510 |
+| 2026 | nova | precificados | 66 | 1210 |
+| 2026 | nova | todos | 66 | 1228 |
+| 2026 | toda | precificados | 84 | 1644 |
+| 2026 | toda | todos | 1289 | 19886 |
+| 2025_2026 | congelada | precificados | 18 | 326 |
+| 2025_2026 | congelada | todos | 18 | 510 |
+| 2025_2026 | nova | precificados | 66 | 1210 |
+| 2025_2026 | nova | todos | 66 | 1228 |
+| 2025_2026 | toda | precificados | 84 | 1644 |
+| 2025_2026 | toda | todos | 1279 | 19886 |
+
+**Jogos do universo precificado, contados por fixture** (idêntico nos dois cenários; nenhum fixture tem controle
+alterado):
+
+| janela | jogos | com clube da leva | com ≥1 âncora alterada | com ≥1 âncora com \|Δpp\| > 0,25 |
+|---|---|---|---|---|
+| congelada | 16 | 12 | 12 | 9 |
+| nova | 48 | 28 | 28 | 20 |
+| toda | 64 | 40 | 40 | 29 |
+
+Os 64 jogos precificados de Lib/Sud estão todos em `congelada` + `nova` (16 + 48). Dos 40 afetados, 2 jogos na
+congelada e 2 na nova têm os **dois** clubes da leva. No universo `todos` da janela `toda`: 934 jogos de Lib/Sud;
+cenário `2026`, 516 com clube da leva e 184 com âncora alterada; cenário `2025_2026`, 524 e 372.
+
+**Tamanho das células precificadas.** `n_ancoras` vai de 4 a 26 por liga, então a média é pouco informativa em
+CO e PE (congelada e nova, n=4 a 6; toda, n=10 e 8) e em AR/congelada (n=6). As menos fracas dentro do universo
+precificado são AR/nova (n=20) e AR/toda (n=26). Nas células do universo `todos` (n de 133 a 314) a média é
+informativa.
+
+**Âncoras das próprias 4 ligas** (só existem no "depois"; nenhuma está em `fact_odds_snapshot`; contexto, não é
+efeito retroativo):
+
+| liga | âncoras `2026` | abaixo do piso 5 | sem histórico | âncoras `2025_2026` | abaixo do piso 5 | sem histórico |
+|---|---|---|---|---|---|---|
+| AR 128 | 990 | 70 | 14 | 2.010 | 103 | 20 |
+| CO 239 | 788 | 53 | 9 | 1.694 | 84 | 14 |
+| PE 281 | 612 | 51 | 8 | 1.296 | 80 | 14 |
+| MX 262 | 306 | 90 | 18 | 980 | 95 | 19 |
+
+`played_total` médio: 9,06–9,22 (AR/CO/PE) e 6,67 (MX) no `2026`; 9,31–9,45 e 8,93 no `2025_2026`. Os kickoffs vão
+até nov/2026, então incluem jogos ainda agendados.
+
+### Reconciliação com a recomputação independente
+
+A comparação (o SQL da análise rodado sobre os snapshots) e uma recomputação em Python dos 10 jogos mais recentes
+a partir de `leva8_fixtures_*` **concordam**:
+
+- **A regra reproduz os snapshots exatamente.** `played_total`, `wins_total` e `played_total_disponivel`: 0
+  divergências nos pares de `leva8_pit_antes` (21.754), `leva8_pit_2026` (24.450) e `leva8_pit_2025_2026`
+  (27.734); amostra de 300 pares de Lib/Sud, 300/300 nos três cenários.
+- **Contagens iguais:** pares de clubes da leva com histórico alterado **210** (`2026`) e **424** (`2025_2026`)
+  nas duas frentes; ganharam histórico do zero **6** e **17**; cruzaram o piso 5 **39** (AR 25, CO 5, PE 9) e
+  **102**; máximo individual 70,0 pp; controle 0 nos dois.
+- **Médias iguais onde a população é a mesma:** média ponderada das três ligas precificadas = (6·6,03 + 4·12,01 +
+  4·7,50) / 14 = **8,16 pp** na `congelada` e (20·12,88 + 6·6,67 + 4·0) / 30 = **9,92 pp** na `nova`; a
+  recomputação deu 8,16 e 9,92 (pares de clubes da leva com taxa definida dos dois lados).
+- **Diferenças que são de definição, não de número:** (i) a matriz tem 579 pares de clubes da leva no `2026` e 589
+  no `2025_2026`, a recomputação tem 589 nos dois, porque 10 pares de AR em Lib/Sud são de clubes que só aparecem
+  nos fixtures de 2025 — no `2026` eles caem em `controle_lib_sud` (1.289 contra 1.279) com delta 0, como deve; (ii)
+  a recomputação mediu "Lib/Sud 2026 inteira" (310 âncoras), a matriz `toda` inclui as temporadas 2024 e 2025,
+  então as médias da `toda` **não** foram confrontadas entre si; (iii) a recomputação conta 31 âncoras que cruzam o
+  piso pelo `LEAST` dos dois lados (como o `task01_base`), a matriz conta 39 **pares**.
+- Cinco pares conferidos jogo a jogo (placar, mando, status; inclui um PEN 1-1 que entra como empate): os 37 jogos
+  das ligas 128/239/281 batem com o cache da API e os 31 de Lib/Sud com `futebol.fact_fixtures` de produção (68
+  jogos, 0 divergências). Isso **não** é uma terceira fonte independente do mundo real: a produção nasce do mesmo
+  landing.
+
+### Método
+
+Comparação ANTES × DEPOIS do mesmo modelo (`int_futebol_team_form_pit`), por `(fixture_id, team_id)`, sobre as
+âncoras do `antes`. O "depois" é o modelo de produção rodando no target `taskF` com uma var nova,
+`taskf_incluir_ligas_leva` (`false` | `'2026'` | `'2025_2026'`), que faz `UNION ALL`, em `stg_futebol_fixtures`, da
+tabela **nativa** `futebol_taskF.leva8_raw_fixtures` (2.990 linhas das 4 ligas, carregadas de JSONs em cache da
+API; **não estão no landing e nunca podem ir para lá**: a tabela externa é wildcard sobre o GCS e o próximo diário
+publicaria as ligas em produção com `competition='unknown'`). Fail-closed como `macros/taskf_destino.sql`: valor
+desconhecido levanta erro de compilação (`"foo"`, `true`, `"2027"` e `2025_2026` **sem aspas** — que o YAML de
+`--vars` lê como o inteiro 20252026 — recusam, rc=2). Com a var em default o SQL compilado é **byte-idêntico** ao de
+`origin/master` (sha256 `74abc28f…ea452`, 3.843 bytes, igual ao baseline compilado antes da edição): produção não
+muda uma linha.
+
+Três snapshots foram copiados dos builds: `leva8_pit_antes` (21.754 linhas), `leva8_pit_2026` (24.450) e
+`leva8_pit_2025_2026` (27.734), mais `leva8_fixtures_*` (cópias de `fact_fixtures`). **O delta é sempre cenário ×
+`antes`**, três builds sobre o mesmo raw (12:22–12:24 UTC de 01/10) — nunca contra o backup (ver "Estado do taskF").
+
+### Reprodução
+
+O script que rodou é `/private/tmp/claude-501/-Users-mateuskasuya-Documents-smartbetting/1966321c-7079-4b3d-8205-daf994e848b6/scratchpad/leva8_run_all.sh`
+(log em `leva8_run_all.log`, mesma pasta) — **scratch de sessão, não versionado**; por isso os passos estão aqui.
+O script faz, nesta ordem: guarda de concorrência, conferência dos backups, builds `2025_2026` → `2026` → `antes`
+(cada um seguido dos CTAS dos snapshots), restauração por `trap` e verificação final.
+
+```bash
+# 0. guarda de concorrência: ninguém escreveu no taskF na última hora (o taskF é compartilhado)
+bq query --use_legacy_sql=false --location=us-east1 <<'SQL'
+SELECT COUNT(*) AS n_escritas_alheias_60min
+FROM `smartbetting-dados`.`region-us-east1`.INFORMATION_SCHEMA.JOBS_BY_PROJECT
+WHERE creation_time > TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL 60 MINUTE)
+  AND statement_type != 'SELECT'
+  AND destination_table.dataset_id = 'futebol_taskF'
+  AND NOT STARTS_WITH(destination_table.table_id, 'leva8_')
+SQL
+
+# 1. backups ANTES de qualquer build (bq cp preserva partição e cluster; mesma operação do restauro)
+bq --location=us-east1 cp smartbetting-dados:futebol_taskF.fact_fixtures \
+                          smartbetting-dados:futebol_taskF.leva8_bak_fact_fixtures
+bq --location=us-east1 cp smartbetting-dados:futebol_taskF.int_futebol_team_form_pit \
+                          smartbetting-dados:futebol_taskF.leva8_bak_pit
+
+# 2. os três cenários, do dbt_futebol/. --full-refresh NÃO é opcional: fact_fixtures é incremental por MERGE e um
+#    MERGE nunca apaga. `--exclude-resource-type test unit_test`: ver "Defeito latente do unit test".
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+  --select stg_futebol_fixtures fact_fixtures int_futebol_team_form_pit \
+  --full-refresh --exclude-resource-type test unit_test --vars "{taskf_incluir_ligas_leva: '2025_2026'}"
+#    (o cenário default, sem --vars, e o '2026' são o mesmo comando); após CADA build:
+bq query --use_legacy_sql=false --location=us-east1 <<'SQL'
+CREATE OR REPLACE TABLE `smartbetting-dados.futebol_taskF.leva8_pit_2025_2026`
+AS SELECT * FROM `smartbetting-dados.futebol_taskF.int_futebol_team_form_pit`;
+CREATE OR REPLACE TABLE `smartbetting-dados.futebol_taskF.leva8_fixtures_2025_2026`
+AS SELECT * FROM `smartbetting-dados.futebol_taskF.fact_fixtures`;
+SQL
+#    (leva8_pit_antes / leva8_fixtures_antes e leva8_pit_2026 / leva8_fixtures_2026 nos outros dois)
+
+# 3. RESTAURAR o taskF (não é "rebuild sem a var": o raw já andou — ver "Estado do taskF")
+bq --location=us-east1 cp -f smartbetting-dados:futebol_taskF.leva8_bak_fact_fixtures \
+                             smartbetting-dados:futebol_taskF.fact_fixtures
+bq --location=us-east1 cp -f smartbetting-dados:futebol_taskF.leva8_bak_pit \
+                             smartbetting-dados:futebol_taskF.int_futebol_team_form_pit
+#    + CREATE OR REPLACE VIEW `futebol_taskF.stg_futebol_fixtures` com a definição original (scratchpad/leva8_stg_view_original.json)
+
+# 4. a análise (SOMENTE LEITURA). O compilado é byte-idêntico ao SQL que gerou a matriz desta seção.
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_leva_ligas_efeito_retroativo
+bq query --use_legacy_sql=false --location=us-east1 --format=json --max_rows=200 \
+  < target/compiled/dbt_futebol/analyses/taskf_leva_ligas_efeito_retroativo.sql
+```
+
+`leva8_raw_fixtures` vem de `leva8_build_ndjson.py` (um NDJSON por linha de `/fixtures`, com `requested_league_id`,
+`requested_season`, `mode`, `total_fixtures` e `loaded_at`, a partir de `A_fixtures_league{L}_season{S}.json` do
+cache da API) carregado em tabela nativa; a conferência da carga é `leva8_verify_load.sql` (o comando exato de
+`bq load` não está nos artefatos desta sessão). O universo precificado lê `futebol.fact_odds_snapshot` **na hora da
+consulta** (01/10), não no instante dos builds.
+
+### Estado do taskF depois da medição
+
+**Restaurado por `bq cp` a partir de `leva8_bak_fact_fixtures` (10.877 linhas) e `leva8_bak_pit` (21.754)** — 0
+linhas das 4 ligas nos dois e nos backups —, e a view `stg_futebol_fixtures` do `taskF` recriada com o texto original
+(2.246 caracteres, sem `leva8`). Verificado: contagens iguais; `EXCEPT DISTINCT` sobre `TO_JSON_STRING(linha)` nos dois
+sentidos = 0; `BIT_XOR(FARM_FINGERPRINT)` iguais; partição `DAY` em `date_utc` e cluster `[competition, season,
+home_team_id]` iguais. **Os backups `leva8_bak_*` foram mantidos**, assim como `leva8_raw_fixtures`,
+`leva8_pit_{antes,2026,2025_2026}` e `leva8_fixtures_{antes,2026,2025_2026}`.
+
+- **A restauração é exata ao `taskF` de 24/09 e NÃO equivale a um build novo.** O raw avançou desde então: o rebuild
+  `antes` difere do backup em 3.798 linhas de `fact_fixtures` (todas por `extracted_at`; 71 por status, 61 delas NS
+  que viraram FT/AET/PEN) e em 476 de `int_futebol_team_form_pit`. "0 diferença contra o backup" não quer dizer
+  "o rebuild bate com o backup".
+- **Nada foi escrito em `futebol` (produção) nem no GCS por esta medição.** Pelo `INFORMATION_SCHEMA.JOBS_BY_PROJECT`,
+  todo job não-SELECT com destino `futebol` desde as 11:30Z é do pipeline normal (`dbtcontainer`, `target_name: prod`);
+  os jobs de escrita da sessão (4 COPY, 13 CTAS, 4 CREATE_VIEW) são todos em `futebol_taskF`. O GCS tem os 3 arquivos
+  esperados de `futebol/fixtures/`, com 0 linhas das 4 ligas. Produção: `fact_fixtures` 10.877, PIT 21.754, 0 linhas das 4 ligas.
+- `taskf_teste2*`, `taskf_pit_por_celula*` e as `*_ancora` **não foram tocadas** (`last_modified`, linhas, partição e
+  cluster iguais ao estado inicial); o `taskF` só ganhou tabelas `leva8_*`; nenhum `*__dbt_tmp` sobrou.
+- Três achados laterais, sem efeito na matriz: (i) nas linhas de controle fora das 4 ligas, `fact_fixtures` dos cenários
+  difere do `antes` em 25 (`2026`) e 60 (`2025_2026`) linhas **só em `venue_*`** — o fallback `LAST_VALUE(venue_*)` anda
+  no histórico do mandante entre competições —, e isso não chega ao PIT (0 diferenças em 21.165 pares comparáveis de
+  clubes de fora); (ii) as linhas das 4 ligas saem com `competition = 'unknown'` (o `CASE` de `fact_fixtures` não as
+  tem, de propósito), inofensivo sob `pit_escopo=todas`; (iii) a produção tem 1 linha `competition='unknown'` (liga 916),
+  anterior à sessão e sem relação.
+
+### Defeito latente do unit test com a var ligada
+
+O unit test `stg_fixtures_insumo_so_entra_a_partir_do_corte` **falha com `taskf_incluir_ligas_leva` ligada** (log do
+primeiro build, 12:06:10: `Unrecognized name: total_fixtures`, 6 nós SKIP, nada escrito) por dois motivos: com a var
+ligada o modelo troca `SELECT *` por lista explícita de colunas que inclui `total_fixtures` e `mode`, e o mock não as
+tem; e o `UNION ALL` lê a tabela nativa `leva8_raw_fixtures` com nome fixo, que o mock não cobre — mesmo com as colunas
+no mock, as 2.990 linhas reais entrariam no resultado. **Com a var em default nada muda**: o SQL compilado é
+byte-idêntico, o YAML do teste não foi alterado, e há registro de o código de `origin/master` rodando esse teste
+(CTAS `…__dbt_tmp` do `dbtcontainer` às 12:22:02Z, `DONE`, sem erro).
+
+**Não foi corrigido.** Não é conserto de duas colunas no mock: o teste só cobriria o caminho ligado se a tabela da leva
+virasse um `source()` declarado (para o mock poder cobri-la), e a prova de que passa exige `dbt test`, que escreve
+`__dbt_tmp` no dataset — fora do que esta medição podia fazer. Mitigação em vigor: `--exclude-resource-type test
+unit_test` nos três builds e na receita acima. O teste continua válido só para o caminho default.
+
+### As três formas que o desenho pode tomar
+
+⚠️ **Esta seção não escolhe entre elas — a decisão é do usuário.** O que segue é o que cada uma custaria ou mudaria
+segundo a matriz; nenhuma foi implementada nem medida além do que está dito.
+
+**1. Data de entrada só no PIT** (o jogo de liga da leva com kickoff anterior a D não entra na forma de ninguém).
+
+- *Data que zeraria as duas janelas.* Para cada janela, o kickoff do último jogo encerrado de liga da leva que precede
+  uma âncora de Lib/Sud do mesmo clube (consulta abaixo, sobre os snapshots de 01/10): `congelada` **2026-07-26 22:30
+  UTC** (14 pares, âncoras de 21/07 a 31/07), `nova` **2026-09-12 17:45 UTC** (30 pares, âncoras de 11/08 a
+  18/09) — os mesmos 44 pares da matriz. Uma data de entrada D (UTC, inclusiva, como em `futebol_competicoes_insumo`)
+  zera **as duas janelas** se **D > 2026-09-12 17:45 UTC**; em granularidade de dia, **`2026-09-13`**. Só a `congelada`:
+  `2026-07-27`. Por construção, com D assim, toda âncora com kickoff anterior a D fica com o histórico do `antes`
+  (inclusive as 238 de Lib/Sud anteriores a 16/06 que a matriz mostra deslocadas); o deslocamento passa a ser só
+  prospectivo (as 8 âncoras de Lib/Sud em 2026 a partir de 01/10 e as futuras carregam a liga, por desenho).
+- *O que custaria.* Os jogos de liga anteriores a D não alimentam a forma de ninguém, **inclusive a das âncoras das
+  próprias 4 ligas** (990 / 788 / 612 / 306 âncoras no `2026`, tabela acima) — como ficaria o histórico delas com o
+  corte **não foi medido**. É um mecanismo diferente do da DE#95: aquele cortou em `stg_futebol_fixtures` (o jogo some
+  do mart inteiro); um corte "só no PIT" é filtro no `team_log` de `int_futebol_team_form_pit`, que **não foi escrito
+  nem medido**. A matriz mede só esse modelo: as fontes de histórico próprias de cada mercado (ver a seção do #59) não
+  foram medidas, e um corte aplicado só no PIT deixaria de fora o que elas lerem de `fact_fixtures` sem corte.
+- *Limite da data.* Foi calculada sobre os fixtures encerrados do snapshot de 01/10; jogo remarcado ou reprocessado
+  pode mudá-la.
+
+**2. Aceitar e carimbar** (as ligas entram com a história inteira e o deslocamento é registrado).
+
+- *O que a matriz diz que muda:* nos 64 jogos precificados, 12 de 16 (`congelada`) e 28 de 48 (`nova`) têm âncora de
+  histórico alterado; 9 e 20 com |Δpp| > 0,25; na proxy, 15× a 51,5× o valor 0,25 nas células com n > 0. Nenhum jogo
+  precificado ganha histórico do zero nem cruza o piso 5. Fora do universo precificado: 25 / 5 / 9 âncoras cruzam o
+  piso no `2026` (AR/CO/PE) e 53 / 26 / 23 no `2025_2026`.
+- *O que pede, pelo precedente da #82/#103/#117:* âncora re-medida com a anterior preservada em `_pre_*`, porque a
+  forma PIT das âncoras de Lib/Sud da janela congelada deixa de ser a que a âncora carimbou. O Teste 2 **não** foi
+  rodado com os cenários: o efeito em `aconteceu_p*` (a unidade da régua) é **desconhecido**. Que os 16 jogos
+  precificados da `congelada` sejam subconjunto dos 169 jogos da âncora **não foi conferido**.
+- *Não muda:* outras competições (delta 0 exato) e a Liga MX (n=0).
+
+**3. Pular 2025** (backfill só da temporada corrente, cenário `2026`).
+
+- *O que muda:* **nada nas duas janelas operacionais** — `congelada` e `nova` dão células idênticas nos dois
+  cenários (44 pares, 40 de 64 jogos). Pular 2025 **não** zera o efeito. A diferença está só na janela `toda`
+  (âncoras antigas, universo `todos`): ganhou histórico do zero **5 / 0 / 1** (AR/CO/PE) contra 10 / 3 / 4; cruzou o
+  piso 5 **25 / 5 / 9** contra 53 / 26 / 23; Δ pp médio 5,19 / 7,27 / 5,72 contra 11,13 / 15,56 / 15,67; pares de
+  clubes da leva alterados 210 contra 424; jogos de Lib/Sud com âncora alterada 184 contra 372 (de 934).
+- *O que custaria:* menos jogos de história para as próprias ligas — âncoras das 4 ligas no `2026` 990 / 788 / 612 /
+  306 contra 2.010 / 1.694 / 1.296 / 980 no `2025_2026`; abaixo do piso 5, 70 / 53 / 51 / 90 contra 103 / 84 / 80 / 95
+  (populações de âncoras diferentes, não comparáveis como proporção). Não se mediu o efeito sobre essas âncoras
+  próprias além disso.
+
+**A consulta da data de entrada** (somente leitura; `leva8_fixtures_2025_2026` é a cópia de `fact_fixtures` do cenário
+com tudo):
+
+```sql
+WITH a AS (
+  SELECT fixture_id, team_id, kickoff_utc,
+         CASE WHEN kickoff_utc < TIMESTAMP('2026-08-04 12:00:00+00') THEN 'congelada' ELSE 'nova' END AS janela
+  FROM `smartbetting-dados.futebol_taskF.leva8_pit_antes`
+  WHERE competition_id IN (13, 11)
+    AND kickoff_utc >= TIMESTAMP('2026-06-16 00:00:00+00') AND kickoff_utc < TIMESTAMP('2026-10-01 00:00:00+00')
+),
+l AS (
+  SELECT home_team_id AS team_id, kickoff_utc AS lk
+  FROM `smartbetting-dados.futebol_taskF.leva8_fixtures_2025_2026`
+  WHERE competition_id IN (128, 239, 281, 262) AND status_short IN ('FT','AET','PEN')
+    AND score_fulltime_home IS NOT NULL AND score_fulltime_away IS NOT NULL
+  UNION ALL
+  SELECT away_team_id, kickoff_utc
+  FROM `smartbetting-dados.futebol_taskF.leva8_fixtures_2025_2026`
+  WHERE competition_id IN (128, 239, 281, 262) AND status_short IN ('FT','AET','PEN')
+    AND score_fulltime_home IS NOT NULL AND score_fulltime_away IS NOT NULL
+)
+SELECT a.janela,
+       COUNT(DISTINCT CONCAT(a.fixture_id, '-', a.team_id)) AS pares_com_jogo_de_liga_antes,
+       MAX(l.lk) AS ultimo_kickoff_liga_que_precede
+FROM a JOIN l ON l.team_id = a.team_id AND l.lk < a.kickoff_utc
+GROUP BY a.janela;
+-- nova: 30 pares, 2026-09-12 17:45 · congelada: 14 pares, 2026-07-26 22:30
+```
+
+### O que esta medição NÃO mostra
+
+- A unidade da régua (`aconteceu_p*`, as 5 famílias de premissa) **não** foi medida; só a proxy (taxa de vitória PIT).
+- Com `n` de 4 a 26 nas células precificadas, as médias são frágeis e a mediana (2 buckets) é imprecisa.
+- `last10 mudou` e a contagem de fixtures alterados são inferidos de agregados: podem subcontar, nunca sobrecontar.
+- O universo precificado foi lido de `fact_odds_snapshot` em 01/10, não no instante dos builds.
+- A completude de `leva8_raw_fixtures` (2.990 linhas do cache da API; todas as rodadas dos 4 campeonatos) **não** foi
+  verificada; só que a tabela bate com o cache e que o cache bate com `fact_fixtures` de produção nos jogos conferidos.
+- 10 âncoras a mais da AR no `2025_2026` (314 contra 304) vêm de clubes que só aparecem nos fixtures de 2025; quais,
+  não foi investigado.
+- A janela `toda` inclui jogos de Lib/Sud ainda agendados (kickoffs até nov/2026); `congelada` e `nova` são as
+  operacionais.
+- A ausência de drift está provada pelo controle (delta 0), não pelos timestamps de criação dos `leva8_pit_*`.
+- A matriz mede só `int_futebol_team_form_pit`; as fontes de histórico próprias dos mercados e os cinco modelos de
+  premissa **não** foram rodados nos cenários.

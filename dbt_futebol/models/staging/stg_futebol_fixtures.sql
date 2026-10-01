@@ -23,12 +23,43 @@
 -- passado entra — só existe para o cenário "com amistosos" da análise
 -- taskf_amistosos_efeito_retroativo_95 continuar reproduzível contra o target `taskF`, nunca
 -- contra dev/prod.
+{#- MEDIÇÃO (leva de ligas AR/CO/PE/MX): var `taskf_incluir_ligas_leva`, default false. O portão antes
+    do primeiro backfill de Argentina 128, Colômbia 239, Peru 281 e Liga MX 262: mede o efeito
+    RETROATIVO que cadastrar as 4 ligas teria na forma PIT de clubes JÁ medidos (os que jogam
+    Libertadores 13 e Sudamericana 11), no molde da DE#95 — ver
+    analyses/taskf_leva_ligas_efeito_retroativo.sql.
+
+    Valores aceitos: false | '2026' | '2025_2026'. Ligada, faz UNION ALL, sobre `src`, da tabela
+    NATIVA smartbetting-dados.futebol_taskF.leva8_raw_fixtures (fixtures das 4 ligas carregados de
+    JSONs em cache; fixa, NÃO segue o target), só das seasons do valor. Os fixtures dessas ligas NÃO
+    estão no landing e NUNCA podem ser escritos lá: a tabela externa é wildcard sobre o GCS e o
+    próximo diário publicaria as ligas em produção com competition='unknown'.
+
+    FAIL-CLOSED, como macros/taskf_destino.sql: valor desconhecido levanta erro de compilação. O
+    valor é normalizado com `| string | lower` porque `--vars` passa por YAML: `2026` chega inteiro
+    (aceito assim mesmo) e `2025_2026` SEM ASPAS chega como o inteiro 20252026 (YAML 1.1 lê o
+    sublinhado como separador) — que é recusado, de propósito, com a instrução de pôr aspas.
+
+    Com a var em default nada disto emite texto: o SQL compilado é byte-idêntico ao de antes.
+    Os `{%-` abaixo existem para isso — não os "arrume". Ligada, as DUAS pontas do UNION ALL
+    listam as colunas por nome, para a união não depender da ordem das colunas da tabela externa. #}
 {% set aplica_corte_insumo = not var('taskf_incluir_amistosos', false) %}
+{%- set ligas_leva = var('taskf_incluir_ligas_leva', false) | string | lower %}
+{%- if ligas_leva not in ['false', '2026', '2025_2026'] %}{{ exceptions.raise_compiler_error(
+    "taskf_incluir_ligas_leva inválido: '" ~ ligas_leva ~ "'. Valores aceitos: false | '2026' | '2025_2026' "
+    ~ "(entre aspas: 2025_2026 sem aspas vira o inteiro 20252026 no YAML de --vars).") }}{%- endif %}
+{%- set filtro_temporada_leva = {'2026': 'requested_season = 2026', '2025_2026': 'requested_season IN (2025, 2026)'}.get(ligas_leva) %}
+{%- set colunas_raw = 'score, fixture, requested_season, loaded_at, requested_league_id, goals, teams, league, total_fixtures, mode' %}
 
 WITH src AS (
-    SELECT * FROM {{ source('futebol', 'raw_futebol_fixtures') }}
+    SELECT {{ colunas_raw if filtro_temporada_leva else '*' }} FROM {{ source('futebol', 'raw_futebol_fixtures') }}
     {% if aplica_corte_insumo -%}
     WHERE NOT {{ futebol_insumo_antes_da_entrada('requested_league_id', 'TIMESTAMP_SECONDS(fixture.timestamp)') }}
+    {%- endif %}
+    {%- if filtro_temporada_leva %}
+    UNION ALL
+    SELECT {{ colunas_raw }} FROM `smartbetting-dados.futebol_taskF.leva8_raw_fixtures`
+    WHERE {{ filtro_temporada_leva }}
     {%- endif %}
 )
 
