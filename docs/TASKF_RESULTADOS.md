@@ -3498,3 +3498,268 @@ bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados --max
 ⚠️ Os dois testes `assert_insumos_medidos_reconstroi` e `assert_funil_insumos_medidos_reconstroi` ficam de
 fora porque leem `fact_insumos_medidos` e `fact_value_funnel`, marts que **não existem** no
 `futebol_taskF` — o erro é `Not found`, não falha de dado.
+
+
+---
+
+## AE#117 — Teste 2 da janela nova (termo 5 da ADR 0010)
+
+⚠️ **ESTA SEÇÃO TAMBÉM NÃO É PARTE DO 2×2.** As linhas moram em tabelas irmãs
+(`taskf_teste2_remedicao`, `taskf_teste2_remedicao_com_gate`) e a acumulativa `taskf_teste2` não foi
+tocada. A janela e as contagens foram declaradas na descrição do PR #216 **antes** de qualquer
+resultado, como a regra 3 da ADR 0004 pede.
+
+### Veredito
+
+**O Teste 2 rodou sobre a janela nova, no pipeline juntado, e as linhas estão publicadas.** O termo 5
+da ADR 0010 pede exatamente isso (*"rodou nessa janela e as linhas estão publicadas com carimbo de
+execução"*), e é isso que esta seção entrega: 37 premissas no benchmark preferido, 589 jogos, 19.781
+linhas de aposta, sem gate de preço.
+
+**A ADR 0010 não define limiar de aprovação por premissa.** A régua de 0,25 pp (#92) governa a
+comparação com a âncora, e só ela. Esta seção, portanto, **não aprova nem reprova premissa nenhuma**:
+publica o número medido de cada uma, com `n` e erro-padrão ao lado, e diz o que mudou em relação à
+janela congelada. Quem julgar o catálogo (a [B]) aplica o critério que a [B] declarar.
+
+O que os números dizem, sem interpretação além:
+
+- **No piso 5 a diferença é positiva em 26 das 37 premissas** (média simples **+1,4 pp**), contra
+  **−0,8 pp** na janela congelada (âncora, universo `completo`). Com as portas de preço do board
+  ligadas (leitura secundária) é positiva em 20 de 37, média **+0,4 pp**.
+- **O sinal no piso 5 é o MESMO da janela congelada em apenas 11 das 37.** As outras 26 trocam de
+  sinal entre as duas janelas — o que a [B] precisa ler como instabilidade da medição entre janelas,
+  não como melhora do catálogo. Os dois universos diferem em composição (a congelada é 46,7% Copa do
+  Mundo e 27,7% de amostra curta em média nas 37; a nova não tem seleção e tem 9,7%) e em tamanho
+  (soma dos `n` do piso 5: **17.090** contra **3.347**).
+- **Só cinco das 37 têm |diferença| ≥ 2 erros-padrão no piso 5:** `historico_over` (+4,9),
+  `xg_combinado_alto` (+4,4), `ambos_vazam` (+4,2), `tende_golear` (+9,5) e `ataques_fracos` (−3,9).
+  O erro-padrão aqui é o binomial do `aconteceu` e ignora a variância da probabilidade justa, então
+  **subestima** a incerteza; é dimensionamento, não teste de hipótese. Com 37 premissas, cinco acima
+  de 2 erros-padrão não é distinguível de ruído por esta conta.
+- **A amostra curta caiu, mas não zerou:** 9,7% em média nas 37 (de 27,7% na janela congelada). As
+  que sobram altas: `tende_golear` 20,2%, `defesa_forte` 19,3%, `desfalque_adversario` 27,0%.
+
+### Os cinco termos da ADR 0010, conferidos com número (01/10)
+
+| # | termo | estado | evidência |
+|---|---|---|---|
+| 1 | o pipeline junta | verde | `pit_escopo`/`pit_recorte` com default `todas`/`ultimos_10` (`macros/taskf_eixos.sql`); `deriva-imagem.yml` verde em `a7bfed0` nas quatro últimas execuções (30/09 19:27 e 23:56, 01/10 06:07 e 13:30 UTC). **Esta PR muda `macros/`: depois do merge o detector fica vermelho até o `./build-and-push.sh dbt_futebol`** |
+| 2 | a #71 no mesmo commit | verde | `887a1f9` é ancestral do `HEAD` (`git merge-base --is-ancestor`) |
+| 3 | a âncora reproduz | verde, com ressalva | 169 jogos / 5.605 linhas; 0 linhas sem contraparte; 3 linhas / 24 de 1.680 campos divergem de `1b9c757`, das quais `xg_combinado_alto` (22 campos) está **fora** da régua de 0,25 pp e é por dado (fixture 1492290, hipótese não isolada); contra `aa9f44a`, 2 campos de 0,1 pp |
+| 4 | a janela tem forma | verde | 589 / 512 / 359 / 0 (alvos ≥400, ≥300, ≥100, 0) |
+| 5 | o Teste 2 rodou na janela e está publicado | entregue por esta seção | 589 jogos, 19.781 linhas, commit `53ba6af`, snapshot de standings 2026-10-01 |
+
+### Carimbo de execução
+
+| | |
+|---|---|
+| Execução | 2026-10-01 19:15–19:16 UTC (`medido_em` 19:15:51 sem gate, 19:16:09 com gate) |
+| Commit | `53ba6af` (o `git_sha` gravado nas linhas; contém o predicado e o destino novos) |
+| Dataset | `smartbetting-dados.futebol_taskF` (nada em `futebol`) |
+| Tabelas | `taskf_teste2_remedicao` (108 linhas), `taskf_teste2_remedicao_com_gate` (92), `taskf_pit_por_celula_remedicao` |
+| Célula | `ambos` (o default, o pipeline que produção roda), sem `--vars` de eixo |
+| Fatos | reconstruídos UMA vez em 19:12:44–19:13:25 UTC (26 modelos); `fact_odds_snapshot.dbt_loaded_at` = 19:12:50 UTC, igual em todas as linhas |
+| Fatos vs produção | `fact_odds_snapshot` 4.300.664 linhas dos dois lados, `EXCEPT DISTINCT` zero nos dois sentidos; `fact_fixtures`: diferença zero nos dois sentidos em (id, status, gols, kickoff, times); 650 jogos FT na janela dos dois lados |
+| **Snapshot de standings** | **2026-10-01** (`MAX(snapshot_date)`; 27.898 linhas, idêntico a produção), reconstruído no `futebol_taskF` em 19:12:49; **conferido de novo depois das três medições e dos dois deltas: inalterado** |
+| Janela | `kickoff_utc ∈ [2026-08-04 12:00:00, 2026-10-01 00:00:00) UTC`; primeiro e último dia medidos 2026-08-04 e 2026-09-29 |
+| Universo primário (`janela_nova`) | 589 jogos / 19.781 linhas sem gate; 587 jogos / 6.490 linhas com gate |
+| Universo à parte (`janela_nova_nations_league`) | 52 jogos / 1.702 linhas sem gate; 52 / 577 com gate. `n` máximo no piso 5 é 22 sem gate e 7 com gate, **nenhuma** premissa preferida chega a n = 30 no piso 5, e a amostra curta média é 77,8% — sem leitura utilizável por premissa |
+| Guardas | `assert_taskf_remedicao_universo` PASS (589 e 587 batem com o gabarito); Costura B (`tag:costura_b`) PASS sobre a tabela congelada, intocada |
+
+### Os quatro pisos do termo 4, finais (ae117_termo4_pisos.sql, produção, 01/10)
+
+| piso | alvo | primário sem gate | primário com gate | com Nations League sem gate | com Nations League com gate |
+|---|---|---|---|---|---|
+| encerrados e precificados | ≥ 400 | **589** | 587 | 641 | 639 |
+| acima do piso 5 | ≥ 300 | **512** | 510 | 516 | 514 |
+| split-year | ≥ 100 | **359** | 359 | 359 | 359 |
+| Copa do Mundo | 0 | **0** | 0 | 0 | 0 |
+
+`x_sem_familia = 0`, `x_unknown = 0`. Passam em todas as leituras. A contagem primária bate, **em contagem**, com `jogos_no_universo` da tabela medida no `futebol_taskF` (589 e 587): os fatos reconstruídos medem um universo do mesmo tamanho do declarado
+(não comparei fixture a fixture).
+
+**Exclusões contadas** (jogos da janela que o `task01_base` não mede por exigir `status_short = 'FT'`,
+a regra da [0.1]): 5 AET (`champions_league`), 4 PEN (`libertadores`), 2 PEN (`sudamericana`) e 1 PST
+(`primeira_liga`) — **12 jogos**. Mais **9 jogos FT sem preço**, todos de `amistosos` (a agenda da
+janela tem 662 jogos, 650 FT; 641 FT estão no universo precificado, os outros 9 são esses amistosos, que
+não têm odds). Cobertura de preço dos jogos FT: **641 de 650 (98,6%)**; fora os amistosos, 641 de 641.
+As 52 partidas de Nations League saem do primário por decisão da emenda. `copa_mundo` não tem jogo
+agendado na janela, e os amistosos ficam fora por decisão da emenda **e** por ausência de odds — não
+é a mesma coisa que "zero na janela".
+
+### A âncora, re-rodada no mesmo PR (regra da #82)
+
+`macros/` mudou (predicado, destino), então a âncora foi re-medida: `taskf_destino: ancora`, commit
+`53ba6af`, mesmos fatos e mesmo standings da remedição. **O universo `completo` reproduz: 169 jogos /
+5.605 linhas, 224 linhas na tabela / 56 por universo, `sem_copa_mundo` 90 / 2.870.** O SQL compilado
+da âncora é equivalente ao de antes da mudança (diferem só comentário e espaço em branco).
+
+Backup antes da sobrescrita: `taskf_teste2_ancora_pre_janela_nova` e
+`taskf_pit_por_celula_ancora_pre_janela_nova` (a âncora vigente era `aa9f44a`, de 29/09 — a
+`1b9c757` já estava preservada em `taskf_teste2_ancora_pre_gates`).
+
+`analyses/taskf_remedicao.sql`, 56 linhas comparadas, 1.680 campos, régua de 0,25 pp:
+
+| contra | linhas sem contraparte | linhas divergentes | campos divergentes |
+|---|---|---|---|
+| `1b9c757` (26/08, `_pre_gates`) | 0 | **3** | **24** de 1.680 (1,4%) |
+| `aa9f44a` (29/09, `_pre_janela_nova`) | 0 | **2** | **2** de 1.680 (0,1%) |
+
+**Contra `1b9c757`:**
+
+- `Gols · xg_combinado_alto · sharp`, **22 campos**: `n_p0` 231 → 232 (e +1 nos pisos 3/5/10),
+  `aconteceu_p10` 63,3 → 62,8, `diferenca_p10` −5,5 → −5,9, `diferenca_p5` −2,3 → −2,6. **Está fora
+  da régua de 0,25 pp** (a maior variação é 0,5 pp), e a divergência é a **já conhecida** de 29/09:
+  por dado e não por código (`int_futebol_premissas_ou.sql` sem diff desde a `1b9c757`). A hipótese
+  continua sendo a fixture **1492290** (Brasileirão, 21/07, FT 1–1, dentro da janela congelada), que
+  tem `fact_fixture_stats` que a base de 12/08 não tinha. **Segue sendo inferência:** a âncora guarda
+  só agregados e a linha que passou a acender não foi isolada.
+- `Gols · defesas_vazaveis · sharp`, `aconteceu_p5` 58,7 → 58,8, e `Handicap ·
+  adversario_fragil_fora · consenso`, `aconteceu_p10` 8,7 → 8,8: **0,1 pp, dentro da régua**, e são
+  empate de arredondamento, não efeito — 94/160 = 58,75% e 7/80 = 8,75%, exatamente no meio da grade
+  de `ROUND(·, 1)`. É a classe que a #53, a #54 e a #103 já mediram. Contra `aa9f44a` são **os únicos
+  dois campos** que divergem.
+
+**A fixture 1492145** (Brasileirão, remarcada para 02/09, FT 2–0) saiu da janela congelada por mudança
+de data e hoje cai **dentro da janela nova** (5.772 linhas de odds): não é divergência, é a janela
+nova medindo um jogo que a congelada não tem.
+
+⚠️ **O que o delta contra `aa9f44a` isola:** o efeito do dia (fatos e standings de 01/10 em vez de
+24–29/09) somado ao das `macros/` novas é **zero campo fora da régua**. A `team_group` não-PIT
+(AE#213) não aparece no delta desta vez; **não investiguei por quê** (não comparei o `group_name`
+resolvido entre os dois snapshots), então a ausência de efeito é observação, não explicação.
+
+### Ressalvas que valem para o resultado abaixo
+
+1. **`team_group` não é point-in-time (AE#213, não corrigido).** O `group_name` de todo jogo da janela
+   nova, de agosto a setembro, vem do snapshot de **01/10**. O efeito esperado se concentra nas
+   premissas de tabela (`superioridade_tabela`, `supremacia`, `sem_rodizio`) e em quem as lê
+   (`lado_coberto_forte` foi a que se moveu em 29/09), principalmente Copa do Mundo e Champions; **não
+   medi o tamanho dele na janela nova**. O snapshot foi conferido antes e depois das medições
+   (inalterado), mas o resultado dessas premissas é do standings de 01/10, não do kickoff.
+2. **O universo primário não tem seleção e deixa de fora** os 5 jogos de Champions com AET e os 6 de
+   Libertadores/Sudamericana com PEN (a regra FT-apenas da [0.1]); o veredito não se estende a jogo
+   decidido na prorrogação ou nos pênaltis.
+3. **O sinal do piso 5 mudou de janela em 26 das 37 premissas** (acima). Nenhuma conclusão sobre uma
+   premissa isolada deve apoiar-se numa janela só — é a mesma lição do teste de premissa forte da
+   [0.1].
+
+### O veredito por premissa
+
+Benchmark preferido de cada mercado (sharp no 1X2, Gols e Handicap; consenso no BTTS; derivada na
+Dupla Chance), universo `janela_nova`, **sem gate**. `dif` = `aconteceu` − `a odd dava`, em pp. `p0`,
+`p5`, `p10` são os pisos de amostra (sobre o disponível). `± ep` é o erro-padrão binomial do `aconteceu`
+no piso 5, em pp. A coluna "sinal p5 vs congelada" compara o sinal da diferença no piso 5 com o da
+âncora (janela congelada, `completo`) e traz o valor dela entre parênteses; "com gate" é a leitura
+secundária (`n` e dif no piso 5). **Nenhuma coluna é critério da ADR 0010.**
+
+#### Resultado (1X2) (benchmark sharp)
+
+| premissa | n p0 | dif p0 | n p5 | dif p5 | ± ep | dif p10 | % amostra curta | sinal p5 vs congelada | com gate: n p5 / dif p5 |
+|---|---|---|---|---|---|---|---|---|---|
+| `desfalque_adversario` | 111 | +4,5 | 81 | **+2,7** | 5,4 | +2,7 | 27,0 | inverte (-24,9) | 47 / +0,4 |
+| `forca_mismatch` | 252 | +2,1 | 226 | **+4,1** | 3,3 | +4,5 | 10,3 | inverte (-8,0) | 163 / +1,1 |
+| `forma` | 346 | -0,7 | 318 | **+0,2** | 2,8 | +0,2 | 8,1 | inverte (-3,6) | 202 / -2,9 |
+| `h2h_favoravel` | 374 | +2,2 | 370 | **+1,9** | 2,6 | +1,9 | 1,1 | inverte (-10,7) | 251 / -0,6 |
+| `mando` | 529 | +1,2 | 469 | **+2,0** | 2,3 | +1,9 | 11,3 | igual (+1,4) | 300 / -0,1 |
+| `superioridade_tabela` | 357 | +3,5 | 313 | **+3,7** | 2,8 | +4,1 | 12,3 | inverte (-3,3) | 218 / +0,8 |
+| `superioridade_xg` | 300 | +1,2 | 281 | **+0,5** | 2,9 | +1,2 | 6,3 | inverte (-3,8) | 163 / -4,1 |
+
+#### Ambos marcam (benchmark consenso)
+
+| premissa | n p0 | dif p0 | n p5 | dif p5 | ± ep | dif p10 | % amostra curta | sinal p5 vs congelada | com gate: n p5 / dif p5 |
+|---|---|---|---|---|---|---|---|---|---|
+| `ambos_marcam` | 150 | +5,8 | 132 | **+4,3** | 4,3 | +4,6 | 12,0 | igual (+4,8) | 113 / +5,4 |
+| `ataque_dos_dois` | 208 | +3,3 | 189 | **+2,7** | 3,6 | +3,3 | 9,1 | igual (+7,7) | 170 / +3,1 |
+| `ataque_trava` | 287 | -2,3 | 252 | **-4,1** | 3,1 | -3,1 | 12,2 | igual (-3,6) | 244 / -4,1 |
+| `defesa_forte` | 176 | +1,3 | 142 | **-1,9** | 4,2 | -2,9 | 19,3 | inverte (+12,7) | 137 / -1,9 |
+| `defesas_vazaveis` | 257 | +4,9 | 236 | **+4,3** | 3,2 | +4,4 | 8,2 | igual (+7,3) | 214 / +4,9 |
+| `historico_btts` | 154 | +5,2 | 150 | **+4,8** | 4,0 | +6,6 | 2,6 | inverte (-11,3) | 133 / +6,0 |
+| `historico_seco` | 398 | -2,4 | 362 | **-3,4** | 2,6 | -2,6 | 9,0 | igual (-3,0) | 354 / -3,6 |
+
+#### Dupla chance (benchmark derivada)
+
+| premissa | n p0 | dif p0 | n p5 | dif p5 | ± ep | dif p10 | % amostra curta | sinal p5 vs congelada | com gate: n p5 / dif p5 |
+|---|---|---|---|---|---|---|---|---|---|
+| `adversario_limitado` | 677 | +0,0 | 613 | **-0,1** | 1,9 | -0,1 | 9,5 | inverte (+3,0) | 375 / -1,7 |
+| `equilibrio_defensivo` | 420 | -2,0 | 394 | **-1,6** | 2,4 | -2,0 | 6,2 | igual (-1,9) | 231 / -0,6 |
+| `invicto_recente` | 174 | +1,6 | 151 | **+3,5** | 3,6 | +4,6 | 13,2 | inverte (-5,4) | 80 / +4,3 |
+| `lado_coberto_forte` | 493 | +2,3 | 437 | **+3,4** | 2,1 | +3,7 | 11,4 | igual (+6,1) | 248 / +4,2 |
+
+#### Gols (benchmark sharp)
+
+| premissa | n p0 | dif p0 | n p5 | dif p5 | ± ep | dif p10 | % amostra curta | sinal p5 vs congelada | com gate: n p5 / dif p5 |
+|---|---|---|---|---|---|---|---|---|---|
+| `ambos_vazam` | 789 | +4,1 | 732 | **+4,2** | 1,8 | +4,2 | 7,2 | inverte (-3,8) | 394 / +6,4 |
+| `ataque_combinado` | 685 | +3,4 | 619 | **+3,4** | 1,9 | +3,8 | 9,6 | inverte (-3,6) | 222 / +1,5 |
+| `ataques_fracos` | 953 | -2,9 | 851 | **-3,9** | 1,7 | -3,7 | 10,7 | inverte (+2,5) | 424 / -4,2 |
+| `clean_sheets_altos` | 253 | -4,6 | 227 | **-5,6** | 3,3 | -5,6 | 10,3 | inverte (+25,9) | 101 / -6,5 |
+| `defesas_firmes` | 887 | -1,2 | 802 | **-2,0** | 1,7 | -2,2 | 9,6 | inverte (+2,1) | 304 / -8,2 |
+| `defesas_vazaveis` | 846 | +2,4 | 778 | **+2,4** | 1,7 | +2,7 | 8,0 | inverte (-5,3) | 335 / +2,4 |
+| `historico_over` | 541 | +4,8 | 525 | **+4,9** | 1,9 | +5,2 | 3,0 | inverte (-5,3) | 155 / +7,9 |
+| `historico_under` | 699 | -0,5 | 673 | **-1,0** | 1,8 | -1,8 | 3,7 | inverte (+5,8) | 199 / -5,4 |
+| `ritmo_alto` | 1135 | +1,8 | 1076 | **+2,6** | 1,5 | +2,5 | 5,2 | inverte (-13,1) | 554 / +3,3 |
+| `xg_baixo_combinado` | 731 | -1,3 | 674 | **-1,8** | 1,8 | -1,8 | 7,8 | inverte (+2,3) | 155 / -8,0 |
+| `xg_combinado_alto` | 700 | +4,1 | 656 | **+4,4** | 1,7 | +4,3 | 6,3 | inverte (-2,6) | 219 / +4,7 |
+
+#### Handicap (benchmark sharp)
+
+| premissa | n p0 | dif p0 | n p5 | dif p5 | ± ep | dif p10 | % amostra curta | sinal p5 vs congelada | com gate: n p5 / dif p5 |
+|---|---|---|---|---|---|---|---|---|---|
+| `adversario_fragil_fora` | 515 | -0,2 | 457 | **+2,8** | 2,3 | +2,9 | 11,3 | inverte (-6,6) | 287 / +1,4 |
+| `defesa_fora_solida` | 518 | -0,9 | 448 | **+1,0** | 2,2 | +1,6 | 13,5 | inverte (-3,4) | 168 / +4,3 |
+| `favorito_irregular` | 1130 | +0,1 | 1041 | **-1,0** | 1,5 | -0,9 | 7,9 | inverte (+5,7) | 428 / -1,9 |
+| `mando_forte` | 441 | +3,6 | 395 | **+3,5** | 2,5 | +2,9 | 10,4 | inverte (-7,1) | 260 / +3,2 |
+| `raramente_perde_por_2` | 999 | +0,1 | 964 | **+0,5** | 1,6 | +0,8 | 3,5 | igual (+5,5) | 413 / +0,4 |
+| `sem_rodizio` | 541 | -0,4 | 477 | **+0,6** | 2,2 | -0,1 | 11,8 | igual (+0,5) | 270 / -3,6 |
+| `supremacia` | 473 | +1,7 | 421 | **+1,5** | 2,4 | +1,4 | 11,0 | inverte (-3,1) | 270 / -0,9 |
+| `tende_golear` | 198 | +6,5 | 158 | **+9,5** | 4,0 | +9,0 | 20,2 | igual (+11,2) | 102 / +7,4 |
+
+
+### Reprodução
+
+```bash
+# ANTES de qualquer coisa: preservar a âncora que vai ser substituída (taskf_destino: ancora DELETA `ambos`)
+bq --headless cp smartbetting-dados:futebol_taskF.taskf_teste2_ancora \
+                 smartbetting-dados:futebol_taskF.taskf_teste2_ancora_pre_janela_nova
+bq --headless cp smartbetting-dados:futebol_taskF.taskf_pit_por_celula_ancora \
+                 smartbetting-dados:futebol_taskF.taskf_pit_por_celula_ancora_pre_janela_nova
+
+# do dbt_futebol/, no commit 53ba6af — antes de qualquer `dbt run`, conferir que as 45 relações de
+# modelo resolvem para futebol_taskF (dbt compile + manifest.json) e abortar se alguma não resolver
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt run --target taskF \
+  --select +int_futebol_premissas_1x2 +int_futebol_premissas_ou +int_futebol_premissas_ah \
+           +int_futebol_premissas_btts +int_futebol_premissas_dc +int_futebol_corroboracao
+# (inclui fact_standings_snapshot; registrar MAX(snapshot_date) e conferi-lo de novo no fim)
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --target taskF \
+  --select int_futebol_team_form_pit int_futebol_premissas_1x2 int_futebol_premissas_ou \
+           int_futebol_premissas_ah int_futebol_premissas_btts int_futebol_premissas_dc \
+  --exclude assert_taskf_pit_default_igual_baseline assert_insumos_medidos_reconstroi \
+            assert_funil_insumos_medidos_reconstroi
+
+# três medições, mesmo commit: ancora, remedicao (PIT + Teste 2) e remedicao_com_gate (só o Teste 2)
+for D in ancora remedicao remedicao_com_gate; do
+  DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_pit_por_celula taskf_teste2 \
+    --vars "{taskf_git_sha: 53ba6af, taskf_destino: $D}"
+  # taskf_pit_por_celula.sql só para ancora e remedicao
+  bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados \
+    < target/compiled/dbt_futebol/analyses/taskf_teste2.sql
+done
+
+# deltas da âncora (régua 0,25 pp)
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt compile --target taskF --select taskf_remedicao \
+  --vars '{taskf_remedicao_agora: taskf_teste2_ancora, taskf_remedicao_anterior: taskf_teste2_ancora_pre_gates}'
+#   (e com taskf_teste2_ancora_pre_janela_nova)
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados --max_rows=300 \
+  < target/compiled/dbt_futebol/analyses/taskf_remedicao.sql
+
+# contagem dos pisos (leitura pura de produção) e guardas
+bq --headless query --use_legacy_sql=false --project_id=smartbetting-dados --format=csv \
+  < dbt_futebol/analyses/ae117_termo4_pisos.sql
+DBT_PROFILES_DIR=.. ../.venv/bin/dbt test --target taskF \
+  --select assert_taskf_remedicao_universo assert_taskf_universo_janela_nova_predicado \
+           assert_taskf_destino_remedicao tag:costura_b
+```
+
+⚠️ A receita grava SÓ em `futebol_taskF`. Os alvos `dev` e `prod` do `dbt_futebol` apontam ambos para o
+dataset de produção `futebol`, então um `dbt run` sem `--target taskF` é escrita em produção.

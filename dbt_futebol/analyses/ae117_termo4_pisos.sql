@@ -31,6 +31,9 @@
 -- Duas leituras do universo, ambas reportadas:
 --   SEM_GATES = task01_base(gates_board=false): o universo do Teste 2 (ADR 0010, emenda de 29/09)
 --   COM_GATES = task01_base() default: leitura secundaria, o universo que o board enxerga
+-- e as mesmas duas SEM selecoes (copa_mundo, nations_league, amistosos), sufixo _PRIMARIO: o universo
+-- primario da emenda, que e a contagem do termo 4 (AE#117, 01/10). SEM_GATES/COM_GATES continuam
+-- aqui porque sao as leituras das contagens provisorias de 29/09 e do comentario de 01/10.
 --
 -- Saida: UMA tabela longa (secao, ...) -- resumo por piso e detalhe por competicao.
 
@@ -148,6 +151,19 @@ jogos_leitura AS (
     UNION ALL
     SELECT 'COM_GATES', fixture_id, ANY_VALUE(competition), MAX(min_jogos), COUNT(*)
     FROM apostas WHERE passa_gates_board GROUP BY fixture_id
+    UNION ALL
+    -- As mesmas duas leituras SEM as selecoes (o universo PRIMARIO da emenda de 29/09): e a contagem
+    -- que vale para o termo 4. A lista e a de macros/taskf_universos.sql (taskf_janela_nova().fora);
+    -- aqui e copia porque esta analysis roda crua no bq, sem dbt.
+    SELECT 'SEM_GATES_PRIMARIO', fixture_id, ANY_VALUE(competition),
+           MAX(min_jogos), COUNT(*)
+    FROM apostas WHERE competition NOT IN ('copa_mundo', 'nations_league', 'amistosos')
+    GROUP BY fixture_id
+    UNION ALL
+    SELECT 'COM_GATES_PRIMARIO', fixture_id, ANY_VALUE(competition), MAX(min_jogos), COUNT(*)
+    FROM apostas
+    WHERE passa_gates_board AND competition NOT IN ('copa_mundo', 'nations_league', 'amistosos')
+    GROUP BY fixture_id
 ),
 jogos_classificados AS (
     SELECT
