@@ -25,6 +25,10 @@ SELECT
         WHEN 61  THEN 'ligue_1'
         WHEN 94  THEN 'primeira_liga'
         WHEN 5  THEN 'nations_league'
+        WHEN 128 THEN 'liga_profesional'
+        WHEN 239 THEN 'primera_a_colombia'
+        WHEN 281 THEN 'liga_1_peru'
+        WHEN 262 THEN 'liga_mx'
         ELSE 'unknown'
     END                                          AS competition,
     requested_league_id                          AS league_id,
