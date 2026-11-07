@@ -66,7 +66,9 @@ no master e não na imagem. Sintoma e detector desligados pela mesma causa.
    bug misterioso.
 5. **O carimbo mora no job (env var), não como LABEL da imagem.** O que apodrece é o *digest
    fixado no job*, não a tag: o job resolve `:latest` para um digest no `jobs update` e as
-   execuções herdam. O carimbo interroga a coisa certa, e o detector precisa só de
+   execuções herdam. (Desde 11/2026 o `build-and-push.sh` passa o digest explícito,
+   `--image <pacote>@sha256:...`, e move a tag `live` depois; ver
+   `data-engineering/docs/adr/0007-*` e `data-engineering/infra/README.md`.) O carimbo interroga a coisa certa, e o detector precisa só de
    `roles/run.viewer` — nunca lê o Artifact Registry.
 6. **`gcloud run jobs update` foi dobrado para dentro do `build-and-push.sh`**, com
    `--update-env-vars` (não `--set-env-vars`, que apagaria variáveis futuras em silêncio).
