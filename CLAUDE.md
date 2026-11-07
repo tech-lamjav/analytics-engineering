@@ -148,6 +148,11 @@ procedência) num passo só. Não existe mais um segundo comando manual — foi 
 esquecido que deixou o fix do de-vig 2 dias fora de produção e o `dbt_nba` 6 semanas atrás
 do master.
 
+Desde 11/2026 o job é atualizado com `--image <pacote>@sha256:<digest>` (não `:latest`), e o
+script move a tag `live` para esse digest DEPOIS do `jobs update`. A tag `live` é o que a
+cleanup policy do Artifact Registry mantém (ver `data-engineering/infra/README.md`):
+**não rode `gcloud run jobs update --image` na mão**, porque ela não move a `live`.
+
 **A fase de guardas dbt não pega isso**: ela roda da mesma imagem, então imagem velha causa o
 bug e apaga o detector. Quem pega é `.github/workflows/deriva-imagem.yml`, de hora em hora,
 de fora da imagem. Para conferir na hora:

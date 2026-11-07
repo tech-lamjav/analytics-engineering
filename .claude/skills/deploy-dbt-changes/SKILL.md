@@ -13,9 +13,8 @@ local muda o BigQuery *naquele momento*, mas o job agendado continua rodando o c
 **antigo** até a imagem ser reconstruída e o job re-apontado.
 
 ```
-.sql editado ──► build-and-push.sh ──► imagem :latest ──► gcloud run jobs update ──► job roda o código novo
-                                                              ▲
-                            (sem este passo, o job fica preso no digest antigo)
+.sql editado ──► build-and-push.sh ──► push git-<sha> + latest ──► jobs update --image @sha256 ──► tag live ──► job roda o código novo
+                 (um comando só; tudo isto acontece dentro dele)
 ```
 
 E, em paralelo, **qual** modelo roda é decidido pelo `--select` hardcoded no YAML do
@@ -47,7 +46,7 @@ DBT_PROFILES_DIR=.. ../.venv/bin/dbt build --select +nome_do_modelo
 > `profiles.yml`. Não existe sandbox: rodar local **escreve em produção**. Trate
 > qualquer `dbt run` como uma ação em prod.
 
-### 2. Rebuild da imagem (obrigatório se qualquer arquivo do projeto dbt mudou)
+### 2. Rebuild + deploy da imagem (obrigatório se qualquer arquivo do projeto dbt mudou)
 
 De `analytics-engineering/`:
 
@@ -56,20 +55,32 @@ De `analytics-engineering/`:
 ```
 
 Convenção do script: `dbt_futebol` → `Dockerfile.futebol` → repo `dbt-futebol-repo`,
-imagem `dbt-futebol:latest`. `dbt_nba` (default sem argumento) → `Dockerfile`.
+imagem `dbt-futebol`. `dbt_nba` (default sem argumento) → `Dockerfile`.
 
-### 3. Re-apontar o Cloud Run Job — **o passo mais esquecido**
+O script faz tudo num comando só, nesta ordem:
 
-```bash
-gcloud run jobs update dbt-futebol \
-  --image us-east1-docker.pkg.dev/smartbetting-dados/dbt-futebol-repo/dbt-futebol:latest \
-  --region us-east1
-```
+1. build com `--provenance=false --sbom=false` (uma versão por build no registry);
+2. push das tags `git-<sha>` (com `-sujo` se havia alteração não commitada) e `latest`;
+3. lê o digest do registry e **aborta** se vier ilegível;
+4. `gcloud run jobs update --image <pacote>@sha256:<digest>` + carimbo de procedência;
+5. só então move a tag `live` para esse digest.
 
-**Por que é necessário mesmo com a tag `:latest`:** o Cloud Run resolve a tag para um
-**digest** no momento do deploy e fica preso nele. Push de um novo `:latest` não muda
-nada sozinho. Sem este passo o job roda o código antigo **sem erro nenhum** — é a
-falha silenciosa mais comum aqui.
+### 3. NÃO re-aponte o job na mão
+
+> ⚠️ **Não rode `gcloud run jobs update --image ...:latest`.** Antes era o passo mais
+> esquecido; agora está dentro do `build-and-push.sh`, e rodá-lo na mão é **prejudicial**:
+> o job passa a rodar um digest sem a tag `live`, e a cleanup policy do Artifact Registry
+> (repos `dbt-*-repo`: mantém `live`, `latest` e as 9 versões mais novas, apaga o resto com
+> mais de 30 dias) pode apagar a imagem que o job roda. Se precisar re-apontar (rollback),
+> mova a `live` junto:
+>
+> ```bash
+> PKG=us-east1-docker.pkg.dev/smartbetting-dados/dbt-futebol-repo/dbt-futebol
+> gcloud run jobs update dbt-futebol --region us-east1 --image "$PKG@sha256:<digest>"
+> gcloud artifacts docker tags add "$PKG@sha256:<digest>" "$PKG:live"
+> ```
+>
+> Detalhes e runbook da policy: `data-engineering/infra/README.md`.
 
 ### 4. Modelo NOVO? Adicione ao `--select` do workflow
 
@@ -117,8 +128,8 @@ gcloud run jobs execute dbt-futebol --region us-east1 \
 ## Checklist de "deployado de verdade"
 
 - [ ] `dbt build` local verde (`ERROR=0`), ciente de que já escreveu em prod
-- [ ] `build-and-push.sh <projeto>` concluído
-- [ ] `gcloud run jobs update` executado (**não pule por causa do `:latest`**)
+- [ ] `build-and-push.sh <projeto>` concluído (já inclui `jobs update` por digest e a tag `live`)
+- [ ] **Nenhum** `gcloud run jobs update --image` manual (ver passo 3)
 - [ ] Modelo novo adicionado ao `--select` do workflow certo **e** `deploy_workflows.sh` rodado
 - [ ] Execução verificada **no log** (`Done. PASS=`), não pelo exit code
 - [ ] Commit nos **dois** repos, se ambos mudaram

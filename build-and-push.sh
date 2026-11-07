@@ -13,6 +13,18 @@
 #
 # O mesmo comando grava o CARIMBO DE PROCEDÊNCIA (`scripts/procedencia.sh`) como env var do
 # job, para que build, digest e carimbo não possam divergir. Ver docs/adr/0001.
+#
+# TAGS E ARTIFACT REGISTRY (cleanup policy, ver data-engineering/infra/README.md):
+#   git-<sha>   a imagem deste build (rastreável até o commit; `-sujo` se o disco divergia)
+#   latest      conveniência humana (`docker run`), movida a cada build
+#   live        o digest que o JOB roda. Só é movida DEPOIS do `jobs update` dar certo:
+#               empurrada junto com o build, ela marcaria um digest que o job talvez nunca
+#               rode (o mesmo erro do `latest` do `deploy --source`), e a cleanup policy
+#               poderia apagar o digest vivo.
+# O job é atualizado com `--image ...@sha256:<digest>`, não com a tag: o que roda fica
+# explícito no spec do job, e mover `latest` depois não muda nada por engano.
+# `--provenance=false --sbom=false`: sem isso o buildx empurra um índice com manifests de
+# attestation, e cada build vira várias versões no registry em vez de uma.
 
 set -e
 
@@ -29,7 +41,6 @@ GCP_REGION=us-east1
 NORMALIZED_NAME=$(echo "$PROJECT_NAME" | tr '_' '-')
 ARTIFACT_REGISTRY_REPO="${NORMALIZED_NAME}-repo"
 IMAGE_NAME="$NORMALIZED_NAME"
-IMAGE_TAG=latest
 
 if [ "$PROJECT_NAME" = "dbt_nba" ]; then
     DOCKERFILE="Dockerfile"
@@ -44,8 +55,8 @@ if [ ! -f "$DOCKERFILE" ]; then
     exit 1
 fi
 
-# Construir o nome completo da imagem
-FULL_IMAGE_NAME="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${IMAGE_NAME}:${IMAGE_TAG}"
+# Pacote no Artifact Registry (sem tag); as tags vêm abaixo, depois do carimbo.
+PACOTE="${GCP_REGION}-docker.pkg.dev/${GCP_PROJECT_ID}/${ARTIFACT_REGISTRY_REPO}/${IMAGE_NAME}"
 
 # Nome do Cloud Run Job: mesma convenção da imagem (dbt_futebol -> dbt-futebol).
 JOB_NAME="$NORMALIZED_NAME"
@@ -60,11 +71,17 @@ PROCEDENCIA_SHA="$(git -C "$SCRIPT_DIR" rev-parse --short HEAD 2>/dev/null || ec
 # Aviso — não bloqueio. Buildar de branch/worktree com alteração não commitada é legítimo
 # (hotfix, depuração) e o repo trabalha assim. O carimbo simplesmente vai refletir o disco,
 # então o detector vai acusar deriva até o código ser mergeado — que é a verdade, não um bug.
+SUJO=""
 if ! git -C "$SCRIPT_DIR" diff --quiet -- $("$SCRIPT_DIR/scripts/procedencia.sh" "$PROJECT_NAME" --paths) 2>/dev/null; then
+    SUJO="-sujo"
     echo "⚠️  AVISO: ha alteracao nao commitada nas paths comportamentais de ${PROJECT_NAME}."
     echo "    O carimbo vai refletir o DISCO, entao o detector de deriva vai ficar VERMELHO"
     echo "    ate esse codigo estar no master. Isso e o comportamento correto, nao um erro."
 fi
+
+TAG_GIT="git-${PROCEDENCIA_SHA}${SUJO}"
+IMAGEM_GIT="${PACOTE}:${TAG_GIT}"
+IMAGEM_LATEST="${PACOTE}:latest"
 
 echo "=========================================="
 echo "Build e Push da Imagem Docker"
@@ -74,8 +91,8 @@ echo "Dockerfile: ${DOCKERFILE}"
 echo "Projeto GCP: ${GCP_PROJECT_ID}"
 echo "Região: ${GCP_REGION}"
 echo "Repositório: ${ARTIFACT_REGISTRY_REPO}"
-echo "Imagem: ${IMAGE_NAME}:${IMAGE_TAG}"
-echo "Nome completo: ${FULL_IMAGE_NAME}"
+echo "Imagem: ${IMAGE_NAME} (tags ${TAG_GIT} e latest; live depois do jobs update)"
+echo "Pacote: ${PACOTE}"
 echo "Cloud Run Job: ${JOB_NAME}"
 echo "Carimbo (procedência): ${PROCEDENCIA_HASH}"
 echo "Commit (leitura humana): ${PROCEDENCIA_SHA}"
@@ -86,19 +103,35 @@ echo ""
 echo "Configurando autenticação Docker..."
 gcloud auth print-access-token | docker login -u oauth2accesstoken --password-stdin https://${GCP_REGION}-docker.pkg.dev
 
-# Build da imagem para linux/amd64 (requerido pelo Cloud Run)
+# Build da imagem para linux/amd64 (requerido pelo Cloud Run). Uma versão por build no
+# registry: sem attestation de provenance/SBOM (ver o cabeçalho).
 echo ""
 echo "Fazendo build da imagem para linux/amd64..."
-docker build --platform linux/amd64 -f ${DOCKERFILE} -t ${FULL_IMAGE_NAME} .
+docker build --platform linux/amd64 --provenance=false --sbom=false \
+    -f "${DOCKERFILE}" -t "${IMAGEM_GIT}" -t "${IMAGEM_LATEST}" .
 
-# Push para Artifact Registry
+# Push para Artifact Registry. `live` NÃO é empurrada aqui (ver o cabeçalho).
 echo ""
 echo "Fazendo push para Artifact Registry..."
-docker push ${FULL_IMAGE_NAME}
+docker push "${IMAGEM_GIT}"
+docker push "${IMAGEM_LATEST}"
+
+# Digest lido do REGISTRY (a fonte da verdade do que foi empurrado), não do docker local.
+# Vazio ou fora do formato = aborta ANTES do jobs update: o job não pode ser re-apontado
+# para um digest que ninguém confirmou.
+DIGEST=$(gcloud artifacts docker images describe "${IMAGEM_GIT}" \
+    --project="$GCP_PROJECT_ID" \
+    --format='value(image_summary.digest)')
+if ! [[ "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+    echo "ERROR: digest de ${IMAGEM_GIT} ilegivel no Artifact Registry: '${DIGEST}'" >&2
+    echo "       O job ${JOB_NAME} NAO foi atualizado." >&2
+    exit 1
+fi
+IMAGEM_DIGEST="${PACOTE}@${DIGEST}"
 
 # Deploy: repin do digest no job + gravação do carimbo, NO MESMO COMANDO.
-# O job resolve `:latest` para um digest no momento do update e as execuções herdam esse
-# digest — sem este passo, o push acima não muda absolutamente nada em produção.
+# O job roda exatamente o digest passado aqui; sem este passo, o push acima não muda
+# absolutamente nada em produção.
 #
 # `--update-env-vars` e não `--set-env-vars`: o segundo substitui o mapa inteiro de env vars,
 # então qualquer variável que alguém venha a acrescentar ao job seria apagada em silêncio no
@@ -108,14 +141,22 @@ echo "Atualizando Cloud Run Job ${JOB_NAME} (digest + carimbo)..."
 gcloud run jobs update "$JOB_NAME" \
     --region="$GCP_REGION" \
     --project="$GCP_PROJECT_ID" \
-    --image="$FULL_IMAGE_NAME" \
+    --image="$IMAGEM_DIGEST" \
     --update-env-vars="PROCEDENCIA_HASH=${PROCEDENCIA_HASH},PROCEDENCIA_SHA=${PROCEDENCIA_SHA}"
+
+# Só agora a tag `live`: o job já aponta para este digest. É ela que a cleanup policy do
+# repo mantém para sempre; o digest anterior sai do `live` e passa a depender só do
+# "9 mais recentes / 30 dias" da policy, que cobre o rollback.
+echo ""
+echo "Movendo a tag live para ${DIGEST}..."
+gcloud artifacts docker tags add "$IMAGEM_DIGEST" "${PACOTE}:live" --quiet
 
 echo ""
 echo "=========================================="
 echo "✅ Build, push e deploy concluídos com sucesso!"
 echo "=========================================="
-echo "Imagem disponível em: ${FULL_IMAGE_NAME}"
+echo "Job ${JOB_NAME} roda: ${IMAGEM_DIGEST}"
+echo "Tags: ${TAG_GIT}, latest, live"
 echo "Job ${JOB_NAME} carimbado com: ${PROCEDENCIA_HASH}"
 echo ""
 echo "Carimbo agora gravado no job (o que o detector le):"
@@ -123,10 +164,7 @@ gcloud run jobs describe "$JOB_NAME" \
     --region="$GCP_REGION" \
     --project="$GCP_PROJECT_ID" \
     --format="value(spec.template.spec.template.spec.containers[0].env)"
-# O spec do job guarda a TAG; o digest só aparece resolvido no spec de cada execução
-# (`gcloud run jobs executions list --format='value(spec.template.spec.containers[0].image)'`).
-# Por isso o carimbo, e não o digest, é o que o detector interroga.
 echo ""
 echo "Para executar localmente:"
-echo "  docker run ${FULL_IMAGE_NAME}"
+echo "  docker run ${IMAGEM_DIGEST}"
 echo ""
