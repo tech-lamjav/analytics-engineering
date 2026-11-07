@@ -13,7 +13,7 @@ local muda o BigQuery *naquele momento*, mas o job agendado continua rodando o c
 **antigo** até a imagem ser reconstruída e o job re-apontado.
 
 ```
-.sql editado ──► build-and-push.sh ──► push git-<sha> + latest ──► jobs update --image @sha256 ──► tag live ──► job roda o código novo
+.sql editado ──► build-and-push.sh ──► push git-<sha> ──► jobs update --image @sha256 ──► tags live-prev/live/latest ──► job roda o código novo
                  (um comando só; tudo isto acontece dentro dele)
 ```
 
@@ -60,10 +60,13 @@ imagem `dbt-futebol`. `dbt_nba` (default sem argumento) → `Dockerfile`.
 O script faz tudo num comando só, nesta ordem:
 
 1. build com `--provenance=false --sbom=false` (uma versão por build no registry);
-2. push das tags `git-<sha>` (com `-sujo` se havia alteração não commitada) e `latest`;
-3. lê o digest do registry e **aborta** se vier ilegível;
+2. push **só** da tag `git-<sha>` (com `-sujo` se havia alteração não commitada);
+3. lê o digest do registry e as tags atuais do pacote, e **aborta** se algum vier ilegível
+   (nada em produção mudou ainda);
 4. `gcloud run jobs update --image <pacote>@sha256:<digest>` + carimbo de procedência;
-5. só então move a tag `live` para esse digest.
+5. só então move `live-prev` para a `live` anterior (o N-1, alvo de rollback), `live` e
+   `latest` para o digest novo. Se uma tag falhar aqui, o job **já** roda a imagem nova: a
+   saída imprime os `tags add` que completam o serviço.
 
 ### 3. NÃO re-aponte o job na mão
 
@@ -71,8 +74,10 @@ O script faz tudo num comando só, nesta ordem:
 > esquecido; agora está dentro do `build-and-push.sh`, e rodá-lo na mão é **prejudicial**:
 > o job passa a rodar um digest sem a tag `live`, e a cleanup policy do Artifact Registry
 > (repos `dbt-*-repo`: mantém `live`, `latest` e as 9 versões mais novas, apaga o resto com
-> mais de 30 dias) pode apagar a imagem que o job roda. Se precisar re-apontar (rollback),
-> mova a `live` junto:
+> mais de 30 dias) pode apagar a imagem que o job roda. Rollback: **só o N-1 é alvo
+> garantido** (tag `live-prev`); mais antigo que isso, confira que o digest existe
+> (`gcloud artifacts docker images describe "$PKG@sha256:<digest>"`) antes. Re-aponte
+> movendo a `live` junto:
 >
 > ```bash
 > PKG=us-east1-docker.pkg.dev/smartbetting-dados/dbt-futebol-repo/dbt-futebol
