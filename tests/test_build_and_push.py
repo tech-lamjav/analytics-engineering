@@ -5,10 +5,11 @@ anotam cada chamada num log em ordem. Nada toca o registry nem o Cloud Run.
 
 O que precisa ficar preso:
 - build com `--provenance=false --sbom=false` (sem attestation, uma versão por build);
-- tags `git-<sha>` e `latest` no push, e NUNCA `live` no push;
+- só `git-<sha>` no push: `live`, `live-prev` e `latest` NUNCA no push;
 - `jobs update --image <pacote>@sha256:<digest lido do registry>`;
-- `live` movida só DEPOIS do `jobs update`;
-- digest ilegível aborta ANTES do `jobs update`.
+- `live-prev` (rolante, para a `live` antiga), `live` e `latest` só DEPOIS do `jobs update`;
+- digest ou tags ilegíveis abortam ANTES do `jobs update`;
+- falha numa tag depois do update diz o comando que completa o serviço.
 
 Este repositório não tem CI de pytest: rode à mão com qualquer pytest (ex.: o .venv do
 data-engineering): `../data-engineering/.venv/bin/python3 -m pytest tests/test_build_and_push.py`.
@@ -34,6 +35,18 @@ if [ "$1 $2 $3 $4" = "artifacts docker images describe" ]; then
     [ -n "${STUB_DIGEST_VAZIO:-}" ] && exit 0
     echo "$STUB_DIGEST"
     exit 0
+fi
+if [ "$1 $2 $3 $4" = "artifacts docker tags list" ]; then
+    [ -n "${STUB_TAGS_FALHA:-}" ] && exit 1
+    if [ -n "${STUB_LIVE_ATUAL:-}" ]; then
+        echo "[{\"tag\": \"projects/p/locations/l/repositories/r/packages/x/tags/live\", \"version\": \"projects/p/locations/l/repositories/r/packages/x/versions/$STUB_LIVE_ATUAL\"}]"
+    else
+        echo "[]"
+    fi
+    exit 0
+fi
+if [ "$1 $2 $3 $4" = "artifacts docker tags add" ] && [ -n "${STUB_FALHA_TAG:-}" ]; then
+    case "$6" in *":$STUB_FALHA_TAG") exit 1 ;; esac
 fi
 exit 0
 """
@@ -96,32 +109,74 @@ def _indice(linhas, prefixo):
     return achados[0]
 
 
-def test_build_sem_attestation_e_com_tags_git_e_latest(arvore):
+def test_build_sem_attestation_e_push_so_da_tag_git(arvore):
     r, linhas, sha = rodar(arvore)
     assert r.returncode == 0, r.stdout + r.stderr
 
     build = linhas[_indice(linhas, "docker build")]
     assert "--provenance=false" in build and "--sbom=false" in build
     assert f"-t {PACOTE}:git-{sha} " in build
-    assert f"-t {PACOTE}:latest " in build
-    assert ":live" not in build
+    assert ":latest" not in build and ":live" not in build
 
     pushes = [l for l in linhas if l.startswith("docker push")]
-    assert pushes == [f"docker push {PACOTE}:git-{sha}", f"docker push {PACOTE}:latest"]
+    assert pushes == [f"docker push {PACOTE}:git-{sha}"]
 
 
-def test_job_recebe_o_digest_e_live_vem_depois_do_update(arvore):
+def _tags(linhas):
+    return [l for l in linhas if l.startswith("gcloud artifacts docker tags add")]
+
+
+def test_job_recebe_o_digest_e_as_tags_vem_depois_do_update(arvore):
     r, linhas, sha = rodar(arvore)
     assert r.returncode == 0, r.stdout + r.stderr
 
     i_describe = _indice(linhas, "gcloud artifacts docker images describe")
     assert f"{PACOTE}:git-{sha}" in linhas[i_describe]
+    i_lista = _indice(linhas, "gcloud artifacts docker tags list")
     i_update = _indice(linhas, "gcloud run jobs update")
     assert f"--image={PACOTE}@{DIGEST}" in linhas[i_update]
     assert "PROCEDENCIA_HASH=hash-carimbo-falso" in linhas[i_update]
-    i_live = _indice(linhas, "gcloud artifacts docker tags add")
-    assert linhas[i_live] == f"gcloud artifacts docker tags add {PACOTE}@{DIGEST} {PACOTE}:live --quiet"
-    assert i_describe < i_update < i_live
+    # Leitura das tags ANTES do update (falha não pode deixar o job mudado); escrita DEPOIS.
+    assert i_describe < i_lista < i_update
+    assert all(linhas.index(t) > i_update for t in _tags(linhas))
+    # Sem live anterior: só live e latest.
+    assert _tags(linhas) == [
+        f"gcloud artifacts docker tags add {PACOTE}@{DIGEST} {PACOTE}:live --quiet",
+        f"gcloud artifacts docker tags add {PACOTE}@{DIGEST} {PACOTE}:latest --quiet",
+    ]
+
+
+def test_live_prev_rola_para_a_live_anterior_antes_de_mover_a_live(arvore):
+    anterior = "sha256:" + "cd" * 32
+    r, linhas, _ = rodar(arvore, STUB_LIVE_ATUAL=anterior)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert _tags(linhas) == [
+        f"gcloud artifacts docker tags add {PACOTE}@{anterior} {PACOTE}:live-prev --quiet",
+        f"gcloud artifacts docker tags add {PACOTE}@{DIGEST} {PACOTE}:live --quiet",
+        f"gcloud artifacts docker tags add {PACOTE}@{DIGEST} {PACOTE}:latest --quiet",
+    ]
+
+
+def test_rebuild_do_mesmo_digest_nao_mexe_na_live_prev(arvore):
+    r, linhas, _ = rodar(arvore, STUB_LIVE_ATUAL=DIGEST)
+    assert r.returncode == 0, r.stdout + r.stderr
+    assert not any(":live-prev" in t for t in _tags(linhas))
+
+
+def test_tags_ilegiveis_abortam_antes_do_jobs_update(arvore):
+    r, linhas, _ = rodar(arvore, STUB_TAGS_FALHA="1")
+    assert r.returncode != 0
+    assert "NAO foi atualizado" in r.stderr
+    assert not any(l.startswith("gcloud run jobs update") for l in linhas)
+
+
+def test_falha_na_tag_live_diz_como_completar(arvore):
+    anterior = "sha256:" + "cd" * 32
+    r, linhas, _ = rodar(arvore, STUB_LIVE_ATUAL=anterior, STUB_FALHA_TAG="live")
+    assert r.returncode != 0
+    assert "JA roda" in r.stderr and "tag live nao foi aplicada" in r.stderr
+    assert f"tags add {PACOTE}@{DIGEST} {PACOTE}:live" in r.stderr
+    assert f"tags add {PACOTE}@{anterior} {PACOTE}:live-prev" in r.stderr
 
 
 def test_disco_sujo_marca_a_tag_git(arvore):
